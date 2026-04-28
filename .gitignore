@@ -20,6 +20,7 @@
 .DS_Store
 .idea
 **/.turbo
+archive/
 
 # compiled
 chrome-extension/public/manifest.json
