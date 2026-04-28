@@ -351,8 +351,8 @@ export function createChatModel(providerConfig: ProviderConfig, modelConfig: Mod
       console.log('[createChatModel] Calling createOpenAIChatModel for OpenRouter');
       return createOpenAIChatModel(providerConfig, modelConfig, {
         headers: {
-          'HTTP-Referer': 'https://nanobrowser.ai',
-          'X-Title': 'Nanobrowser',
+          'HTTP-Referer': 'https://github.com/wyddy7/browd',
+          'X-Title': 'Browd',
         },
       });
     }

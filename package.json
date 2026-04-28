@@ -1,11 +1,11 @@
 {
-  "name": "nanobrowser",
+  "name": "browd",
   "version": "0.1.13",
   "description": "AI web automation tool",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/nanobrowser/nanobrowser.git"
+    "url": "https://github.com/wyddy7/browd.git"
   },
   "type": "module",
   "scripts": {

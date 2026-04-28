@@ -38,7 +38,7 @@ const Options = () => {
 
   const handleTabClick = (tabId: TabTypes) => {
     if (tabId === 'help') {
-      window.open('https://nanobrowser.ai/docs', '_blank');
+      window.open('https://github.com/wyddy7/browd', '_blank');
     } else {
       setActiveTab(tabId);
     }
