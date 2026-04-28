@@ -214,6 +214,21 @@
   "options_general_header": {
     "message": "Geral"
   },
+  "options_general_theme": {
+    "message": "Tema de Aparência"
+  },
+  "options_general_theme_desc": {
+    "message": "Escolha o tom visual usado nos painéis do Browd"
+  },
+  "options_general_theme_sage": {
+    "message": "Sálvia"
+  },
+  "options_general_theme_blue": {
+    "message": "Azul"
+  },
+  "options_general_theme_mono": {
+    "message": "Mono"
+  },
   "options_general_maxSteps": {
     "message": "Máximo de Passos por Tarefa"
   },

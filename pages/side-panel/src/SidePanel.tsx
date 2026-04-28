@@ -3,7 +3,14 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { FiGithub, FiSettings } from 'react-icons/fi';
 import { PiPlusBold } from 'react-icons/pi';
 import { GrHistory } from 'react-icons/gr';
-import { type Message, Actors, chatHistoryStore, agentModelStore, generalSettingsStore } from '@extension/storage';
+import {
+  type AppearanceTheme,
+  type Message,
+  Actors,
+  chatHistoryStore,
+  agentModelStore,
+  generalSettingsStore,
+} from '@extension/storage';
 import favoritesStorage, { type FavoritePrompt } from '@extension/storage/lib/prompt/favorites';
 import { t } from '@extension/i18n';
 import MessageList from './components/MessageList';
@@ -31,6 +38,7 @@ const SidePanel = () => {
   const [isFollowUpMode, setIsFollowUpMode] = useState(false);
   const [isHistoricalSession, setIsHistoricalSession] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [appearanceTheme, setAppearanceTheme] = useState<AppearanceTheme>('sage');
   const [favoritePrompts, setFavoritePrompts] = useState<FavoritePrompt[]>([]);
   const [hasConfiguredModels, setHasConfiguredModels] = useState<boolean | null>(null); // null = loading, false = no models, true = has models
   const [isRecording, setIsRecording] = useState(false);
@@ -79,9 +87,11 @@ const SidePanel = () => {
     try {
       const settings = await generalSettingsStore.getSettings();
       setReplayEnabled(settings.replayHistoricalTasks);
+      setAppearanceTheme(settings.appearanceTheme);
     } catch (error) {
       console.error('Error loading general settings:', error);
       setReplayEnabled(false);
+      setAppearanceTheme('sage');
     }
   }, []);
 
@@ -999,16 +1009,15 @@ const SidePanel = () => {
   };
 
   return (
-    <div>
-      <div
-        className={`flex h-screen flex-col ${isDarkMode ? 'bg-slate-900' : "bg-[url('/bg.jpg')] bg-cover bg-no-repeat"} overflow-hidden border ${isDarkMode ? 'border-sky-800' : 'border-[rgb(186,230,253)]'} rounded-2xl`}>
+    <div data-browd-theme={appearanceTheme} data-browd-mode={isDarkMode ? 'dark' : 'light'}>
+      <div className="browd-shell flex h-screen flex-col overflow-hidden rounded-[var(--browd-radius-md)] border border-[var(--browd-border)] text-[var(--browd-text)]">
         <header className="header relative">
           <div className="header-logo">
             {showHistory ? (
               <button
                 type="button"
                 onClick={() => handleBackToChat(false)}
-                className={`${isDarkMode ? 'text-sky-400 hover:text-sky-300' : 'text-sky-400 hover:text-sky-500'} cursor-pointer`}
+                className="browd-button-ghost cursor-pointer px-2 py-1 text-sm"
                 aria-label={t('nav_back_a11y')}>
                 {t('nav_back')}
               </button>
@@ -1023,7 +1032,7 @@ const SidePanel = () => {
                   type="button"
                   onClick={handleNewChat}
                   onKeyDown={e => e.key === 'Enter' && handleNewChat()}
-                  className={`header-icon ${isDarkMode ? 'text-sky-400 hover:text-sky-300' : 'text-sky-400 hover:text-sky-500'} cursor-pointer`}
+                  className="browd-icon-button cursor-pointer p-1.5"
                   aria-label={t('nav_newChat_a11y')}
                   tabIndex={0}>
                   <PiPlusBold size={20} />
@@ -1032,7 +1041,7 @@ const SidePanel = () => {
                   type="button"
                   onClick={handleLoadHistory}
                   onKeyDown={e => e.key === 'Enter' && handleLoadHistory()}
-                  className={`header-icon ${isDarkMode ? 'text-sky-400 hover:text-sky-300' : 'text-sky-400 hover:text-sky-500'} cursor-pointer`}
+                  className="browd-icon-button cursor-pointer p-1.5"
                   aria-label={t('nav_loadHistory_a11y')}
                   tabIndex={0}>
                   <GrHistory size={20} />
@@ -1043,14 +1052,14 @@ const SidePanel = () => {
               href="https://github.com/wyddy7/browd"
               target="_blank"
               rel="noopener noreferrer"
-              className={`header-icon ${isDarkMode ? 'text-sky-400 hover:text-sky-300' : 'text-sky-400 hover:text-sky-500'}`}>
+              className="browd-icon-button p-1.5">
               <FiGithub size={20} />
             </a>
             <button
               type="button"
               onClick={() => chrome.runtime.openOptionsPage()}
               onKeyDown={e => e.key === 'Enter' && chrome.runtime.openOptionsPage()}
-              className={`header-icon ${isDarkMode ? 'text-sky-400 hover:text-sky-300' : 'text-sky-400 hover:text-sky-500'} cursor-pointer`}
+              className="browd-icon-button cursor-pointer p-1.5"
               aria-label={t('nav_settings_a11y')}
               tabIndex={0}>
               <FiSettings size={20} />
@@ -1072,10 +1081,9 @@ const SidePanel = () => {
           <>
             {/* Show loading state while checking model configuration */}
             {hasConfiguredModels === null && (
-              <div
-                className={`flex flex-1 items-center justify-center p-8 ${isDarkMode ? 'text-sky-300' : 'text-sky-600'}`}>
+              <div className="flex flex-1 items-center justify-center p-8 text-[var(--browd-muted)]">
                 <div className="text-center">
-                  <div className="mx-auto mb-4 size-8 animate-spin rounded-full border-2 border-sky-400 border-t-transparent"></div>
+                  <div className="mx-auto mb-4 size-8 animate-spin rounded-full border-2 border-[var(--browd-accent)] border-t-transparent"></div>
                   <p>{t('status_checkingConfig')}</p>
                 </div>
               </div>
@@ -1083,19 +1091,14 @@ const SidePanel = () => {
 
             {/* Show setup message when no models are configured */}
             {hasConfiguredModels === false && (
-              <div
-                className={`flex flex-1 items-center justify-center p-8 ${isDarkMode ? 'text-sky-300' : 'text-sky-600'}`}>
-                <div className="max-w-md text-center">
+              <div className="flex flex-1 items-center justify-center p-8 text-[var(--browd-muted)]">
+                <div className="browd-card max-w-md p-6 text-center">
                   <img src="/icon-128.png" alt="Browd Logo" className="mx-auto mb-4 size-12" />
-                  <h3 className={`mb-2 text-lg font-semibold ${isDarkMode ? 'text-sky-200' : 'text-sky-700'}`}>
-                    {t('welcome_title')}
-                  </h3>
+                  <h3 className="mb-2 text-lg font-semibold text-[var(--browd-text)]">{t('welcome_title')}</h3>
                   <p className="mb-4">{t('welcome_instruction')}</p>
                   <button
                     onClick={() => chrome.runtime.openOptionsPage()}
-                    className={`my-4 rounded-lg px-4 py-2 font-medium transition-colors ${
-                      isDarkMode ? 'bg-sky-600 text-white hover:bg-sky-700' : 'bg-sky-500 text-white hover:bg-sky-600'
-                    }`}>
+                    className="browd-button-primary my-4 px-4 py-2 text-sm font-medium">
                     {t('welcome_openSettings')}
                   </button>
                   <div className="mt-4 text-sm opacity-75">
@@ -1103,7 +1106,7 @@ const SidePanel = () => {
                       href="https://github.com/wyddy7/browd#local-setup"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className={`${isDarkMode ? 'text-sky-400 hover:text-sky-300' : 'text-sky-700 hover:text-sky-600'}`}>
+                      className="text-[var(--browd-accent)] hover:text-[var(--browd-accent-hover)]">
                       {t('welcome_quickStart')}
                     </a>
                     <span className="mx-2">•</span>
@@ -1111,7 +1114,7 @@ const SidePanel = () => {
                       href="https://github.com/wyddy7/browd"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className={`${isDarkMode ? 'text-sky-400 hover:text-sky-300' : 'text-sky-700 hover:text-sky-600'}`}>
+                      className="text-[var(--browd-accent)] hover:text-[var(--browd-accent-hover)]">
                       {t('welcome_joinCommunity')}
                     </a>
                   </div>
@@ -1124,8 +1127,7 @@ const SidePanel = () => {
               <>
                 {messages.length === 0 && (
                   <>
-                    <div
-                      className={`border-t ${isDarkMode ? 'border-sky-900' : 'border-sky-100'} mb-2 p-2 shadow-sm backdrop-blur-sm`}>
+                    <div className="mb-2 border-t border-[var(--browd-border)] p-2">
                       <ChatInput
                         onSendMessage={handleSendMessage}
                         onStopTask={handleStopTask}
@@ -1142,7 +1144,7 @@ const SidePanel = () => {
                         onReplay={handleReplay}
                       />
                     </div>
-                    <div className="flex-1 overflow-y-auto">
+                    <div className="flex-1 overflow-y-auto bg-[var(--browd-bg)]/35">
                       <BookmarkList
                         bookmarks={favoritePrompts}
                         onBookmarkSelect={handleBookmarkSelect}
@@ -1155,15 +1157,13 @@ const SidePanel = () => {
                   </>
                 )}
                 {messages.length > 0 && (
-                  <div
-                    className={`scrollbar-gutter-stable flex-1 overflow-x-hidden overflow-y-scroll scroll-smooth p-2 ${isDarkMode ? 'bg-slate-900/80' : ''}`}>
+                  <div className="scrollbar-gutter-stable flex-1 overflow-x-hidden overflow-y-scroll bg-[var(--browd-bg)]/60 p-3 scroll-smooth">
                     <MessageList messages={messages} isDarkMode={isDarkMode} />
                     <div ref={messagesEndRef} />
                   </div>
                 )}
                 {messages.length > 0 && (
-                  <div
-                    className={`border-t ${isDarkMode ? 'border-sky-900' : 'border-sky-100'} p-2 shadow-sm backdrop-blur-sm`}>
+                  <div className="border-t border-[var(--browd-border)] bg-[var(--browd-surface)]/80 p-2 backdrop-blur">
                     <ChatInput
                       onSendMessage={handleSendMessage}
                       onStopTask={handleStopTask}

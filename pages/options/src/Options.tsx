@@ -4,6 +4,7 @@ import { Button } from '@extension/ui';
 import { withErrorBoundary, withSuspense } from '@extension/shared';
 import { t } from '@extension/i18n';
 import { FiSettings, FiCpu, FiShield, FiTrendingUp, FiHelpCircle } from 'react-icons/fi';
+import { type AppearanceTheme, generalSettingsStore } from '@extension/storage';
 import { GeneralSettings } from './components/GeneralSettings';
 import { ModelSettings } from './components/ModelSettings';
 import { FirewallSettings } from './components/FirewallSettings';
@@ -22,6 +23,7 @@ const TABS: { id: TabTypes; icon: React.ComponentType<{ className?: string }>; l
 const Options = () => {
   const [activeTab, setActiveTab] = useState<TabTypes>('models');
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [appearanceTheme, setAppearanceTheme] = useState<AppearanceTheme>('sage');
 
   // Check for dark mode preference
   useEffect(() => {
@@ -36,6 +38,13 @@ const Options = () => {
     return () => darkModeMediaQuery.removeEventListener('change', handleChange);
   }, []);
 
+  useEffect(() => {
+    generalSettingsStore
+      .getSettings()
+      .then(settings => setAppearanceTheme(settings.appearanceTheme))
+      .catch(() => setAppearanceTheme('sage'));
+  }, [activeTab]);
+
   const handleTabClick = (tabId: TabTypes) => {
     if (tabId === 'help') {
       window.open('https://github.com/wyddy7/browd', '_blank');
@@ -47,7 +56,7 @@ const Options = () => {
   const renderTabContent = () => {
     switch (activeTab) {
       case 'general':
-        return <GeneralSettings isDarkMode={isDarkMode} />;
+        return <GeneralSettings />;
       case 'models':
         return <ModelSettings isDarkMode={isDarkMode} />;
       case 'firewall':
@@ -61,24 +70,23 @@ const Options = () => {
 
   return (
     <div
-      className={`flex min-h-screen min-w-[768px] ${isDarkMode ? 'bg-slate-900' : "bg-[url('/bg.jpg')] bg-cover bg-center"} ${isDarkMode ? 'text-gray-200' : 'text-gray-900'}`}>
+      data-browd-theme={appearanceTheme}
+      data-browd-mode={isDarkMode ? 'dark' : 'light'}
+      className="browd-shell flex min-h-screen min-w-[768px] text-[var(--browd-text)]">
       {/* Vertical Navigation Bar */}
-      <nav
-        className={`w-48 border-r ${isDarkMode ? 'border-slate-700 bg-slate-800/80' : 'border-white/20 bg-[#0EA5E9]/10'} backdrop-blur-sm`}>
+      <nav className="w-48 border-r border-[var(--browd-border)] bg-[var(--browd-surface)]/85 backdrop-blur-sm">
         <div className="p-4">
-          <h1 className={`mb-6 text-xl font-bold ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
-            {t('options_nav_header')}
-          </h1>
+          <h1 className="mb-6 text-xl font-bold text-[var(--browd-text)]">{t('options_nav_header')}</h1>
           <ul className="space-y-2">
             {TABS.map(item => (
               <li key={item.id}>
                 <Button
                   onClick={() => handleTabClick(item.id)}
-                  className={`flex w-full items-center space-x-2 rounded-lg px-4 py-2 text-left text-base 
+                  className={`flex w-full items-center space-x-2 rounded-lg px-4 py-2 text-left text-sm
                     ${
                       activeTab !== item.id
-                        ? `${isDarkMode ? 'bg-slate-700/70 text-gray-300 hover:text-white' : 'bg-[#0EA5E9]/15 font-medium text-gray-700 hover:text-white'} backdrop-blur-sm`
-                        : `${isDarkMode ? 'bg-sky-800/50' : ''} text-white backdrop-blur-sm`
+                        ? 'browd-button-ghost'
+                        : 'bg-[var(--browd-accent-soft)] text-[var(--browd-accent-hover)]'
                     }`}>
                   <item.icon className="h-4 w-4" />
                   <span>{item.label}</span>
@@ -90,7 +98,7 @@ const Options = () => {
       </nav>
 
       {/* Main Content Area */}
-      <main className={`flex-1 ${isDarkMode ? 'bg-slate-800/50' : 'bg-white/10'} p-8 backdrop-blur-sm`}>
+      <main className="flex-1 bg-[var(--browd-bg)]/45 p-8 backdrop-blur-sm">
         <div className="mx-auto min-w-[512px] max-w-screen-lg">{renderTabContent()}</div>
       </main>
     </div>

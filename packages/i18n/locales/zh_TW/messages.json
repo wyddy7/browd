@@ -214,6 +214,21 @@
   "options_general_header": {
     "message": "一般"
   },
+  "options_general_theme": {
+    "message": "外觀主題"
+  },
+  "options_general_theme_desc": {
+    "message": "選擇 Browd 面板使用的視覺風格"
+  },
+  "options_general_theme_sage": {
+    "message": "鼠尾草綠"
+  },
+  "options_general_theme_blue": {
+    "message": "藍色"
+  },
+  "options_general_theme_mono": {
+    "message": "黑白"
+  },
   "options_general_maxSteps": {
     "message": "單一任務的步驟上限"
   },

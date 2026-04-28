@@ -3,7 +3,10 @@ import { createStorage } from '../base/base';
 import type { BaseStorage } from '../base/types';
 
 // Interface for general settings configuration
+export type AppearanceTheme = 'sage' | 'blue' | 'mono';
+
 export interface GeneralSettingsConfig {
+  appearanceTheme: AppearanceTheme;
   maxSteps: number;
   maxActionsPerStep: number;
   maxFailures: number;
@@ -23,6 +26,7 @@ export type GeneralSettingsStorage = BaseStorage<GeneralSettingsConfig> & {
 
 // Default settings
 export const DEFAULT_GENERAL_SETTINGS: GeneralSettingsConfig = {
+  appearanceTheme: 'sage',
   maxSteps: 100,
   maxActionsPerStep: 5,
   maxFailures: 3,

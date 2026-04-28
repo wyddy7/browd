@@ -23,6 +23,7 @@
     "webextension-polyfill": "^0.12.0",
     "@extension/shared": "workspace:*",
     "@extension/storage": "workspace:*",
+    "@extension/ui": "workspace:*",
     "@extension/i18n": "workspace:*"
   },
   "devDependencies": {

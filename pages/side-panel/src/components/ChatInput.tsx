@@ -34,7 +34,6 @@ export default function ChatInput({
   disabled,
   showStopButton,
   setContent,
-  isDarkMode = false,
   historicalSessionId,
   onReplay,
 }: ChatInputProps) {
@@ -185,29 +184,22 @@ export default function ChatInput({
   return (
     <form
       onSubmit={handleSubmit}
-      className={`overflow-hidden rounded-lg border transition-colors ${disabled ? 'cursor-not-allowed' : 'focus-within:border-sky-400 hover:border-sky-400'} ${isDarkMode ? 'border-slate-700' : ''}`}
+      className={`browd-input overflow-hidden transition-colors ${disabled ? 'cursor-not-allowed opacity-80' : ''}`}
       aria-label={t('chat_input_form')}>
       <div className="flex flex-col">
         {/* File attachments display */}
         {attachedFiles.length > 0 && (
-          <div
-            className={`flex flex-wrap gap-2 border-b p-2 ${
-              isDarkMode ? 'border-slate-700 bg-slate-800' : 'border-gray-200 bg-gray-50'
-            }`}>
+          <div className="flex flex-wrap gap-2 border-b border-[var(--browd-border)] bg-[var(--browd-panel)] p-2">
             {attachedFiles.map((file, index) => (
               <div
                 key={index}
-                className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs ${
-                  isDarkMode ? 'bg-slate-700 text-gray-300' : 'bg-gray-200 text-gray-700'
-                }`}>
+                className="flex items-center gap-1 rounded-md bg-[var(--browd-panel-strong)] px-2 py-1 text-xs text-[var(--browd-muted)]">
                 <span className="text-xs">📎</span>
                 <span className="max-w-[150px] truncate">{file.name}</span>
                 <button
                   type="button"
                   onClick={() => handleRemoveFile(index)}
-                  className={`ml-1 rounded-sm transition-colors ${
-                    isDarkMode ? 'hover:bg-slate-600' : 'hover:bg-gray-300'
-                  }`}
+                  className="browd-button-ghost ml-1 px-1 transition-colors"
                   aria-label={`Remove ${file.name}`}>
                   <span className="text-xs">✕</span>
                 </button>
@@ -224,24 +216,13 @@ export default function ChatInput({
           disabled={disabled}
           aria-disabled={disabled}
           rows={5}
-          className={`w-full resize-none border-none p-2 focus:outline-none ${
-            disabled
-              ? isDarkMode
-                ? 'cursor-not-allowed bg-slate-800 text-gray-400'
-                : 'cursor-not-allowed bg-gray-100 text-gray-500'
-              : isDarkMode
-                ? 'bg-slate-800 text-gray-200'
-                : 'bg-white'
-          }`}
+          className="w-full resize-none border-none bg-[var(--browd-bg)] p-3 text-sm leading-6 text-[var(--browd-text)] placeholder:text-[var(--browd-faint)] focus:outline-none disabled:cursor-not-allowed disabled:text-[var(--browd-faint)]"
           placeholder={attachedFiles.length > 0 ? 'Add a message (optional)...' : t('chat_input_placeholder')}
           aria-label={t('chat_input_editor')}
         />
 
-        <div
-          className={`flex items-center justify-between px-2 py-1.5 ${
-            disabled ? (isDarkMode ? 'bg-slate-800' : 'bg-gray-100') : isDarkMode ? 'bg-slate-800' : 'bg-white'
-          }`}>
-          <div className="flex gap-2 text-gray-500">
+        <div className="flex items-center justify-between border-t border-[var(--browd-border)] bg-[var(--browd-surface)] px-2 py-1.5">
+          <div className="flex gap-2 text-[var(--browd-muted)]">
             {/* File attachment button */}
             <button
               type="button"
@@ -249,13 +230,7 @@ export default function ChatInput({
               disabled={disabled}
               aria-label="Attach files"
               title="Attach text files (txt, md, json, csv, etc.)"
-              className={`rounded-md p-1.5 transition-colors ${
-                disabled
-                  ? 'cursor-not-allowed opacity-50'
-                  : isDarkMode
-                    ? 'text-gray-400 hover:bg-slate-700 hover:text-gray-200'
-                    : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
-              }`}>
+              className="browd-icon-button p-1.5 disabled:cursor-not-allowed disabled:opacity-50">
               <span className="text-lg">📎</span>
             </button>
 
@@ -287,9 +262,7 @@ export default function ChatInput({
                     ? 'cursor-not-allowed opacity-50'
                     : isRecording
                       ? 'bg-red-500 text-white hover:bg-red-600'
-                      : isDarkMode
-                        ? 'text-gray-400 hover:bg-slate-700 hover:text-gray-200'
-                        : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
+                      : 'browd-icon-button'
                 }`}>
                 {isProcessingSpeech ? (
                   <AiOutlineLoading3Quarters className="size-4 animate-spin" />
@@ -313,7 +286,7 @@ export default function ChatInput({
               onClick={handleReplay}
               disabled={!historicalSessionId}
               aria-disabled={!historicalSessionId}
-              className={`rounded-md bg-green-500 px-3 py-1 text-white transition-colors hover:enabled:bg-green-600 ${!historicalSessionId ? 'cursor-not-allowed opacity-50' : ''}`}>
+              className={`browd-button-primary px-3 py-1 text-sm font-medium ${!historicalSessionId ? 'cursor-not-allowed opacity-50' : ''}`}>
               {t('chat_buttons_replay')}
             </button>
           ) : (
@@ -321,7 +294,7 @@ export default function ChatInput({
               type="submit"
               disabled={isSendButtonDisabled}
               aria-disabled={isSendButtonDisabled}
-              className={`rounded-md bg-[#19C2FF] px-3 py-1 text-white transition-colors hover:enabled:bg-[#0073DC] ${isSendButtonDisabled ? 'cursor-not-allowed opacity-50' : ''}`}>
+              className={`browd-button-primary px-3 py-1 text-sm font-medium ${isSendButtonDisabled ? 'cursor-not-allowed opacity-50' : ''}`}>
               {t('chat_buttons_send')}
             </button>
           )}

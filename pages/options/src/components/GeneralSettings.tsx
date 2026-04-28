@@ -1,12 +1,27 @@
 import { useState, useEffect } from 'react';
-import { type GeneralSettingsConfig, generalSettingsStore, DEFAULT_GENERAL_SETTINGS } from '@extension/storage';
+import {
+  type AppearanceTheme,
+  type GeneralSettingsConfig,
+  generalSettingsStore,
+  DEFAULT_GENERAL_SETTINGS,
+} from '@extension/storage';
 import { t } from '@extension/i18n';
 
-interface GeneralSettingsProps {
-  isDarkMode?: boolean;
-}
+type MessageKey = Parameters<typeof t>[0];
 
-export const GeneralSettings = ({ isDarkMode = false }: GeneralSettingsProps) => {
+const APPEARANCE_THEMES = [
+  { id: 'sage', labelKey: 'options_general_theme_sage', swatch: 'bg-[#8fd36a]' },
+  { id: 'blue', labelKey: 'options_general_theme_blue', swatch: 'bg-[#7bb7ff]' },
+  { id: 'mono', labelKey: 'options_general_theme_mono', swatch: 'bg-[#e8e8e8]' },
+] satisfies Array<{ id: AppearanceTheme; labelKey: MessageKey; swatch: string }>;
+
+const settingTitleClass = 'text-base font-medium text-[var(--browd-text)]';
+const settingDescriptionClass = 'text-sm font-normal text-[var(--browd-muted)]';
+const numberInputClass = 'browd-input w-20 px-3 py-2';
+const toggleClass =
+  "peer h-6 w-11 rounded-full bg-[var(--browd-panel-strong)] after:absolute after:left-[2px] after:top-[2px] after:size-5 after:rounded-full after:border after:border-[var(--browd-border)] after:bg-[var(--browd-text)] after:transition-all after:content-[''] peer-checked:bg-[var(--browd-accent)] peer-checked:after:translate-x-full peer-checked:after:border-[var(--browd-accent)] peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-[var(--browd-accent-soft)]";
+
+export const GeneralSettings = () => {
   const [settings, setSettings] = useState<GeneralSettingsConfig>(DEFAULT_GENERAL_SETTINGS);
 
   useEffect(() => {
@@ -29,21 +44,40 @@ export const GeneralSettings = ({ isDarkMode = false }: GeneralSettingsProps) =>
 
   return (
     <section className="space-y-6">
-      <div
-        className={`rounded-lg border ${isDarkMode ? 'border-slate-700 bg-slate-800' : 'border-blue-100 bg-white'} p-6 text-left shadow-sm`}>
-        <h2 className={`mb-4 text-left text-xl font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
-          {t('options_general_header')}
-        </h2>
+      <div className="browd-card p-6 text-left">
+        <h2 className="mb-4 text-left text-xl font-semibold text-[var(--browd-text)]">{t('options_general_header')}</h2>
 
         <div className="space-y-4">
+          <div className="flex items-center justify-between gap-6 border-b border-[var(--browd-border)] pb-4">
+            <div>
+              <h3 className={settingTitleClass}>{t('options_general_theme')}</h3>
+              <p className={settingDescriptionClass}>{t('options_general_theme_desc')}</p>
+            </div>
+            <div className="flex shrink-0 gap-2">
+              {APPEARANCE_THEMES.map(theme => {
+                const isSelected = settings.appearanceTheme === theme.id;
+                return (
+                  <button
+                    key={theme.id}
+                    type="button"
+                    onClick={() => updateSetting('appearanceTheme', theme.id)}
+                    className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors ${
+                      isSelected
+                        ? 'border-[var(--browd-accent)] bg-[var(--browd-accent-soft)] text-[var(--browd-text)]'
+                        : 'border-[var(--browd-border)] bg-[var(--browd-bg)] text-[var(--browd-muted)] hover:border-[var(--browd-border-strong)] hover:text-[var(--browd-text)]'
+                    }`}>
+                    <span className={`size-3 rounded-full ${theme.swatch}`} />
+                    {t(theme.labelKey)}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="flex items-center justify-between">
             <div>
-              <h3 className={`text-base font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                {t('options_general_maxSteps')}
-              </h3>
-              <p className={`text-sm font-normal ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                {t('options_general_maxSteps_desc')}
-              </p>
+              <h3 className={settingTitleClass}>{t('options_general_maxSteps')}</h3>
+              <p className={settingDescriptionClass}>{t('options_general_maxSteps_desc')}</p>
             </div>
             <label htmlFor="maxSteps" className="sr-only">
               {t('options_general_maxSteps')}
@@ -55,18 +89,14 @@ export const GeneralSettings = ({ isDarkMode = false }: GeneralSettingsProps) =>
               max={50}
               value={settings.maxSteps}
               onChange={e => updateSetting('maxSteps', Number.parseInt(e.target.value, 10))}
-              className={`w-20 rounded-md border ${isDarkMode ? 'border-slate-600 bg-slate-700 text-gray-200' : 'border-gray-300 bg-white text-gray-700'} px-3 py-2`}
+              className={numberInputClass}
             />
           </div>
 
           <div className="flex items-center justify-between">
             <div>
-              <h3 className={`text-base font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                {t('options_general_maxActions')}
-              </h3>
-              <p className={`text-sm font-normal ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                {t('options_general_maxActions_desc')}
-              </p>
+              <h3 className={settingTitleClass}>{t('options_general_maxActions')}</h3>
+              <p className={settingDescriptionClass}>{t('options_general_maxActions_desc')}</p>
             </div>
             <label htmlFor="maxActionsPerStep" className="sr-only">
               {t('options_general_maxActions')}
@@ -78,18 +108,14 @@ export const GeneralSettings = ({ isDarkMode = false }: GeneralSettingsProps) =>
               max={50}
               value={settings.maxActionsPerStep}
               onChange={e => updateSetting('maxActionsPerStep', Number.parseInt(e.target.value, 10))}
-              className={`w-20 rounded-md border ${isDarkMode ? 'border-slate-600 bg-slate-700 text-gray-200' : 'border-gray-300 bg-white text-gray-700'} px-3 py-2`}
+              className={numberInputClass}
             />
           </div>
 
           <div className="flex items-center justify-between">
             <div>
-              <h3 className={`text-base font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                {t('options_general_maxFailures')}
-              </h3>
-              <p className={`text-sm font-normal ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                {t('options_general_maxFailures_desc')}
-              </p>
+              <h3 className={settingTitleClass}>{t('options_general_maxFailures')}</h3>
+              <p className={settingDescriptionClass}>{t('options_general_maxFailures_desc')}</p>
             </div>
             <label htmlFor="maxFailures" className="sr-only">
               {t('options_general_maxFailures')}
@@ -101,18 +127,14 @@ export const GeneralSettings = ({ isDarkMode = false }: GeneralSettingsProps) =>
               max={10}
               value={settings.maxFailures}
               onChange={e => updateSetting('maxFailures', Number.parseInt(e.target.value, 10))}
-              className={`w-20 rounded-md border ${isDarkMode ? 'border-slate-600 bg-slate-700 text-gray-200' : 'border-gray-300 bg-white text-gray-700'} px-3 py-2`}
+              className={numberInputClass}
             />
           </div>
 
           <div className="flex items-center justify-between">
             <div>
-              <h3 className={`text-base font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                {t('options_general_enableVision')}
-              </h3>
-              <p className={`text-sm font-normal ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                {t('options_general_enableVision_desc')}
-              </p>
+              <h3 className={settingTitleClass}>{t('options_general_enableVision')}</h3>
+              <p className={settingDescriptionClass}>{t('options_general_enableVision_desc')}</p>
             </div>
             <div className="relative inline-flex cursor-pointer items-center">
               <input
@@ -122,9 +144,7 @@ export const GeneralSettings = ({ isDarkMode = false }: GeneralSettingsProps) =>
                 onChange={e => updateSetting('useVision', e.target.checked)}
                 className="peer sr-only"
               />
-              <label
-                htmlFor="useVision"
-                className={`peer h-6 w-11 rounded-full ${isDarkMode ? 'bg-slate-600' : 'bg-gray-200'} after:absolute after:left-[2px] after:top-[2px] after:size-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-blue-600 peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300`}>
+              <label htmlFor="useVision" className={toggleClass}>
                 <span className="sr-only">{t('options_general_enableVision')}</span>
               </label>
             </div>
@@ -132,12 +152,8 @@ export const GeneralSettings = ({ isDarkMode = false }: GeneralSettingsProps) =>
 
           <div className="flex items-center justify-between">
             <div>
-              <h3 className={`text-base font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                {t('options_general_displayHighlights')}
-              </h3>
-              <p className={`text-sm font-normal ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                {t('options_general_displayHighlights_desc')}
-              </p>
+              <h3 className={settingTitleClass}>{t('options_general_displayHighlights')}</h3>
+              <p className={settingDescriptionClass}>{t('options_general_displayHighlights_desc')}</p>
             </div>
             <div className="relative inline-flex cursor-pointer items-center">
               <input
@@ -147,9 +163,7 @@ export const GeneralSettings = ({ isDarkMode = false }: GeneralSettingsProps) =>
                 onChange={e => updateSetting('displayHighlights', e.target.checked)}
                 className="peer sr-only"
               />
-              <label
-                htmlFor="displayHighlights"
-                className={`peer h-6 w-11 rounded-full ${isDarkMode ? 'bg-slate-600' : 'bg-gray-200'} after:absolute after:left-[2px] after:top-[2px] after:size-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-blue-600 peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300`}>
+              <label htmlFor="displayHighlights" className={toggleClass}>
                 <span className="sr-only">{t('options_general_displayHighlights')}</span>
               </label>
             </div>
@@ -157,12 +171,8 @@ export const GeneralSettings = ({ isDarkMode = false }: GeneralSettingsProps) =>
 
           <div className="flex items-center justify-between">
             <div>
-              <h3 className={`text-base font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                {t('options_general_planningInterval')}
-              </h3>
-              <p className={`text-sm font-normal ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                {t('options_general_planningInterval_desc')}
-              </p>
+              <h3 className={settingTitleClass}>{t('options_general_planningInterval')}</h3>
+              <p className={settingDescriptionClass}>{t('options_general_planningInterval_desc')}</p>
             </div>
             <label htmlFor="planningInterval" className="sr-only">
               {t('options_general_planningInterval')}
@@ -174,18 +184,14 @@ export const GeneralSettings = ({ isDarkMode = false }: GeneralSettingsProps) =>
               max={20}
               value={settings.planningInterval}
               onChange={e => updateSetting('planningInterval', Number.parseInt(e.target.value, 10))}
-              className={`w-20 rounded-md border ${isDarkMode ? 'border-slate-600 bg-slate-700 text-gray-200' : 'border-gray-300 bg-white text-gray-700'} px-3 py-2`}
+              className={numberInputClass}
             />
           </div>
 
           <div className="flex items-center justify-between">
             <div>
-              <h3 className={`text-base font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                {t('options_general_minWaitPageLoad')}
-              </h3>
-              <p className={`text-sm font-normal ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                {t('options_general_minWaitPageLoad_desc')}
-              </p>
+              <h3 className={settingTitleClass}>{t('options_general_minWaitPageLoad')}</h3>
+              <p className={settingDescriptionClass}>{t('options_general_minWaitPageLoad_desc')}</p>
             </div>
             <div className="flex items-center space-x-2">
               <label htmlFor="minWaitPageLoad" className="sr-only">
@@ -199,19 +205,15 @@ export const GeneralSettings = ({ isDarkMode = false }: GeneralSettingsProps) =>
                 step={50}
                 value={settings.minWaitPageLoad}
                 onChange={e => updateSetting('minWaitPageLoad', Number.parseInt(e.target.value, 10))}
-                className={`w-20 rounded-md border ${isDarkMode ? 'border-slate-600 bg-slate-700 text-gray-200' : 'border-gray-300 bg-white text-gray-700'} px-3 py-2`}
+                className={numberInputClass}
               />
             </div>
           </div>
 
           <div className="flex items-center justify-between">
             <div>
-              <h3 className={`text-base font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                {t('options_general_replayHistoricalTasks')}
-              </h3>
-              <p className={`text-sm font-normal ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                {t('options_general_replayHistoricalTasks_desc')}
-              </p>
+              <h3 className={settingTitleClass}>{t('options_general_replayHistoricalTasks')}</h3>
+              <p className={settingDescriptionClass}>{t('options_general_replayHistoricalTasks_desc')}</p>
             </div>
             <div className="relative inline-flex cursor-pointer items-center">
               <input
@@ -221,9 +223,7 @@ export const GeneralSettings = ({ isDarkMode = false }: GeneralSettingsProps) =>
                 onChange={e => updateSetting('replayHistoricalTasks', e.target.checked)}
                 className="peer sr-only"
               />
-              <label
-                htmlFor="replayHistoricalTasks"
-                className={`peer h-6 w-11 rounded-full ${isDarkMode ? 'bg-slate-600' : 'bg-gray-200'} after:absolute after:left-[2px] after:top-[2px] after:size-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-blue-600 peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300`}>
+              <label htmlFor="replayHistoricalTasks" className={toggleClass}>
                 <span className="sr-only">{t('options_general_replayHistoricalTasks')}</span>
               </label>
             </div>

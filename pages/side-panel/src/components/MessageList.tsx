@@ -7,7 +7,7 @@ interface MessageListProps {
   isDarkMode?: boolean;
 }
 
-export default memo(function MessageList({ messages, isDarkMode = false }: MessageListProps) {
+export default memo(function MessageList({ messages }: MessageListProps) {
   return (
     <div className="max-w-full space-y-4">
       {messages.map((message, index) => (
@@ -15,7 +15,6 @@ export default memo(function MessageList({ messages, isDarkMode = false }: Messa
           key={`${message.actor}-${message.timestamp}-${index}`}
           message={message}
           isSameActor={index > 0 ? messages[index - 1].actor === message.actor : false}
-          isDarkMode={isDarkMode}
         />
       ))}
     </div>
@@ -25,10 +24,9 @@ export default memo(function MessageList({ messages, isDarkMode = false }: Messa
 interface MessageBlockProps {
   message: Message;
   isSameActor: boolean;
-  isDarkMode?: boolean;
 }
 
-function MessageBlock({ message, isSameActor, isDarkMode = false }: MessageBlockProps) {
+function MessageBlock({ message, isSameActor }: MessageBlockProps) {
   if (!message.actor) {
     console.error('No actor found');
     return <div />;
@@ -39,9 +37,7 @@ function MessageBlock({ message, isSameActor, isDarkMode = false }: MessageBlock
   return (
     <div
       className={`flex max-w-full gap-3 ${
-        !isSameActor
-          ? `mt-4 border-t ${isDarkMode ? 'border-sky-800/50' : 'border-sky-200/50'} pt-4 first:mt-0 first:border-t-0 first:pt-0`
-          : ''
+        !isSameActor ? 'mt-4 border-t border-[var(--browd-border)] pt-4 first:mt-0 first:border-t-0 first:pt-0' : ''
       }`}>
       {!isSameActor && (
         <div
@@ -53,26 +49,20 @@ function MessageBlock({ message, isSameActor, isDarkMode = false }: MessageBlock
       {isSameActor && <div className="w-8" />}
 
       <div className="min-w-0 flex-1">
-        {!isSameActor && (
-          <div className={`mb-1 text-sm font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-900'}`}>
-            {actor.name}
-          </div>
-        )}
+        {!isSameActor && <div className="mb-1 text-sm font-semibold text-[var(--browd-text)]">{actor.name}</div>}
 
         <div className="space-y-0.5">
-          <div className={`whitespace-pre-wrap break-words text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+          <div className="whitespace-pre-wrap break-words text-sm leading-6 text-[var(--browd-muted)]">
             {isProgress ? (
-              <div className={`h-1 overflow-hidden rounded ${isDarkMode ? 'bg-gray-700' : 'bg-gray-200'}`}>
-                <div className="h-full animate-progress bg-blue-500" />
+              <div className="h-1 overflow-hidden rounded bg-[var(--browd-panel-strong)]">
+                <div className="browd-progress h-full animate-progress" />
               </div>
             ) : (
               message.content
             )}
           </div>
           {!isProgress && (
-            <div className={`text-right text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-300'}`}>
-              {formatTimestamp(message.timestamp)}
-            </div>
+            <div className="text-right text-xs text-[var(--browd-faint)]">{formatTimestamp(message.timestamp)}</div>
           )}
         </div>
       </div>
