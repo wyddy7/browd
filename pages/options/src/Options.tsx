@@ -60,9 +60,9 @@ const Options = () => {
       case 'models':
         return <ModelSettings isDarkMode={isDarkMode} />;
       case 'firewall':
-        return <FirewallSettings isDarkMode={isDarkMode} />;
+        return <FirewallSettings />;
       case 'analytics':
-        return <AnalyticsSettings isDarkMode={isDarkMode} />;
+        return <AnalyticsSettings />;
       default:
         return null;
     }

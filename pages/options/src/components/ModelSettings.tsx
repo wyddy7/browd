@@ -57,6 +57,17 @@ interface ModelSettingsProps {
   isDarkMode?: boolean; // Controls dark/light theme styling
 }
 
+const cardClass = 'browd-card p-6 text-left';
+const innerCardClass = 'rounded-lg border border-[var(--browd-border)] bg-[var(--browd-panel-strong)] p-4';
+const titleClass = 'mb-4 text-xl font-semibold text-[var(--browd-text)]';
+const fieldLabelClass = 'w-24 text-sm font-medium text-[var(--browd-text)]';
+const narrowFieldLabelClass = 'w-20 text-sm font-medium text-[var(--browd-text)]';
+const fieldInputClass = 'browd-input flex-1 px-3 py-2 text-sm';
+const smallFieldInputClass = 'browd-input w-20 px-2 py-1 text-sm';
+const rangeStyle = (value: number) => ({
+  background: `linear-gradient(to right, var(--browd-accent) 0%, var(--browd-accent) ${value}%, var(--browd-border-strong) ${value}%, var(--browd-border-strong) 100%)`,
+});
+
 export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
   const [providers, setProviders] = useState<Record<string, ProviderConfig>>({});
   const [modifiedProviders, setModifiedProviders] = useState<Set<string>>(new Set());
@@ -711,26 +722,21 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
   };
 
   const renderModelSelect = (agentName: AgentNameEnum) => (
-    <div
-      className={`rounded-lg border ${isDarkMode ? 'border-gray-700 bg-slate-800' : 'border-gray-200 bg-gray-50'} p-4`}>
-      <h3 className={`mb-2 text-lg font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+    <div className={innerCardClass}>
+      <h3 className="mb-2 text-lg font-medium text-[var(--browd-text)]">
         {agentName.charAt(0).toUpperCase() + agentName.slice(1)}
       </h3>
-      <p className={`mb-4 text-sm font-normal ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-        {getAgentDescription(agentName)}
-      </p>
+      <p className="mb-4 text-sm font-normal text-[var(--browd-muted)]">{getAgentDescription(agentName)}</p>
 
       <div className="space-y-4">
         {/* Model Selection */}
         <div className="flex items-center">
-          <label
-            htmlFor={`${agentName}-model`}
-            className={`w-24 text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+          <label htmlFor={`${agentName}-model`} className={fieldLabelClass}>
             {t('options_models_labels_model')}
           </label>
           <select
             id={`${agentName}-model`}
-            className={`flex-1 rounded-md border text-sm ${isDarkMode ? 'border-slate-600 bg-slate-700 text-gray-200' : 'border-gray-300 bg-white text-gray-700'} px-3 py-2`}
+            className={fieldInputClass}
             disabled={availableModels.length === 0}
             value={selectedModels[agentName] || ''} // Use the stored provider>model value directly
             onChange={e => handleModelChange(agentName, e.target.value)}>
@@ -748,9 +754,7 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
         {/* Temperature Slider - Only show for non-reasoning models */}
         {selectedModels[agentName] && !isOpenAIReasoningModel(selectedModels[agentName]) && (
           <div className="flex items-center">
-            <label
-              htmlFor={`${agentName}-temperature`}
-              className={`w-24 text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+            <label htmlFor={`${agentName}-temperature`} className={fieldLabelClass}>
               {t('options_models_labels_temperature')}
             </label>
             <div className="flex flex-1 items-center space-x-2">
@@ -762,13 +766,11 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
                 step="0.01"
                 value={modelParameters[agentName].temperature}
                 onChange={e => handleParameterChange(agentName, 'temperature', Number.parseFloat(e.target.value))}
-                style={{
-                  background: `linear-gradient(to right, ${isDarkMode ? '#3b82f6' : '#60a5fa'} 0%, ${isDarkMode ? '#3b82f6' : '#60a5fa'} ${(modelParameters[agentName].temperature / 2) * 100}%, ${isDarkMode ? '#475569' : '#cbd5e1'} ${(modelParameters[agentName].temperature / 2) * 100}%, ${isDarkMode ? '#475569' : '#cbd5e1'} 100%)`,
-                }}
-                className={`flex-1 ${isDarkMode ? 'accent-blue-500' : 'accent-blue-400'} h-1 appearance-none rounded-full`}
+                style={rangeStyle((modelParameters[agentName].temperature / 2) * 100)}
+                className="h-1 flex-1 appearance-none rounded-full accent-[var(--browd-accent)]"
               />
               <div className="flex items-center space-x-2">
-                <span className={`w-12 text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                <span className="w-12 text-sm text-[var(--browd-muted)]">
                   {modelParameters[agentName].temperature.toFixed(2)}
                 </span>
                 <input
@@ -783,7 +785,7 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
                       handleParameterChange(agentName, 'temperature', value);
                     }
                   }}
-                  className={`w-20 rounded-md border ${isDarkMode ? 'border-slate-600 bg-slate-700 text-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-800' : 'border-gray-300 bg-white text-gray-700 focus:border-blue-400 focus:ring-2 focus:ring-blue-200'} px-2 py-1 text-sm`}
+                  className={smallFieldInputClass}
                   aria-label={`${agentName} temperature number input`}
                 />
               </div>
@@ -796,9 +798,7 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
           !isOpenAIReasoningModel(selectedModels[agentName]) &&
           !isAnthropicModel(selectedModels[agentName]) && (
             <div className="flex items-center">
-              <label
-                htmlFor={`${agentName}-topP`}
-                className={`w-24 text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+              <label htmlFor={`${agentName}-topP`} className={fieldLabelClass}>
                 {t('options_models_labels_topP')}
               </label>
               <div className="flex flex-1 items-center space-x-2">
@@ -810,13 +810,11 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
                   step="0.001"
                   value={modelParameters[agentName].topP}
                   onChange={e => handleParameterChange(agentName, 'topP', Number.parseFloat(e.target.value))}
-                  style={{
-                    background: `linear-gradient(to right, ${isDarkMode ? '#3b82f6' : '#60a5fa'} 0%, ${isDarkMode ? '#3b82f6' : '#60a5fa'} ${modelParameters[agentName].topP * 100}%, ${isDarkMode ? '#475569' : '#cbd5e1'} ${modelParameters[agentName].topP * 100}%, ${isDarkMode ? '#475569' : '#cbd5e1'} 100%)`,
-                  }}
-                  className={`flex-1 ${isDarkMode ? 'accent-blue-500' : 'accent-blue-400'} h-1 appearance-none rounded-full`}
+                  style={rangeStyle(modelParameters[agentName].topP * 100)}
+                  className="h-1 flex-1 appearance-none rounded-full accent-[var(--browd-accent)]"
                 />
                 <div className="flex items-center space-x-2">
-                  <span className={`w-12 text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                  <span className="w-12 text-sm text-[var(--browd-muted)]">
                     {modelParameters[agentName].topP.toFixed(3)}
                   </span>
                   <input
@@ -831,7 +829,7 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
                         handleParameterChange(agentName, 'topP', value);
                       }
                     }}
-                    className={`w-20 rounded-md border ${isDarkMode ? 'border-slate-600 bg-slate-700 text-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-800' : 'border-gray-300 bg-white text-gray-700 focus:border-blue-400 focus:ring-2 focus:ring-blue-200'} px-2 py-1 text-sm`}
+                    className={smallFieldInputClass}
                     aria-label={`${agentName} top P number input`}
                   />
                 </div>
@@ -842,9 +840,7 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
         {/* Reasoning Effort Selector (only for O-series models) */}
         {selectedModels[agentName] && isOpenAIReasoningModel(selectedModels[agentName]) && (
           <div className="flex items-center">
-            <label
-              htmlFor={`${agentName}-reasoning-effort`}
-              className={`w-24 text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+            <label htmlFor={`${agentName}-reasoning-effort`} className={fieldLabelClass}>
               {t('options_models_labels_reasoning')}
             </label>
             <div className="flex flex-1 items-center space-x-2">
@@ -854,7 +850,7 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
                 onChange={e =>
                   handleReasoningEffortChange(agentName, e.target.value as 'minimal' | 'low' | 'medium' | 'high')
                 }
-                className={`flex-1 rounded-md border text-sm ${isDarkMode ? 'border-slate-600 bg-slate-700 text-gray-200' : 'border-gray-300 bg-white text-gray-700'} px-3 py-2`}>
+                className={fieldInputClass}>
                 <option value="minimal/none">Minimal</option>
                 <option value="low">Low</option>
                 <option value="medium">Medium</option>
@@ -1127,14 +1123,11 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
   return (
     <section className="space-y-6">
       {/* LLM Providers Section */}
-      <div
-        className={`rounded-lg border ${isDarkMode ? 'border-slate-700 bg-slate-800' : 'border-blue-100 bg-gray-50'} p-6 text-left shadow-sm`}>
-        <h2 className={`mb-4 text-xl font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
-          {t('options_models_providers_header')}
-        </h2>
+      <div className={cardClass}>
+        <h2 className={titleClass}>{t('options_models_providers_header')}</h2>
         <div className="space-y-6">
           {getSortedProviders().length === 0 ? (
-            <div className="py-8 text-center text-gray-500">
+            <div className="py-8 text-center text-[var(--browd-muted)]">
               <p className="mb-4">{t('options_models_providers_notConfigured')}</p>
             </div>
           ) : (
@@ -1149,9 +1142,9 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
                 <div
                   key={providerId}
                   id={`provider-${providerId}`}
-                  className={`space-y-4 ${modifiedProviders.has(providerId) && !providersFromStorage.has(providerId) ? `rounded-lg border p-4 ${isDarkMode ? 'border-blue-700 bg-slate-700' : 'border-blue-200 bg-blue-50/70'}` : ''}`}>
+                  className={`space-y-4 ${modifiedProviders.has(providerId) && !providersFromStorage.has(providerId) ? 'rounded-lg border border-[var(--browd-accent)] bg-[var(--browd-accent-soft)] p-4' : ''}`}>
                   <div className="flex items-center justify-between">
-                    <h3 className={`text-lg font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                    <h3 className="text-lg font-medium text-[var(--browd-text)]">
                       {providerConfig.name || providerId}
                     </h3>
                     <div className="flex space-x-2">
@@ -1176,7 +1169,7 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
 
                   {/* Show message for newly added providers */}
                   {modifiedProviders.has(providerId) && !providersFromStorage.has(providerId) && (
-                    <div className={`mb-2 text-sm ${isDarkMode ? 'text-teal-300' : 'text-teal-700'}`}>
+                    <div className="mb-2 text-sm text-[var(--browd-accent)]">
                       <p>{t('options_models_providers_setupInstructions')}</p>
                     </div>
                   )}
@@ -1186,9 +1179,7 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
                     {providerConfig.type === ProviderTypeEnum.CustomOpenAI && (
                       <div className="flex flex-col">
                         <div className="flex items-center">
-                          <label
-                            htmlFor={`${providerId}-name`}
-                            className={`w-20 text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                          <label htmlFor={`${providerId}-name`} className={narrowFieldLabelClass}>
                             {t('options_models_providers_custom_name')}
                           </label>
                           <input
@@ -1216,7 +1207,7 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
                             {nameErrors[providerId]}
                           </p>
                         ) : (
-                          <p className={`ml-20 mt-1 text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                          <p className="ml-20 mt-1 text-xs text-[var(--browd-muted)]">
                             {t('options_models_providers_custom_name_desc')}
                           </p>
                         )}
@@ -1225,9 +1216,7 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
 
                     {/* API Key input with label */}
                     <div className="flex items-center">
-                      <label
-                        htmlFor={`${providerId}-api-key`}
-                        className={`w-20 text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                      <label htmlFor={`${providerId}-api-key`} className={narrowFieldLabelClass}>
                         {t('options_models_providers_apiKey')}
                         {/* Show asterisk only if required */}
                         {providerConfig.type !== ProviderTypeEnum.CustomOpenAI &&
@@ -1317,9 +1306,7 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
                       providerConfig.type === ProviderTypeEnum.Llama) && (
                       <div className="flex flex-col">
                         <div className="flex items-center">
-                          <label
-                            htmlFor={`${providerId}-base-url`}
-                            className={`w-20 text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                          <label htmlFor={`${providerId}-base-url`} className={narrowFieldLabelClass}>
                             {/* Adjust Label based on provider */}
                             {providerConfig.type === ProviderTypeEnum.AzureOpenAI
                               ? t('options_models_providers_endpoint')
@@ -1562,22 +1549,13 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
             <Button
               variant="secondary"
               onClick={() => setIsProviderSelectorOpen(prev => !prev)}
-              className={`flex w-full items-center justify-center font-medium ${
-                isDarkMode
-                  ? 'border-blue-700 bg-blue-600 text-white hover:bg-blue-500'
-                  : 'border-blue-200 bg-blue-100 text-blue-800 hover:bg-blue-200'
-              }`}>
+              className="flex w-full items-center justify-center border-[var(--browd-accent)] bg-[var(--browd-accent)] font-medium text-[var(--browd-accent-text)] hover:bg-[var(--browd-accent-hover)]">
               <span className="mr-2 text-sm">+</span>{' '}
               <span className="text-sm">{t('options_models_addNewProvider')}</span>
             </Button>
 
             {isProviderSelectorOpen && (
-              <div
-                className={`absolute z-10 mt-2 w-full overflow-hidden rounded-md border ${
-                  isDarkMode
-                    ? 'border-blue-600 bg-slate-700 shadow-lg shadow-slate-900/50'
-                    : 'border-blue-200 bg-white shadow-xl shadow-blue-100/50'
-                }`}>
+              <div className="absolute z-10 mt-2 w-full overflow-hidden rounded-md border border-[var(--browd-border)] bg-[var(--browd-panel)] shadow-xl">
                 <div className="py-1">
                   {/* Map through provider types to create buttons */}
                   {Object.values(ProviderTypeEnum)
@@ -1593,11 +1571,7 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
                       <button
                         key={type}
                         type="button"
-                        className={`flex w-full items-center px-4 py-3 text-left text-sm ${
-                          isDarkMode
-                            ? 'text-blue-200 hover:bg-blue-600/30 hover:text-white'
-                            : 'text-blue-700 hover:bg-blue-100 hover:text-blue-800'
-                        } transition-colors duration-150`}
+                        className="flex w-full items-center px-4 py-3 text-left text-sm text-[var(--browd-muted)] transition-colors duration-150 hover:bg-[var(--browd-accent-soft)] hover:text-[var(--browd-text)]"
                         onClick={() => handleProviderSelection(type)}>
                         <span className="font-medium">{getDefaultDisplayNameFromProviderId(type)}</span>
                       </button>
@@ -1606,11 +1580,7 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
                   {/* Custom provider button (always shown) */}
                   <button
                     type="button"
-                    className={`flex w-full items-center px-4 py-3 text-left text-sm ${
-                      isDarkMode
-                        ? 'text-blue-200 hover:bg-blue-600/30 hover:text-white'
-                        : 'text-blue-700 hover:bg-blue-100 hover:text-blue-800'
-                    } transition-colors duration-150`}
+                    className="flex w-full items-center px-4 py-3 text-left text-sm text-[var(--browd-muted)] transition-colors duration-150 hover:bg-[var(--browd-accent-soft)] hover:text-[var(--browd-text)]"
                     onClick={() => handleProviderSelection(ProviderTypeEnum.CustomOpenAI)}>
                     <span className="font-medium">{t('options_models_providers_openaiCompatible')}</span>
                   </button>
@@ -1622,11 +1592,8 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
       </div>
 
       {/* Updated Agent Models Section */}
-      <div
-        className={`rounded-lg border ${isDarkMode ? 'border-slate-700 bg-slate-800' : 'border-blue-100 bg-gray-50'} p-6 text-left shadow-sm`}>
-        <h2 className={`mb-4 text-left text-xl font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
-          {t('options_models_selection_header')}
-        </h2>
+      <div className={cardClass}>
+        <h2 className={titleClass}>{t('options_models_selection_header')}</h2>
         <div className="space-y-4">
           {[AgentNameEnum.Planner, AgentNameEnum.Navigator].map(agentName => (
             <div key={agentName}>{renderModelSelect(agentName)}</div>
@@ -1635,26 +1602,18 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
       </div>
 
       {/* Speech-to-Text Model Selection */}
-      <div
-        className={`rounded-lg border ${isDarkMode ? 'border-slate-700 bg-slate-800' : 'border-blue-100 bg-gray-50'} p-6 text-left shadow-sm`}>
-        <h2 className={`mb-4 text-left text-xl font-semibold ${isDarkMode ? 'text-gray-200' : 'text-gray-800'}`}>
-          {t('options_models_speechToText_header')}
-        </h2>
-        <p className={`mb-4 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-          {t('options_models_stt_desc')}
-        </p>
+      <div className={cardClass}>
+        <h2 className={titleClass}>{t('options_models_speechToText_header')}</h2>
+        <p className="mb-4 text-sm text-[var(--browd-muted)]">{t('options_models_stt_desc')}</p>
 
-        <div
-          className={`rounded-lg border ${isDarkMode ? 'border-gray-700 bg-slate-800' : 'border-gray-200 bg-gray-50'} p-4`}>
+        <div className={innerCardClass}>
           <div className="flex items-center">
-            <label
-              htmlFor="speech-to-text-model"
-              className={`w-24 text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+            <label htmlFor="speech-to-text-model" className={fieldLabelClass}>
               {t('options_models_labels_model')}
             </label>
             <select
               id="speech-to-text-model"
-              className={`flex-1 rounded-md border text-sm ${isDarkMode ? 'border-slate-600 bg-slate-700 text-gray-200' : 'border-gray-300 bg-white text-gray-700'} px-3 py-2`}
+              className={fieldInputClass}
               value={selectedSpeechToTextModel}
               onChange={e => handleSpeechToTextModelChange(e.target.value)}>
               <option value="">{t('options_models_chooseModel')}</option>
