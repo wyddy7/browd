@@ -4,84 +4,71 @@
 
 @layer base {
   :root,
-  [data-browd-theme='sage'] {
-    --browd-bg: #0d0f12;
-    --browd-bg-soft: #111418;
-    --browd-surface: #15181d;
-    --browd-panel: #1b1f26;
-    --browd-panel-strong: #20262e;
-    --browd-border: #2a3039;
-    --browd-border-strong: #3a424d;
-    --browd-text: #f0eee8;
-    --browd-muted: #9ca39d;
-    --browd-faint: #68706b;
-    --browd-accent: #8fd36a;
-    --browd-accent-hover: #a7e57d;
-    --browd-accent-soft: rgba(143, 211, 106, 0.14);
-    --browd-accent-text: #0d0f12;
-    --browd-blue: #6aa8ff;
+  [data-browd-theme='claude'] {
+    --browd-bg: #f5f1e8;
+    --browd-bg-soft: #ece5d8;
+    --browd-surface: #fbf7ef;
+    --browd-panel: #fffaf2;
+    --browd-panel-strong: #eee4d3;
+    --browd-border: #ded2bd;
+    --browd-border-strong: #c6b79b;
+    --browd-text: #262018;
+    --browd-muted: #6f6659;
+    --browd-faint: #968a78;
+    --browd-accent: #d9783d;
+    --browd-accent-hover: #c8642d;
+    --browd-accent-soft: rgba(217, 120, 61, 0.14);
+    --browd-accent-text: #fffaf2;
+    --browd-blue: #4d7f9f;
     --browd-danger: #ef4444;
     --browd-warning: #f59e0b;
     --browd-success: #22c55e;
     --browd-radius-sm: 4px;
     --browd-radius: 6px;
     --browd-radius-md: 8px;
-    --browd-shadow: 0 16px 44px rgba(0, 0, 0, 0.28);
+    --browd-shadow: 0 16px 44px rgba(62, 45, 24, 0.12);
     --browd-font: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    color-scheme: light;
+  }
+
+  [data-browd-theme='graphite'] {
+    --browd-bg: #101112;
+    --browd-bg-soft: #151719;
+    --browd-surface: #1b1d20;
+    --browd-panel: #22252a;
+    --browd-panel-strong: #2b2f35;
+    --browd-border: #343941;
+    --browd-border-strong: #4a515c;
+    --browd-text: #f2f0ea;
+    --browd-muted: #a4a099;
+    --browd-faint: #73706b;
+    --browd-accent: #e6d7b8;
+    --browd-accent-hover: #fff0cc;
+    --browd-accent-soft: rgba(230, 215, 184, 0.14);
+    --browd-accent-text: #101112;
+    --browd-blue: #8fb4d8;
+    --browd-shadow: 0 16px 44px rgba(0, 0, 0, 0.34);
     color-scheme: dark;
   }
 
-  [data-browd-theme='blue'] {
-    --browd-bg: #0b0f17;
-    --browd-bg-soft: #101724;
-    --browd-surface: #151d2a;
-    --browd-panel: #1b2636;
-    --browd-panel-strong: #223048;
-    --browd-border: #2c3a4f;
-    --browd-border-strong: #40516a;
-    --browd-text: #edf2f8;
-    --browd-muted: #98a6b8;
-    --browd-faint: #687589;
-    --browd-accent: #7bb7ff;
-    --browd-accent-hover: #9bcbff;
-    --browd-accent-soft: rgba(123, 183, 255, 0.15);
-    --browd-accent-text: #07101d;
-    --browd-blue: #7bb7ff;
-    --browd-shadow: 0 16px 44px rgba(0, 0, 0, 0.3);
-  }
-
-  [data-browd-theme='mono'] {
-    --browd-bg: #0e0e0e;
-    --browd-bg-soft: #141414;
-    --browd-surface: #191919;
-    --browd-panel: #202020;
-    --browd-panel-strong: #292929;
-    --browd-border: #303030;
-    --browd-border-strong: #454545;
-    --browd-text: #f2f2f2;
-    --browd-muted: #a3a3a3;
-    --browd-faint: #737373;
-    --browd-accent: #e8e8e8;
-    --browd-accent-hover: #ffffff;
-    --browd-accent-soft: rgba(232, 232, 232, 0.12);
-    --browd-accent-text: #0e0e0e;
-    --browd-blue: #c7c7c7;
-    --browd-shadow: 0 16px 44px rgba(0, 0, 0, 0.34);
-  }
-
-  [data-browd-mode='light'] {
-    --browd-bg: #f4f1ea;
-    --browd-bg-soft: #ebe7de;
-    --browd-surface: #fffdf8;
-    --browd-panel: #f7f3ea;
-    --browd-panel-strong: #eee8dc;
-    --browd-border: #ded7c8;
-    --browd-border-strong: #c8beaa;
-    --browd-text: #1e1c18;
-    --browd-muted: #6f6a60;
-    --browd-faint: #918b80;
-    --browd-accent-soft: rgba(87, 122, 63, 0.14);
-    color-scheme: light;
+  [data-browd-theme='ember'] {
+    --browd-bg: #15100d;
+    --browd-bg-soft: #1d1511;
+    --browd-surface: #241a15;
+    --browd-panel: #2b201a;
+    --browd-panel-strong: #382920;
+    --browd-border: #493529;
+    --browd-border-strong: #674a39;
+    --browd-text: #fff4e6;
+    --browd-muted: #c1aa96;
+    --browd-faint: #856f5f;
+    --browd-accent: #ff9b5f;
+    --browd-accent-hover: #ffb27e;
+    --browd-accent-soft: rgba(255, 155, 95, 0.16);
+    --browd-accent-text: #1b110c;
+    --browd-blue: #86b7d8;
+    --browd-shadow: 0 16px 44px rgba(0, 0, 0, 0.36);
+    color-scheme: dark;
   }
 
   html,

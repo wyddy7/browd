@@ -220,14 +220,14 @@
   "options_general_theme_desc": {
     "message": "選擇 Browd 面板使用的視覺風格"
   },
-  "options_general_theme_sage": {
-    "message": "鼠尾草綠"
+  "options_general_theme_claude": {
+    "message": "Claude"
   },
-  "options_general_theme_blue": {
-    "message": "藍色"
+  "options_general_theme_graphite": {
+    "message": "石墨"
   },
-  "options_general_theme_mono": {
-    "message": "黑白"
+  "options_general_theme_ember": {
+    "message": "餘燼"
   },
   "options_general_maxSteps": {
     "message": "單一任務的步驟上限"

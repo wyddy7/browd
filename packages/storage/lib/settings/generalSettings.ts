@@ -3,7 +3,7 @@ import { createStorage } from '../base/base';
 import type { BaseStorage } from '../base/types';
 
 // Interface for general settings configuration
-export type AppearanceTheme = 'sage' | 'blue' | 'mono';
+export type AppearanceTheme = 'claude' | 'graphite' | 'ember';
 
 export interface GeneralSettingsConfig {
   appearanceTheme: AppearanceTheme;
@@ -26,7 +26,7 @@ export type GeneralSettingsStorage = BaseStorage<GeneralSettingsConfig> & {
 
 // Default settings
 export const DEFAULT_GENERAL_SETTINGS: GeneralSettingsConfig = {
-  appearanceTheme: 'sage',
+  appearanceTheme: 'claude',
   maxSteps: 100,
   maxActionsPerStep: 5,
   maxFailures: 3,
@@ -43,6 +43,12 @@ const storage = createStorage<GeneralSettingsConfig>('general-settings', DEFAULT
   liveUpdate: true,
 });
 
+const normalizeAppearanceTheme = (theme: unknown): AppearanceTheme => {
+  if (theme === 'graphite' || theme === 'mono' || theme === 'blue') return 'graphite';
+  if (theme === 'ember') return 'ember';
+  return 'claude';
+};
+
 export const generalSettingsStore: GeneralSettingsStorage = {
   ...storage,
   async updateSettings(settings: Partial<GeneralSettingsConfig>) {
@@ -51,6 +57,8 @@ export const generalSettingsStore: GeneralSettingsStorage = {
       ...currentSettings,
       ...settings,
     };
+
+    updatedSettings.appearanceTheme = normalizeAppearanceTheme(updatedSettings.appearanceTheme);
 
     // If useVision is true, displayHighlights must also be true
     if (updatedSettings.useVision && !updatedSettings.displayHighlights) {
@@ -64,6 +72,7 @@ export const generalSettingsStore: GeneralSettingsStorage = {
     return {
       ...DEFAULT_GENERAL_SETTINGS,
       ...settings,
+      appearanceTheme: normalizeAppearanceTheme(settings?.appearanceTheme),
     };
   },
   async resetToDefaults() {

@@ -10,9 +10,9 @@ import { t } from '@extension/i18n';
 type MessageKey = Parameters<typeof t>[0];
 
 const APPEARANCE_THEMES = [
-  { id: 'sage', labelKey: 'options_general_theme_sage', swatch: 'bg-[#8fd36a]' },
-  { id: 'blue', labelKey: 'options_general_theme_blue', swatch: 'bg-[#7bb7ff]' },
-  { id: 'mono', labelKey: 'options_general_theme_mono', swatch: 'bg-[#e8e8e8]' },
+  { id: 'claude', labelKey: 'options_general_theme_claude', swatch: 'bg-[#d9783d]' },
+  { id: 'graphite', labelKey: 'options_general_theme_graphite', swatch: 'bg-[#e6d7b8]' },
+  { id: 'ember', labelKey: 'options_general_theme_ember', swatch: 'bg-[#ff9b5f]' },
 ] satisfies Array<{ id: AppearanceTheme; labelKey: MessageKey; swatch: string }>;
 
 const settingTitleClass = 'text-base font-medium text-[var(--browd-text)]';
@@ -21,7 +21,11 @@ const numberInputClass = 'browd-input w-20 px-3 py-2';
 const toggleClass =
   "peer h-6 w-11 rounded-full bg-[var(--browd-panel-strong)] after:absolute after:left-[2px] after:top-[2px] after:size-5 after:rounded-full after:border after:border-[var(--browd-border)] after:bg-[var(--browd-text)] after:transition-all after:content-[''] peer-checked:bg-[var(--browd-accent)] peer-checked:after:translate-x-full peer-checked:after:border-[var(--browd-accent)] peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-[var(--browd-accent-soft)]";
 
-export const GeneralSettings = () => {
+interface GeneralSettingsProps {
+  onAppearanceThemeChange?: (theme: AppearanceTheme) => void;
+}
+
+export const GeneralSettings = ({ onAppearanceThemeChange }: GeneralSettingsProps) => {
   const [settings, setSettings] = useState<GeneralSettingsConfig>(DEFAULT_GENERAL_SETTINGS);
 
   useEffect(() => {
@@ -32,6 +36,9 @@ export const GeneralSettings = () => {
   const updateSetting = async <K extends keyof GeneralSettingsConfig>(key: K, value: GeneralSettingsConfig[K]) => {
     // Optimistically update the local state for responsiveness
     setSettings(prevSettings => ({ ...prevSettings, [key]: value }));
+    if (key === 'appearanceTheme') {
+      onAppearanceThemeChange?.(value as AppearanceTheme);
+    }
 
     // Call the store to update the setting
     await generalSettingsStore.updateSettings({ [key]: value } as Partial<GeneralSettingsConfig>);

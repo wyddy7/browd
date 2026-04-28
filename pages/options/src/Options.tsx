@@ -23,7 +23,7 @@ const TABS: { id: TabTypes; icon: React.ComponentType<{ className?: string }>; l
 const Options = () => {
   const [activeTab, setActiveTab] = useState<TabTypes>('models');
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [appearanceTheme, setAppearanceTheme] = useState<AppearanceTheme>('sage');
+  const [appearanceTheme, setAppearanceTheme] = useState<AppearanceTheme>('claude');
 
   // Check for dark mode preference
   useEffect(() => {
@@ -42,7 +42,7 @@ const Options = () => {
     generalSettingsStore
       .getSettings()
       .then(settings => setAppearanceTheme(settings.appearanceTheme))
-      .catch(() => setAppearanceTheme('sage'));
+      .catch(() => setAppearanceTheme('claude'));
   }, [activeTab]);
 
   const handleTabClick = (tabId: TabTypes) => {
@@ -56,7 +56,7 @@ const Options = () => {
   const renderTabContent = () => {
     switch (activeTab) {
       case 'general':
-        return <GeneralSettings />;
+        return <GeneralSettings onAppearanceThemeChange={setAppearanceTheme} />;
       case 'models':
         return <ModelSettings isDarkMode={isDarkMode} />;
       case 'firewall':
@@ -82,11 +82,11 @@ const Options = () => {
               <li key={item.id}>
                 <Button
                   onClick={() => handleTabClick(item.id)}
-                  className={`flex w-full items-center space-x-2 rounded-lg px-4 py-2 text-left text-sm
+                  className={`flex w-full items-center space-x-2 rounded-lg px-4 py-2 text-left text-sm shadow-none
                     ${
                       activeTab !== item.id
-                        ? 'browd-button-ghost'
-                        : 'bg-[var(--browd-accent-soft)] text-[var(--browd-accent-hover)]'
+                        ? 'border border-transparent bg-transparent text-[var(--browd-muted)] hover:bg-[var(--browd-accent-soft)] hover:text-[var(--browd-text)]'
+                        : 'border border-[var(--browd-accent)] bg-[var(--browd-accent)] text-[var(--browd-accent-text)]'
                     }`}>
                   <item.icon className="h-4 w-4" />
                   <span>{item.label}</span>
