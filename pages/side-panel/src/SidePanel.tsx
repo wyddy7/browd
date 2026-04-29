@@ -5,11 +5,17 @@ import { PiPlusBold } from 'react-icons/pi';
 import { GrHistory } from 'react-icons/gr';
 import {
   type AppearanceTheme,
+  type ProviderConfig,
   type Message,
   Actors,
   chatHistoryStore,
   agentModelStore,
   generalSettingsStore,
+  llmProviderStore,
+  llmProviderModelNames,
+  getDefaultAgentModelParams,
+  AgentNameEnum,
+  ProviderTypeEnum,
 } from '@extension/storage';
 import favoritesStorage, { type FavoritePrompt } from '@extension/storage/lib/prompt/favorites';
 import { t } from '@extension/i18n';
@@ -19,6 +25,35 @@ import ChatHistoryList from './components/ChatHistoryList';
 import BookmarkList from './components/BookmarkList';
 import { EventType, type AgentEvent, ExecutionState } from './types/event';
 import './SidePanel.css';
+
+type ModelOption = {
+  provider: string;
+  providerName: string;
+  model: string;
+};
+
+function isOpenAIReasoningModel(modelName: string): boolean {
+  let modelNameWithoutProvider = modelName;
+  if (modelNameWithoutProvider.startsWith('openai/')) {
+    modelNameWithoutProvider = modelNameWithoutProvider.substring(7);
+  }
+  return (
+    modelNameWithoutProvider.startsWith('o') ||
+    (modelNameWithoutProvider.startsWith('gpt-5') && !modelNameWithoutProvider.startsWith('gpt-5-chat'))
+  );
+}
+
+function isAnthropicModel(modelName: string): boolean {
+  return modelName.startsWith('claude-');
+}
+
+function getProviderModels(providerId: string, config: ProviderConfig): string[] {
+  if (config.type === ProviderTypeEnum.AzureOpenAI) {
+    return config.azureDeploymentNames || [];
+  }
+
+  return config.modelNames || llmProviderModelNames[providerId as keyof typeof llmProviderModelNames] || [];
+}
 
 // Declare chrome API types
 declare global {
@@ -41,6 +76,8 @@ const SidePanel = () => {
   const [appearanceTheme, setAppearanceTheme] = useState<AppearanceTheme>('light');
   const [favoritePrompts, setFavoritePrompts] = useState<FavoritePrompt[]>([]);
   const [hasConfiguredModels, setHasConfiguredModels] = useState<boolean | null>(null); // null = loading, false = no models, true = has models
+  const [availableModels, setAvailableModels] = useState<ModelOption[]>([]);
+  const [selectedNavigatorModel, setSelectedNavigatorModel] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessingSpeech, setIsProcessingSpeech] = useState(false);
   const [isReplaying, setIsReplaying] = useState(false);
@@ -95,11 +132,46 @@ const SidePanel = () => {
     }
   }, []);
 
+  const loadAvailableModels = useCallback(async () => {
+    try {
+      const providers = await llmProviderStore.getAllProviders();
+      const models: ModelOption[] = [];
+
+      for (const [providerId, config] of Object.entries(providers)) {
+        const providerModels = getProviderModels(providerId, config);
+        for (const model of providerModels) {
+          models.push({
+            provider: providerId,
+            providerName: config.name || providerId,
+            model,
+          });
+        }
+      }
+
+      setAvailableModels(models);
+    } catch (error) {
+      console.error('Error loading available models:', error);
+      setAvailableModels([]);
+    }
+  }, []);
+
+  const loadNavigatorModel = useCallback(async () => {
+    try {
+      const config = await agentModelStore.getAgentModel(AgentNameEnum.Navigator);
+      setSelectedNavigatorModel(config ? `${config.provider}>${config.modelName}` : '');
+    } catch (error) {
+      console.error('Error loading navigator model:', error);
+      setSelectedNavigatorModel('');
+    }
+  }, []);
+
   // Check model configuration on mount
   useEffect(() => {
     checkModelConfiguration();
     loadGeneralSettings();
-  }, [checkModelConfiguration, loadGeneralSettings]);
+    loadAvailableModels();
+    loadNavigatorModel();
+  }, [checkModelConfiguration, loadGeneralSettings, loadAvailableModels, loadNavigatorModel]);
 
   // Re-check model configuration when the side panel becomes visible again
   useEffect(() => {
@@ -108,6 +180,8 @@ const SidePanel = () => {
         // Panel became visible, re-check configuration and settings
         checkModelConfiguration();
         loadGeneralSettings();
+        loadAvailableModels();
+        loadNavigatorModel();
       }
     };
 
@@ -115,6 +189,8 @@ const SidePanel = () => {
       // Panel gained focus, re-check configuration and settings
       checkModelConfiguration();
       loadGeneralSettings();
+      loadAvailableModels();
+      loadNavigatorModel();
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -124,7 +200,41 @@ const SidePanel = () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleFocus);
     };
-  }, [checkModelConfiguration, loadGeneralSettings]);
+  }, [checkModelConfiguration, loadGeneralSettings, loadAvailableModels, loadNavigatorModel]);
+
+  const handleNavigatorModelChange = useCallback(
+    async (modelValue: string) => {
+      setSelectedNavigatorModel(modelValue);
+
+      try {
+        if (!modelValue) {
+          await agentModelStore.resetAgentModel(AgentNameEnum.Navigator);
+          await checkModelConfiguration();
+          return;
+        }
+
+        const [provider, modelName] = modelValue.split('>');
+        if (!provider || !modelName) return;
+
+        const newParameters = getDefaultAgentModelParams(provider, AgentNameEnum.Navigator);
+        const parametersToSave = isAnthropicModel(modelName)
+          ? { temperature: newParameters.temperature }
+          : newParameters;
+
+        await agentModelStore.setAgentModel(AgentNameEnum.Navigator, {
+          provider,
+          modelName,
+          parameters: parametersToSave,
+          reasoningEffort: isOpenAIReasoningModel(modelName) ? 'minimal' : undefined,
+        });
+
+        await checkModelConfiguration();
+      } catch (error) {
+        console.error('Error saving navigator model:', error);
+      }
+    },
+    [checkModelConfiguration],
+  );
 
   useEffect(() => {
     sessionIdRef.current = currentSessionId;
@@ -1126,6 +1236,9 @@ const SidePanel = () => {
                         onSendMessage={handleSendMessage}
                         onStopTask={handleStopTask}
                         onMicClick={handleMicClick}
+                        availableModels={availableModels}
+                        selectedModel={selectedNavigatorModel}
+                        onModelChange={handleNavigatorModelChange}
                         isRecording={isRecording}
                         isProcessingSpeech={isProcessingSpeech}
                         disabled={!inputEnabled || isHistoricalSession}
@@ -1162,6 +1275,9 @@ const SidePanel = () => {
                       onSendMessage={handleSendMessage}
                       onStopTask={handleStopTask}
                       onMicClick={handleMicClick}
+                      availableModels={availableModels}
+                      selectedModel={selectedNavigatorModel}
+                      onModelChange={handleNavigatorModelChange}
                       isRecording={isRecording}
                       isProcessingSpeech={isProcessingSpeech}
                       disabled={!inputEnabled || isHistoricalSession}

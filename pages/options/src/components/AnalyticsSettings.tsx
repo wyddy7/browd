@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { analyticsSettingsStore } from '@extension/storage';
+import { ToggleSwitch } from '@extension/ui';
 
 import type { AnalyticsSettingsConfig } from '@extension/storage';
 
@@ -8,9 +9,6 @@ const insetClass = 'rounded-md border border-[var(--browd-border)] bg-[var(--bro
 const titleClass = 'mb-4 text-xl font-semibold text-[var(--browd-text)]';
 const subheadClass = 'mb-4 text-base font-medium text-[var(--browd-text)]';
 const listClass = 'list-disc space-y-2 pl-5 text-left text-sm text-[var(--browd-muted)]';
-const toggleTrackClass =
-  'block h-6 cursor-pointer overflow-hidden rounded-full bg-[var(--browd-panel-strong)] data-[enabled=true]:bg-[var(--browd-accent)]';
-
 export const AnalyticsSettings: React.FC = () => {
   const [settings, setSettings] = useState<AnalyticsSettingsConfig | null>(null);
   const [loading, setLoading] = useState(true);
@@ -84,23 +82,12 @@ export const AnalyticsSettings: React.FC = () => {
               <label htmlFor="analytics-enabled" className="text-base font-medium text-[var(--browd-text)]">
                 Help improve Browd
               </label>
-              <div className="relative inline-block w-12 select-none">
-                <input
-                  type="checkbox"
-                  checked={settings.enabled}
-                  onChange={e => handleToggleAnalytics(e.target.checked)}
-                  className="sr-only"
-                  id="analytics-enabled"
-                />
-                <label htmlFor="analytics-enabled" data-enabled={settings.enabled} className={toggleTrackClass}>
-                  <span className="sr-only">Toggle analytics</span>
-                  <span
-                    className={`block size-6 rounded-full bg-[var(--browd-text)] shadow transition-transform ${
-                      settings.enabled ? 'translate-x-6' : 'translate-x-0'
-                    }`}
-                  />
-                </label>
-              </div>
+              <ToggleSwitch
+                id="analytics-enabled"
+                checked={settings.enabled}
+                onChange={e => handleToggleAnalytics(e.target.checked)}
+                label="Toggle analytics"
+              />
             </div>
             <p className="mt-2 text-sm text-[var(--browd-muted)]">
               Share anonymous usage data to help us improve the extension

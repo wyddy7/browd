@@ -3,10 +3,19 @@ import { FaMicrophone } from 'react-icons/fa';
 import { AiOutlineLoading3Quarters } from 'react-icons/ai';
 import { t } from '@extension/i18n';
 
+interface ModelOption {
+  provider: string;
+  providerName: string;
+  model: string;
+}
+
 interface ChatInputProps {
   onSendMessage: (text: string, displayText?: string) => void;
   onStopTask: () => void;
   onMicClick?: () => void;
+  availableModels?: ModelOption[];
+  selectedModel?: string;
+  onModelChange?: (modelValue: string) => void;
   isRecording?: boolean;
   isProcessingSpeech?: boolean;
   disabled: boolean;
@@ -29,6 +38,9 @@ export default function ChatInput({
   onSendMessage,
   onStopTask,
   onMicClick,
+  availableModels = [],
+  selectedModel = '',
+  onModelChange,
   isRecording = false,
   isProcessingSpeech = false,
   disabled,
@@ -39,12 +51,51 @@ export default function ChatInput({
 }: ChatInputProps) {
   const [text, setText] = useState('');
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
+  const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
   const isSendButtonDisabled = useMemo(
     () => disabled || (text.trim() === '' && attachedFiles.length === 0),
     [disabled, text, attachedFiles],
   );
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const modelMenuRef = useRef<HTMLDivElement>(null);
+  const selectedModelOption = useMemo(
+    () => availableModels.find(({ provider, model }) => `${provider}>${model}` === selectedModel),
+    [availableModels, selectedModel],
+  );
+  const selectedModelLabel = useMemo(() => {
+    if (!selectedModelOption) return t('options_models_chooseModel');
+
+    const model = selectedModelOption.model.split('/').pop() || selectedModelOption.model;
+    return model
+      .replace(/^gpt-/i, 'GPT-')
+      .replace(/^claude-/i, 'Claude ')
+      .replace(/^gemini-/i, 'Gemini ')
+      .replace(/-/g, ' ');
+  }, [selectedModelOption]);
+
+  useEffect(() => {
+    if (!isModelMenuOpen) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!modelMenuRef.current?.contains(event.target as Node)) {
+        setIsModelMenuOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsModelMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isModelMenuOpen]);
 
   // Handle text changes and resize textarea
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -184,7 +235,7 @@ export default function ChatInput({
   return (
     <form
       onSubmit={handleSubmit}
-      className={`browd-input overflow-hidden transition-colors ${disabled ? 'cursor-not-allowed opacity-80' : ''}`}
+      className={`browd-input overflow-visible transition-colors ${disabled ? 'cursor-not-allowed opacity-80' : ''}`}
       aria-label={t('chat_input_form')}>
       <div className="flex flex-col">
         {/* File attachments display */}
@@ -221,7 +272,7 @@ export default function ChatInput({
           aria-label={t('chat_input_editor')}
         />
 
-        <div className="flex items-center justify-between border-t border-[var(--browd-border)] bg-[var(--browd-surface)] px-2 py-1.5">
+        <div className="flex items-center justify-between border-t border-[var(--browd-border)] bg-[var(--browd-surface)] px-3 py-2">
           <div className="flex gap-2 text-[var(--browd-muted)]">
             {/* File attachment button */}
             <button
@@ -244,8 +295,62 @@ export default function ChatInput({
               className="hidden"
               aria-hidden="true"
             />
+          </div>
 
-            {onMicClick && (
+          <div className="flex items-center gap-2">
+            {onModelChange && (
+              <div ref={modelMenuRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsModelMenuOpen(open => !open)}
+                  disabled={disabled || availableModels.length === 0}
+                  aria-haspopup="menu"
+                  aria-expanded={isModelMenuOpen}
+                  className="flex max-w-[168px] items-center gap-2 rounded-full bg-[var(--browd-panel-strong)] px-3 py-1.5 text-sm text-[var(--browd-text)] transition-colors hover:bg-[var(--browd-control-hover)] disabled:cursor-not-allowed disabled:opacity-50">
+                  <span className="truncate">{selectedModelLabel}</span>
+                  <span className="shrink-0 text-[var(--browd-faint)]">Medium</span>
+                  <span className="shrink-0 text-xs text-[var(--browd-faint)]">v</span>
+                </button>
+
+                {isModelMenuOpen && (
+                  <div
+                    role="menu"
+                    className="absolute bottom-full right-0 z-50 mb-2 w-72 overflow-hidden rounded-xl border border-[var(--browd-border)] bg-[var(--browd-panel)] py-2 text-sm text-[var(--browd-text)] shadow-[var(--browd-shadow-menu)]">
+                    <div className="px-4 pb-2 text-sm text-[var(--browd-faint)]">Model</div>
+                    <div className="max-h-72 overflow-y-auto">
+                      {availableModels.map(({ provider, providerName, model }) => {
+                        const value = `${provider}>${model}`;
+                        const isSelected = value === selectedModel;
+                        return (
+                          <button
+                            key={value}
+                            type="button"
+                            role="menuitemradio"
+                            aria-checked={isSelected}
+                            onClick={() => {
+                              onModelChange(value);
+                              setIsModelMenuOpen(false);
+                            }}
+                            className={`flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left transition-colors ${
+                              isSelected
+                                ? 'bg-[var(--browd-panel-strong)] text-[var(--browd-text)]'
+                                : 'text-[var(--browd-muted)] hover:bg-[var(--browd-control-hover)] hover:text-[var(--browd-text)]'
+                            }`}>
+                            <span className="min-w-0">
+                              <span className="block truncate text-[var(--browd-text)]">{model}</span>
+                              <span className="block truncate text-xs text-[var(--browd-faint)]">{providerName}</span>
+                            </span>
+                            <span className={`shrink-0 text-lg ${isSelected ? 'opacity-100' : 'opacity-0'}`}>✓</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {onMicClick && !historicalSessionId && (
               <button
                 type="button"
                 onClick={onMicClick}
@@ -271,33 +376,33 @@ export default function ChatInput({
                 )}
               </button>
             )}
-          </div>
 
-          {showStopButton ? (
-            <button
-              type="button"
-              onClick={onStopTask}
-              className="rounded-md bg-[var(--browd-danger)] px-3 py-1 text-white transition-colors hover:bg-[var(--browd-danger-hover)]">
-              {t('chat_buttons_stop')}
-            </button>
-          ) : historicalSessionId ? (
-            <button
-              type="button"
-              onClick={handleReplay}
-              disabled={!historicalSessionId}
-              aria-disabled={!historicalSessionId}
-              className={`browd-button-primary px-3 py-1 text-sm font-medium ${!historicalSessionId ? 'cursor-not-allowed opacity-50' : ''}`}>
-              {t('chat_buttons_replay')}
-            </button>
-          ) : (
-            <button
-              type="submit"
-              disabled={isSendButtonDisabled}
-              aria-disabled={isSendButtonDisabled}
-              className={`browd-button-primary px-3 py-1 text-sm font-medium ${isSendButtonDisabled ? 'cursor-not-allowed opacity-50' : ''}`}>
-              {t('chat_buttons_send')}
-            </button>
-          )}
+            {showStopButton ? (
+              <button
+                type="button"
+                onClick={onStopTask}
+                className="rounded-md bg-[var(--browd-danger)] px-3 py-1 text-white transition-colors hover:bg-[var(--browd-danger-hover)]">
+                {t('chat_buttons_stop')}
+              </button>
+            ) : historicalSessionId ? (
+              <button
+                type="button"
+                onClick={handleReplay}
+                disabled={!historicalSessionId}
+                aria-disabled={!historicalSessionId}
+                className={`browd-button-primary px-3 py-1 text-sm font-medium ${!historicalSessionId ? 'cursor-not-allowed opacity-50' : ''}`}>
+                {t('chat_buttons_replay')}
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={isSendButtonDisabled}
+                aria-disabled={isSendButtonDisabled}
+                className={`browd-button-primary px-3 py-1 text-sm font-medium ${isSendButtonDisabled ? 'cursor-not-allowed opacity-50' : ''}`}>
+                {t('chat_buttons_send')}
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </form>

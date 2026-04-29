@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { firewallStore } from '@extension/storage';
-import { Button } from '@extension/ui';
+import { Button, ToggleSwitch } from '@extension/ui';
 import { t } from '@extension/i18n';
 
 const cardClass = 'browd-card p-6 text-left';
@@ -8,8 +8,6 @@ const insetClass = 'rounded-md border border-[var(--browd-border)] bg-[var(--bro
 const titleClass = 'mb-4 text-xl font-semibold text-[var(--browd-text)]';
 const labelClass = 'text-base font-medium text-[var(--browd-text)]';
 const mutedClass = 'text-[var(--browd-muted)]';
-const toggleTrackClass =
-  'block h-6 cursor-pointer overflow-hidden rounded-full bg-[var(--browd-panel-strong)] data-[enabled=true]:bg-[var(--browd-accent)]';
 const activeSegmentClass = 'bg-[var(--browd-accent)] text-[var(--browd-accent-text)]';
 const inactiveSegmentClass = 'browd-button-ghost bg-[var(--browd-panel-strong)] text-[var(--browd-muted)]';
 
@@ -70,23 +68,12 @@ export const FirewallSettings = () => {
               <label htmlFor="toggle-firewall" className={labelClass}>
                 {t('options_firewall_enableToggle')}
               </label>
-              <div className="relative inline-block w-12 select-none">
-                <input
-                  type="checkbox"
-                  checked={isEnabled}
-                  onChange={handleToggleFirewall}
-                  className="sr-only"
-                  id="toggle-firewall"
-                />
-                <label htmlFor="toggle-firewall" data-enabled={isEnabled} className={toggleTrackClass}>
-                  <span className="sr-only">{t('options_firewall_toggleFirewall_a11y')}</span>
-                  <span
-                    className={`block size-6 rounded-full bg-[var(--browd-text)] shadow transition-transform ${
-                      isEnabled ? 'translate-x-6' : 'translate-x-0'
-                    }`}
-                  />
-                </label>
-              </div>
+              <ToggleSwitch
+                id="toggle-firewall"
+                checked={isEnabled}
+                onChange={handleToggleFirewall}
+                label={t('options_firewall_toggleFirewall_a11y')}
+              />
             </div>
           </div>
 

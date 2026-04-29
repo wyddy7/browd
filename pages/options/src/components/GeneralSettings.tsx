@@ -5,6 +5,7 @@ import {
   generalSettingsStore,
   DEFAULT_GENERAL_SETTINGS,
 } from '@extension/storage';
+import { ToggleSwitch } from '@extension/ui';
 import { t } from '@extension/i18n';
 
 type MessageKey = Parameters<typeof t>[0];
@@ -17,8 +18,6 @@ const APPEARANCE_THEMES = [
 const settingTitleClass = 'text-base font-medium text-[var(--browd-text)]';
 const settingDescriptionClass = 'text-sm font-normal text-[var(--browd-muted)]';
 const numberInputClass = 'browd-input w-20 px-3 py-2';
-const toggleClass =
-  "peer h-6 w-11 rounded-full bg-[var(--browd-toggle-track-off)] after:absolute after:left-[2px] after:top-[2px] after:size-5 after:rounded-full after:border after:border-[var(--browd-border)] after:bg-[var(--browd-toggle-thumb)] after:transition-all after:content-[''] peer-checked:bg-[var(--browd-blue)] peer-checked:after:translate-x-full peer-checked:after:border-transparent peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-[var(--browd-accent-soft)]";
 
 interface GeneralSettingsProps {
   onAppearanceThemeChange?: (theme: AppearanceTheme) => void;
@@ -142,18 +141,12 @@ export const GeneralSettings = ({ onAppearanceThemeChange }: GeneralSettingsProp
               <h3 className={settingTitleClass}>{t('options_general_enableVision')}</h3>
               <p className={settingDescriptionClass}>{t('options_general_enableVision_desc')}</p>
             </div>
-            <div className="relative inline-flex cursor-pointer items-center">
-              <input
-                id="useVision"
-                type="checkbox"
-                checked={settings.useVision}
-                onChange={e => updateSetting('useVision', e.target.checked)}
-                className="peer sr-only"
-              />
-              <label htmlFor="useVision" className={toggleClass}>
-                <span className="sr-only">{t('options_general_enableVision')}</span>
-              </label>
-            </div>
+            <ToggleSwitch
+              id="useVision"
+              checked={settings.useVision}
+              onChange={e => updateSetting('useVision', e.target.checked)}
+              label={t('options_general_enableVision')}
+            />
           </div>
 
           <div className="flex items-center justify-between">
@@ -161,18 +154,12 @@ export const GeneralSettings = ({ onAppearanceThemeChange }: GeneralSettingsProp
               <h3 className={settingTitleClass}>{t('options_general_displayHighlights')}</h3>
               <p className={settingDescriptionClass}>{t('options_general_displayHighlights_desc')}</p>
             </div>
-            <div className="relative inline-flex cursor-pointer items-center">
-              <input
-                id="displayHighlights"
-                type="checkbox"
-                checked={settings.displayHighlights}
-                onChange={e => updateSetting('displayHighlights', e.target.checked)}
-                className="peer sr-only"
-              />
-              <label htmlFor="displayHighlights" className={toggleClass}>
-                <span className="sr-only">{t('options_general_displayHighlights')}</span>
-              </label>
-            </div>
+            <ToggleSwitch
+              id="displayHighlights"
+              checked={settings.displayHighlights}
+              onChange={e => updateSetting('displayHighlights', e.target.checked)}
+              label={t('options_general_displayHighlights')}
+            />
           </div>
 
           <div className="flex items-center justify-between">
@@ -221,18 +208,12 @@ export const GeneralSettings = ({ onAppearanceThemeChange }: GeneralSettingsProp
               <h3 className={settingTitleClass}>{t('options_general_replayHistoricalTasks')}</h3>
               <p className={settingDescriptionClass}>{t('options_general_replayHistoricalTasks_desc')}</p>
             </div>
-            <div className="relative inline-flex cursor-pointer items-center">
-              <input
-                id="replayHistoricalTasks"
-                type="checkbox"
-                checked={settings.replayHistoricalTasks}
-                onChange={e => updateSetting('replayHistoricalTasks', e.target.checked)}
-                className="peer sr-only"
-              />
-              <label htmlFor="replayHistoricalTasks" className={toggleClass}>
-                <span className="sr-only">{t('options_general_replayHistoricalTasks')}</span>
-              </label>
-            </div>
+            <ToggleSwitch
+              id="replayHistoricalTasks"
+              checked={settings.replayHistoricalTasks}
+              onChange={e => updateSetting('replayHistoricalTasks', e.target.checked)}
+              label={t('options_general_replayHistoricalTasks')}
+            />
           </div>
         </div>
       </div>
