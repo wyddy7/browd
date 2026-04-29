@@ -23,13 +23,12 @@ export function Button({ theme, variant = 'primary', className, disabled, childr
             (variant === 'primary' || variant === 'secondary') && disabled,
 
           // Danger variant
-          // Note: bg-red-400 causes the button to appear black (RGB 0,0,0) for unknown reasons
-          // Using bg-red-500 with opacity to achieve a softer look
-          'bg-[var(--browd-danger)] bg-opacity-80 hover:bg-[var(--browd-danger)] hover:bg-opacity-90 text-white hover:scale-105':
+          'bg-[var(--browd-danger)] hover:bg-[var(--browd-danger-hover)] text-white hover:scale-105':
             variant === 'danger' && !disabled && theme !== 'dark',
-          'bg-[var(--browd-danger)] bg-opacity-70 hover:bg-[var(--browd-danger)] hover:bg-opacity-90 text-white hover:scale-105':
+          'bg-[var(--browd-danger)] hover:bg-[var(--browd-danger-hover)] text-[var(--browd-text-inverse)] hover:scale-105':
             variant === 'danger' && !disabled && theme === 'dark',
-          'bg-[var(--browd-danger)] bg-opacity-40 text-white cursor-not-allowed': variant === 'danger' && disabled,
+          'bg-[var(--browd-danger-soft)] text-[var(--browd-danger)] cursor-not-allowed':
+            variant === 'danger' && disabled,
         },
         className,
       )}

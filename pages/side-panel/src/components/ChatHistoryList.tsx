@@ -68,7 +68,7 @@ const ChatHistoryList: React.FC<ChatHistoryListProps> = ({
                   e.stopPropagation();
                   onSessionDelete(session.id);
                 }}
-                className="browd-icon-button absolute bottom-2 right-2 p-1 opacity-0 transition-opacity group-hover:opacity-100"
+                className="absolute bottom-2 right-2 rounded p-1 text-[var(--browd-danger)] opacity-0 transition-colors transition-opacity hover:bg-[var(--browd-danger-soft)] hover:text-[var(--browd-danger-hover)] group-hover:opacity-100"
                 aria-label={t('chat_history_delete')}
                 type="button">
                 <FaTrash size={14} />

@@ -36,7 +36,8 @@
     --browd-info-400: 215 60% 48%;
     --browd-success-400: 150 50% 36%;
     --browd-warning-400: 32 85% 45%;
-    --browd-danger-400: 2 65% 48%;
+    --browd-danger-400: 0 58% 36%;
+    --browd-danger-500: 0 62% 30%;
     --browd-shadow: 40 3% 8%;
     --browd-border-alpha: 0.6;
     --browd-border-strong-alpha: 0.75;
@@ -68,7 +69,8 @@
     --browd-info-400: 215 65% 60%;
     --browd-success-400: 150 45% 48%;
     --browd-warning-400: 35 85% 55%;
-    --browd-danger-400: 2 68% 58%;
+    --browd-danger-400: 0 76% 78%;
+    --browd-danger-500: 0 82% 83%;
     --browd-shadow: 40 3% 5%;
     --browd-border-alpha: 0.14;
     --browd-border-strong-alpha: 0.22;
@@ -133,6 +135,8 @@
     --browd-accent-text: hsl(var(--browd-text-inverse));
     --browd-blue: hsl(var(--browd-info-400));
     --browd-danger: hsl(var(--browd-danger-400));
+    --browd-danger-hover: hsl(var(--browd-danger-500));
+    --browd-danger-soft: hsl(var(--browd-danger-400) / 0.1);
     --browd-warning: hsl(var(--browd-warning-400));
     --browd-success: hsl(var(--browd-success-400));
     --browd-info: hsl(var(--browd-info-400));

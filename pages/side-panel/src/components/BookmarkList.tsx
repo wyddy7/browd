@@ -156,7 +156,7 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
                       onBookmarkDelete(bookmark.id);
                     }
                   }}
-                  className="browd-icon-button absolute right-2 top-1/2 z-10 -translate-y-1/2 p-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+                  className="absolute right-2 top-1/2 z-10 -translate-y-1/2 rounded p-1 text-[var(--browd-danger)] opacity-0 transition-colors transition-opacity duration-200 hover:bg-[var(--browd-danger-soft)] hover:text-[var(--browd-danger-hover)] group-hover:opacity-100"
                   aria-label={t('chat_bookmarks_delete')}
                   type="button">
                   <FaTrash size={14} />

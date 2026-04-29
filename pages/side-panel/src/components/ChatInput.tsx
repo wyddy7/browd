@@ -261,7 +261,7 @@ export default function ChatInput({
                   disabled || isProcessingSpeech
                     ? 'cursor-not-allowed opacity-50'
                     : isRecording
-                      ? 'bg-red-500 text-white hover:bg-red-600'
+                      ? 'bg-[var(--browd-danger)] text-white hover:bg-[var(--browd-danger-hover)]'
                       : 'browd-icon-button'
                 }`}>
                 {isProcessingSpeech ? (
@@ -277,7 +277,7 @@ export default function ChatInput({
             <button
               type="button"
               onClick={onStopTask}
-              className="rounded-md bg-red-500 px-3 py-1 text-white transition-colors hover:bg-red-600">
+              className="rounded-md bg-[var(--browd-danger)] px-3 py-1 text-white transition-colors hover:bg-[var(--browd-danger-hover)]">
               {t('chat_buttons_stop')}
             </button>
           ) : historicalSessionId ? (
