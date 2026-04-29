@@ -38,6 +38,9 @@
     --browd-warning-400: 32 85% 45%;
     --browd-danger-400: 2 65% 48%;
     --browd-shadow: 40 3% 8%;
+    --browd-border-alpha: 0.6;
+    --browd-border-strong-alpha: 0.75;
+    --browd-border-subtle-alpha: 0.45;
     color-scheme: light;
   }
 
@@ -67,6 +70,9 @@
     --browd-warning-400: 35 85% 55%;
     --browd-danger-400: 2 68% 58%;
     --browd-shadow: 40 3% 5%;
+    --browd-border-alpha: 0.14;
+    --browd-border-strong-alpha: 0.22;
+    --browd-border-subtle-alpha: 0.08;
     color-scheme: dark;
   }
 
@@ -107,16 +113,17 @@
     --browd-radius-sm: 4px;
   }
 
-  :root {
+  :root,
+  [data-browd-theme] {
     --browd-bg: hsl(var(--browd-surface-500));
     --browd-bg-soft: hsl(var(--browd-surface-500));
     --browd-surface: hsl(var(--browd-surface-500));
     --browd-panel: hsl(var(--browd-surface-100));
     --browd-panel-strong: hsl(var(--browd-surface-200));
     --browd-surface-overlay: hsl(var(--browd-surface-200));
-    --browd-border: hsl(var(--browd-border-100) / 0.6);
-    --browd-border-strong: hsl(var(--browd-border-200) / 0.75);
-    --browd-border-subtle: hsl(var(--browd-border-300) / 0.45);
+    --browd-border: hsl(var(--browd-border-100) / var(--browd-border-alpha));
+    --browd-border-strong: hsl(var(--browd-border-200) / var(--browd-border-strong-alpha));
+    --browd-border-subtle: hsl(var(--browd-border-300) / var(--browd-border-subtle-alpha));
     --browd-text: hsl(var(--browd-text-100));
     --browd-muted: hsl(var(--browd-text-300));
     --browd-faint: hsl(var(--browd-text-400));
