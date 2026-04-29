@@ -42,6 +42,7 @@
     --browd-border-alpha: 0.6;
     --browd-border-strong-alpha: 0.75;
     --browd-border-subtle-alpha: 0.45;
+    --browd-control-hover: hsl(var(--browd-surface-300));
     color-scheme: light;
   }
 
@@ -75,6 +76,7 @@
     --browd-border-alpha: 0.14;
     --browd-border-strong-alpha: 0.22;
     --browd-border-subtle-alpha: 0.08;
+    --browd-control-hover: hsl(var(--browd-surface-000));
     color-scheme: dark;
   }
 
