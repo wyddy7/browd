@@ -859,10 +859,56 @@ const SidePanel = () => {
       return;
     }
 
+    const openMicrophonePermissionFallback = () => {
+      const permissionUrl = chrome.runtime.getURL('permission/index.html');
+
+      chrome.windows.create(
+        {
+          url: permissionUrl,
+          type: 'popup',
+          width: 500,
+          height: 560,
+        },
+        createdWindow => {
+          if (!createdWindow?.id) {
+            return;
+          }
+
+          chrome.windows.onRemoved.addListener(function onWindowClose(windowId) {
+            if (windowId !== createdWindow.id) {
+              return;
+            }
+
+            chrome.windows.onRemoved.removeListener(onWindowClose);
+            window.setTimeout(async () => {
+              try {
+                const permissionStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+                if (permissionStatus.state === 'granted') {
+                  handleMicClick();
+                }
+              } catch (error) {
+                console.error('Failed to check microphone permission after fallback:', error);
+              }
+            }, 500);
+          });
+        },
+      );
+    };
+
     try {
       // Request microphone access directly from the side panel. The browser
       // shows its native permission prompt when permission is still undecided.
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (error) {
+        if (error instanceof Error && error.name === 'NotAllowedError') {
+          openMicrophonePermissionFallback();
+          return;
+        }
+
+        throw error;
+      }
 
       // Clear previous audio chunks
       audioChunksRef.current = [];
