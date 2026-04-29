@@ -18,7 +18,7 @@ const settingTitleClass = 'text-base font-medium text-[var(--browd-text)]';
 const settingDescriptionClass = 'text-sm font-normal text-[var(--browd-muted)]';
 const numberInputClass = 'browd-input w-20 px-3 py-2';
 const toggleClass =
-  "peer h-6 w-11 rounded-full bg-[var(--browd-panel-strong)] after:absolute after:left-[2px] after:top-[2px] after:size-5 after:rounded-full after:border after:border-[var(--browd-border)] after:bg-[var(--browd-text)] after:transition-all after:content-[''] peer-checked:bg-[var(--browd-blue)] peer-checked:after:translate-x-full peer-checked:after:border-[var(--browd-blue)] peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-[var(--browd-accent-soft)]";
+  "peer h-6 w-11 rounded-full bg-[var(--browd-toggle-track-off)] after:absolute after:left-[2px] after:top-[2px] after:size-5 after:rounded-full after:border after:border-[var(--browd-border)] after:bg-[var(--browd-toggle-thumb)] after:transition-all after:content-[''] peer-checked:bg-[var(--browd-blue)] peer-checked:after:translate-x-full peer-checked:after:border-transparent peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-[var(--browd-accent-soft)]";
 
 interface GeneralSettingsProps {
   onAppearanceThemeChange?: (theme: AppearanceTheme) => void;
