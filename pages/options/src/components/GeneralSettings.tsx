@@ -5,15 +5,8 @@ import {
   generalSettingsStore,
   DEFAULT_GENERAL_SETTINGS,
 } from '@extension/storage';
-import { ToggleSwitch } from '@extension/ui';
+import { ToggleSwitch, ToggleTheme } from '@extension/ui';
 import { t } from '@extension/i18n';
-
-type MessageKey = Parameters<typeof t>[0];
-
-const APPEARANCE_THEMES = [
-  { id: 'light', labelKey: 'options_general_theme_light', swatch: 'bg-[var(--browd-surface-000)]' },
-  { id: 'dark', labelKey: 'options_general_theme_dark', swatch: 'bg-[var(--browd-text)]' },
-] satisfies Array<{ id: AppearanceTheme; labelKey: MessageKey; swatch: string }>;
 
 const settingTitleClass = 'text-base font-medium text-[var(--browd-text)]';
 const settingDescriptionClass = 'text-sm font-normal text-[var(--browd-muted)]';
@@ -58,25 +51,14 @@ export const GeneralSettings = ({ onAppearanceThemeChange }: GeneralSettingsProp
               <h3 className={settingTitleClass}>{t('options_general_theme')}</h3>
               <p className={settingDescriptionClass}>{t('options_general_theme_desc')}</p>
             </div>
-            <div className="flex shrink-0 rounded-md border border-[var(--browd-border)] bg-[var(--browd-surface-overlay)] p-1">
-              {APPEARANCE_THEMES.map(theme => {
-                const isSelected = settings.appearanceTheme === theme.id;
-                return (
-                  <button
-                    key={theme.id}
-                    type="button"
-                    onClick={() => updateSetting('appearanceTheme', theme.id)}
-                    className={`flex items-center gap-2 rounded px-3 py-1.5 text-sm transition-colors ${
-                      isSelected
-                        ? 'bg-[var(--browd-panel)] text-[var(--browd-text)] shadow-sm'
-                        : 'text-[var(--browd-muted)] hover:bg-[var(--browd-panel-strong)] hover:text-[var(--browd-text)]'
-                    }`}>
-                    <span className={`size-3 rounded-full border border-[var(--browd-border)] ${theme.swatch}`} />
-                    {t(theme.labelKey)}
-                  </button>
-                );
-              })}
-            </div>
+            <ToggleTheme
+              value={settings.appearanceTheme}
+              onValueChange={theme => updateSetting('appearanceTheme', theme as AppearanceTheme)}
+              labels={{
+                light: t('options_general_theme_light'),
+                dark: t('options_general_theme_dark'),
+              }}
+            />
           </div>
 
           <div className="flex items-center justify-between">
