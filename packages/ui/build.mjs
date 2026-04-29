@@ -30,3 +30,4 @@ await replaceTscAliasPaths({
 });
 
 fs.copyFileSync(resolve('lib', 'global.css'), resolve('dist', 'global.css'));
+fs.cpSync(resolve('lib', 'assets'), resolve('dist', 'assets'), { recursive: true });

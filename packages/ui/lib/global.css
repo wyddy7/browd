@@ -3,75 +3,146 @@
 @tailwind utilities;
 
 @layer base {
+  @font-face {
+    font-family: 'Inter Variable';
+    src: url('./assets/InterVariable.woff2') format('woff2');
+    font-display: swap;
+    font-style: normal;
+    font-weight: 100 900;
+  }
+
   :root,
   [data-browd-theme='light'] {
-    --browd-bg: #f7f4ee;
-    --browd-bg-soft: #f1ece3;
-    --browd-surface: #f7f4ee;
-    --browd-panel: #ffffff;
-    --browd-panel-strong: #ffffff;
-    --browd-surface-overlay: #ffffff;
-    --browd-border: #e3ded3;
-    --browd-border-strong: #d1c8ba;
-    --browd-border-subtle: #ede8dd;
-    --browd-text: #1f1e1b;
-    --browd-muted: #6b6862;
-    --browd-faint: #9a958c;
-    --browd-accent: #b2543a;
-    --browd-accent-hover: #9a4830;
-    --browd-accent-soft: rgba(178, 84, 58, 0.1);
-    --browd-accent-text: #ffffff;
-    --browd-blue: #7aa2f7;
-    --browd-danger: #ef4444;
-    --browd-warning: #e2a74e;
-    --browd-success: #4fb286;
-    --browd-info: #7aa2f7;
-    --browd-chat-user-bg: #efece4;
-    --browd-chat-agent-bg: #ffffff;
-    --browd-radius-sm: 4px;
-    --browd-radius: 6px;
-    --browd-radius-md: 8px;
-    --browd-radius-lg: 12px;
-    --browd-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
-    --browd-font: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --browd-surface-000: 48 30% 98%;
+    --browd-surface-100: 48 30% 98%;
+    --browd-surface-200: 45 22% 95%;
+    --browd-surface-300: 45 18% 91%;
+    --browd-surface-400: 45 18% 91%;
+    --browd-surface-500: 45 22% 95%;
+    --browd-text-000: 40 3% 8%;
+    --browd-text-100: 40 3% 11%;
+    --browd-text-200: 40 3% 20%;
+    --browd-text-300: 45 3% 38%;
+    --browd-text-400: 45 4% 48%;
+    --browd-text-500: 45 6% 62%;
+    --browd-text-inverse: 48 30% 98%;
+    --browd-border-100: 45 14% 85%;
+    --browd-border-200: 45 10% 76%;
+    --browd-border-300: 45 18% 91%;
+    --browd-accent-000: 17 62% 40%;
+    --browd-accent-100: 18 60% 48%;
+    --browd-accent-400: 18 60% 48%;
+    --browd-accent-900: 22 65% 88%;
+    --browd-info-400: 215 60% 48%;
+    --browd-success-400: 150 50% 36%;
+    --browd-warning-400: 32 85% 45%;
+    --browd-danger-400: 2 65% 48%;
+    --browd-shadow: 40 3% 8%;
     color-scheme: light;
   }
 
   [data-browd-theme='dark'] {
-    --browd-bg: #13151a;
-    --browd-bg-soft: #151820;
-    --browd-surface: #13151a;
-    --browd-panel: #1a1d23;
-    --browd-panel-strong: #22262e;
-    --browd-surface-overlay: #22262e;
-    --browd-border: #2a2f38;
-    --browd-border-strong: #3a424e;
-    --browd-border-subtle: #1f232a;
-    --browd-text: #ece9e2;
-    --browd-muted: #9aa0a8;
-    --browd-faint: #6f747c;
-    --browd-accent: #c96442;
-    --browd-accent-hover: #d9765a;
-    --browd-accent-soft: rgba(201, 100, 66, 0.14);
-    --browd-accent-text: #ffffff;
-    --browd-blue: #7aa2f7;
-    --browd-danger: #e5484d;
-    --browd-warning: #e2a74e;
-    --browd-success: #4fb286;
-    --browd-info: #7aa2f7;
-    --browd-chat-user-bg: #22262e;
-    --browd-chat-agent-bg: #1a1d23;
-    --browd-radius-sm: 4px;
-    --browd-radius: 6px;
-    --browd-radius-md: 8px;
-    --browd-radius-lg: 12px;
-    --browd-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    --browd-surface-000: 40 3% 20%;
+    --browd-surface-100: 40 3% 14%;
+    --browd-surface-200: 40 3% 11%;
+    --browd-surface-300: 40 3% 8%;
+    --browd-surface-400: 40 3% 8%;
+    --browd-surface-500: 40 3% 5%;
+    --browd-text-000: 48 30% 98%;
+    --browd-text-100: 45 22% 95%;
+    --browd-text-200: 45 10% 76%;
+    --browd-text-300: 45 6% 62%;
+    --browd-text-400: 45 4% 48%;
+    --browd-text-500: 45 3% 38%;
+    --browd-text-inverse: 40 3% 8%;
+    --browd-border-100: 45 18% 91%;
+    --browd-border-200: 45 18% 91%;
+    --browd-border-300: 45 18% 91%;
+    --browd-accent-000: 19 60% 68%;
+    --browd-accent-100: 18 58% 55%;
+    --browd-accent-400: 18 58% 55%;
+    --browd-accent-900: 16 60% 32%;
+    --browd-info-400: 215 65% 60%;
+    --browd-success-400: 150 45% 48%;
+    --browd-warning-400: 35 85% 55%;
+    --browd-danger-400: 2 68% 58%;
+    --browd-shadow: 40 3% 5%;
     color-scheme: dark;
+  }
+
+  :root,
+  [data-browd-density='comfortable'] {
+    --browd-text-body: 14px;
+    --browd-text-small: 12.5px;
+    --browd-text-heading: 16px;
+    --browd-leading-body: 1.55;
+    --browd-control-h: 32px;
+    --browd-control-h-sm: 24px;
+    --browd-pad-sm: 8px;
+    --browd-pad-md: 12px;
+    --browd-pad-lg: 16px;
+    --browd-gap-sm: 8px;
+    --browd-gap-md: 12px;
+    --browd-gap-lg: 16px;
+    --browd-gap-xl: 24px;
+    --browd-radius: 8px;
+    --browd-radius-sm: 6px;
+  }
+
+  [data-browd-density='compact'] {
+    --browd-text-body: 13px;
+    --browd-text-small: 11.5px;
+    --browd-text-heading: 14px;
+    --browd-leading-body: 1.5;
+    --browd-control-h: 28px;
+    --browd-control-h-sm: 22px;
+    --browd-pad-sm: 6px;
+    --browd-pad-md: 10px;
+    --browd-pad-lg: 12px;
+    --browd-gap-sm: 6px;
+    --browd-gap-md: 10px;
+    --browd-gap-lg: 12px;
+    --browd-gap-xl: 18px;
+    --browd-radius: 6px;
+    --browd-radius-sm: 4px;
+  }
+
+  :root {
+    --browd-bg: hsl(var(--browd-surface-500));
+    --browd-bg-soft: hsl(var(--browd-surface-500));
+    --browd-surface: hsl(var(--browd-surface-500));
+    --browd-panel: hsl(var(--browd-surface-100));
+    --browd-panel-strong: hsl(var(--browd-surface-200));
+    --browd-surface-overlay: hsl(var(--browd-surface-200));
+    --browd-border: hsl(var(--browd-border-100) / 0.6);
+    --browd-border-strong: hsl(var(--browd-border-200) / 0.75);
+    --browd-border-subtle: hsl(var(--browd-border-300) / 0.45);
+    --browd-text: hsl(var(--browd-text-100));
+    --browd-muted: hsl(var(--browd-text-300));
+    --browd-faint: hsl(var(--browd-text-400));
+    --browd-accent: hsl(var(--browd-accent-400));
+    --browd-accent-hover: hsl(var(--browd-accent-100));
+    --browd-accent-soft: hsl(var(--browd-accent-400) / 0.1);
+    --browd-accent-text: hsl(var(--browd-text-inverse));
+    --browd-blue: hsl(var(--browd-info-400));
+    --browd-danger: hsl(var(--browd-danger-400));
+    --browd-warning: hsl(var(--browd-warning-400));
+    --browd-success: hsl(var(--browd-success-400));
+    --browd-info: hsl(var(--browd-info-400));
+    --browd-chat-user-bg: hsl(var(--browd-surface-200));
+    --browd-chat-agent-bg: hsl(var(--browd-surface-100));
+    --browd-radius-md: var(--browd-radius);
+    --browd-radius-lg: 12px;
+    --browd-shadow-menu: 0 8px 24px hsl(var(--browd-shadow) / 0.18);
+    --browd-shadow-focus: 0 0 0 3px hsl(var(--browd-accent-400) / 0.28);
+    --browd-shadow: var(--browd-shadow-menu);
+    --browd-font: 'Inter Variable', Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   }
 
   html,
   body {
     font-family: var(--browd-font);
+    font-feature-settings: 'cv11', 'ss01', 'ss03';
   }
 }
 
@@ -104,7 +175,7 @@
   .browd-input:focus,
   .browd-input:focus-within {
     border-color: var(--browd-accent);
-    box-shadow: 0 0 0 3px var(--browd-accent-soft);
+    box-shadow: var(--browd-shadow-focus);
     outline: none;
   }
 
