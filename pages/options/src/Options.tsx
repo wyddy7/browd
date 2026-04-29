@@ -85,8 +85,8 @@ const Options = () => {
                   className={`flex w-full items-center space-x-2 rounded-lg px-4 py-2 text-left text-sm shadow-none
                     ${
                       activeTab !== item.id
-                        ? 'border border-transparent bg-transparent text-[var(--browd-muted)] hover:bg-[var(--browd-accent-soft)] hover:text-[var(--browd-text)]'
-                        : 'border border-[var(--browd-accent)] bg-[var(--browd-accent)] text-[var(--browd-accent-text)]'
+                        ? 'border border-transparent bg-transparent text-[var(--browd-muted)] hover:bg-[var(--browd-panel-strong)] hover:text-[var(--browd-text)]'
+                        : 'border border-transparent bg-[var(--browd-panel-strong)] text-[var(--browd-text)]'
                     }`}>
                   <item.icon className="h-4 w-4" />
                   <span>{item.label}</span>

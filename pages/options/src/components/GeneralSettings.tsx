@@ -10,15 +10,15 @@ import { t } from '@extension/i18n';
 type MessageKey = Parameters<typeof t>[0];
 
 const APPEARANCE_THEMES = [
-  { id: 'light', labelKey: 'options_general_theme_light', swatch: 'bg-[#b2543a]' },
-  { id: 'dark', labelKey: 'options_general_theme_dark', swatch: 'bg-[#c96442]' },
+  { id: 'light', labelKey: 'options_general_theme_light', swatch: 'bg-[var(--browd-surface-000)]' },
+  { id: 'dark', labelKey: 'options_general_theme_dark', swatch: 'bg-[var(--browd-text)]' },
 ] satisfies Array<{ id: AppearanceTheme; labelKey: MessageKey; swatch: string }>;
 
 const settingTitleClass = 'text-base font-medium text-[var(--browd-text)]';
 const settingDescriptionClass = 'text-sm font-normal text-[var(--browd-muted)]';
 const numberInputClass = 'browd-input w-20 px-3 py-2';
 const toggleClass =
-  "peer h-6 w-11 rounded-full bg-[var(--browd-panel-strong)] after:absolute after:left-[2px] after:top-[2px] after:size-5 after:rounded-full after:border after:border-[var(--browd-border)] after:bg-[var(--browd-text)] after:transition-all after:content-[''] peer-checked:bg-[var(--browd-accent)] peer-checked:after:translate-x-full peer-checked:after:border-[var(--browd-accent)] peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-[var(--browd-accent-soft)]";
+  "peer h-6 w-11 rounded-full bg-[var(--browd-panel-strong)] after:absolute after:left-[2px] after:top-[2px] after:size-5 after:rounded-full after:border after:border-[var(--browd-border)] after:bg-[var(--browd-text)] after:transition-all after:content-[''] peer-checked:bg-[var(--browd-blue)] peer-checked:after:translate-x-full peer-checked:after:border-[var(--browd-blue)] peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-[var(--browd-accent-soft)]";
 
 interface GeneralSettingsProps {
   onAppearanceThemeChange?: (theme: AppearanceTheme) => void;
@@ -69,10 +69,10 @@ export const GeneralSettings = ({ onAppearanceThemeChange }: GeneralSettingsProp
                     onClick={() => updateSetting('appearanceTheme', theme.id)}
                     className={`flex items-center gap-2 rounded px-3 py-1.5 text-sm transition-colors ${
                       isSelected
-                        ? 'bg-[var(--browd-accent)] text-[var(--browd-accent-text)]'
-                        : 'text-[var(--browd-muted)] hover:bg-[var(--browd-accent-soft)] hover:text-[var(--browd-text)]'
+                        ? 'bg-[var(--browd-panel)] text-[var(--browd-text)] shadow-sm'
+                        : 'text-[var(--browd-muted)] hover:bg-[var(--browd-panel-strong)] hover:text-[var(--browd-text)]'
                     }`}>
-                    <span className={`size-3 rounded-full ${theme.swatch}`} />
+                    <span className={`size-3 rounded-full border border-[var(--browd-border)] ${theme.swatch}`} />
                     {t(theme.labelKey)}
                   </button>
                 );

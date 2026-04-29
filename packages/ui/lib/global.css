@@ -29,10 +29,10 @@
     --browd-border-100: 45 14% 85%;
     --browd-border-200: 45 10% 76%;
     --browd-border-300: 45 18% 91%;
-    --browd-accent-000: 17 62% 40%;
-    --browd-accent-100: 18 60% 48%;
-    --browd-accent-400: 18 60% 48%;
-    --browd-accent-900: 22 65% 88%;
+    --browd-accent-000: 40 3% 8%;
+    --browd-accent-100: 40 3% 14%;
+    --browd-accent-400: 40 3% 20%;
+    --browd-accent-900: 45 18% 91%;
     --browd-info-400: 215 60% 48%;
     --browd-success-400: 150 50% 36%;
     --browd-warning-400: 32 85% 45%;
@@ -61,10 +61,10 @@
     --browd-border-100: 45 18% 91%;
     --browd-border-200: 45 18% 91%;
     --browd-border-300: 45 18% 91%;
-    --browd-accent-000: 19 60% 68%;
-    --browd-accent-100: 18 58% 55%;
-    --browd-accent-400: 18 58% 55%;
-    --browd-accent-900: 16 60% 32%;
+    --browd-accent-000: 48 30% 98%;
+    --browd-accent-100: 45 22% 95%;
+    --browd-accent-400: 45 18% 91%;
+    --browd-accent-900: 40 3% 20%;
     --browd-info-400: 215 65% 60%;
     --browd-success-400: 150 45% 48%;
     --browd-warning-400: 35 85% 55%;
@@ -129,7 +129,7 @@
     --browd-faint: hsl(var(--browd-text-400));
     --browd-accent: hsl(var(--browd-accent-400));
     --browd-accent-hover: hsl(var(--browd-accent-100));
-    --browd-accent-soft: hsl(var(--browd-accent-400) / 0.1);
+    --browd-accent-soft: hsl(var(--browd-accent-400) / 0.08);
     --browd-accent-text: hsl(var(--browd-text-inverse));
     --browd-blue: hsl(var(--browd-info-400));
     --browd-danger: hsl(var(--browd-danger-400));
