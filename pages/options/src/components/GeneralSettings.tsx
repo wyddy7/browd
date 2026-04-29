@@ -10,9 +10,8 @@ import { t } from '@extension/i18n';
 type MessageKey = Parameters<typeof t>[0];
 
 const APPEARANCE_THEMES = [
-  { id: 'claude', labelKey: 'options_general_theme_claude', swatch: 'bg-[#d9783d]' },
-  { id: 'graphite', labelKey: 'options_general_theme_graphite', swatch: 'bg-[#e6d7b8]' },
-  { id: 'ember', labelKey: 'options_general_theme_ember', swatch: 'bg-[#ff9b5f]' },
+  { id: 'light', labelKey: 'options_general_theme_light', swatch: 'bg-[#b2543a]' },
+  { id: 'dark', labelKey: 'options_general_theme_dark', swatch: 'bg-[#c96442]' },
 ] satisfies Array<{ id: AppearanceTheme; labelKey: MessageKey; swatch: string }>;
 
 const settingTitleClass = 'text-base font-medium text-[var(--browd-text)]';
@@ -60,7 +59,7 @@ export const GeneralSettings = ({ onAppearanceThemeChange }: GeneralSettingsProp
               <h3 className={settingTitleClass}>{t('options_general_theme')}</h3>
               <p className={settingDescriptionClass}>{t('options_general_theme_desc')}</p>
             </div>
-            <div className="flex shrink-0 gap-2">
+            <div className="flex shrink-0 rounded-md border border-[var(--browd-border)] bg-[var(--browd-surface-overlay)] p-1">
               {APPEARANCE_THEMES.map(theme => {
                 const isSelected = settings.appearanceTheme === theme.id;
                 return (
@@ -68,10 +67,10 @@ export const GeneralSettings = ({ onAppearanceThemeChange }: GeneralSettingsProp
                     key={theme.id}
                     type="button"
                     onClick={() => updateSetting('appearanceTheme', theme.id)}
-                    className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors ${
+                    className={`flex items-center gap-2 rounded px-3 py-1.5 text-sm transition-colors ${
                       isSelected
-                        ? 'border-[var(--browd-accent)] bg-[var(--browd-accent-soft)] text-[var(--browd-text)]'
-                        : 'border-[var(--browd-border)] bg-[var(--browd-bg)] text-[var(--browd-muted)] hover:border-[var(--browd-border-strong)] hover:text-[var(--browd-text)]'
+                        ? 'bg-[var(--browd-accent)] text-[var(--browd-accent-text)]'
+                        : 'text-[var(--browd-muted)] hover:bg-[var(--browd-accent-soft)] hover:text-[var(--browd-text)]'
                     }`}>
                     <span className={`size-3 rounded-full ${theme.swatch}`} />
                     {t(theme.labelKey)}

@@ -38,7 +38,7 @@ const SidePanel = () => {
   const [isFollowUpMode, setIsFollowUpMode] = useState(false);
   const [isHistoricalSession, setIsHistoricalSession] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [appearanceTheme, setAppearanceTheme] = useState<AppearanceTheme>('claude');
+  const [appearanceTheme, setAppearanceTheme] = useState<AppearanceTheme>('light');
   const [favoritePrompts, setFavoritePrompts] = useState<FavoritePrompt[]>([]);
   const [hasConfiguredModels, setHasConfiguredModels] = useState<boolean | null>(null); // null = loading, false = no models, true = has models
   const [isRecording, setIsRecording] = useState(false);
@@ -91,7 +91,7 @@ const SidePanel = () => {
     } catch (error) {
       console.error('Error loading general settings:', error);
       setReplayEnabled(false);
-      setAppearanceTheme('claude');
+      setAppearanceTheme('light');
     }
   }, []);
 

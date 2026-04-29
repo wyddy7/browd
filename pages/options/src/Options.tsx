@@ -23,7 +23,7 @@ const TABS: { id: TabTypes; icon: React.ComponentType<{ className?: string }>; l
 const Options = () => {
   const [activeTab, setActiveTab] = useState<TabTypes>('models');
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [appearanceTheme, setAppearanceTheme] = useState<AppearanceTheme>('claude');
+  const [appearanceTheme, setAppearanceTheme] = useState<AppearanceTheme>('light');
 
   // Check for dark mode preference
   useEffect(() => {
@@ -42,7 +42,7 @@ const Options = () => {
     generalSettingsStore
       .getSettings()
       .then(settings => setAppearanceTheme(settings.appearanceTheme))
-      .catch(() => setAppearanceTheme('claude'));
+      .catch(() => setAppearanceTheme('light'));
   }, [activeTab]);
 
   const handleTabClick = (tabId: TabTypes) => {

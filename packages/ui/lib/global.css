@@ -4,70 +4,68 @@
 
 @layer base {
   :root,
-  [data-browd-theme='claude'] {
-    --browd-bg: #f5f1e8;
-    --browd-bg-soft: #ece5d8;
-    --browd-surface: #fbf7ef;
-    --browd-panel: #fffaf2;
-    --browd-panel-strong: #eee4d3;
-    --browd-border: #ded2bd;
-    --browd-border-strong: #c6b79b;
-    --browd-text: #262018;
-    --browd-muted: #6f6659;
-    --browd-faint: #968a78;
-    --browd-accent: #d9783d;
-    --browd-accent-hover: #c8642d;
-    --browd-accent-soft: rgba(217, 120, 61, 0.14);
-    --browd-accent-text: #fffaf2;
-    --browd-blue: #4d7f9f;
+  [data-browd-theme='light'] {
+    --browd-bg: #f7f4ee;
+    --browd-bg-soft: #f1ece3;
+    --browd-surface: #f7f4ee;
+    --browd-panel: #ffffff;
+    --browd-panel-strong: #ffffff;
+    --browd-surface-overlay: #ffffff;
+    --browd-border: #e3ded3;
+    --browd-border-strong: #d1c8ba;
+    --browd-border-subtle: #ede8dd;
+    --browd-text: #1f1e1b;
+    --browd-muted: #6b6862;
+    --browd-faint: #9a958c;
+    --browd-accent: #b2543a;
+    --browd-accent-hover: #9a4830;
+    --browd-accent-soft: rgba(178, 84, 58, 0.1);
+    --browd-accent-text: #ffffff;
+    --browd-blue: #7aa2f7;
     --browd-danger: #ef4444;
-    --browd-warning: #f59e0b;
-    --browd-success: #22c55e;
+    --browd-warning: #e2a74e;
+    --browd-success: #4fb286;
+    --browd-info: #7aa2f7;
+    --browd-chat-user-bg: #efece4;
+    --browd-chat-agent-bg: #ffffff;
     --browd-radius-sm: 4px;
     --browd-radius: 6px;
     --browd-radius-md: 8px;
-    --browd-shadow: 0 16px 44px rgba(62, 45, 24, 0.12);
+    --browd-radius-lg: 12px;
+    --browd-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
     --browd-font: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     color-scheme: light;
   }
 
-  [data-browd-theme='graphite'] {
-    --browd-bg: #101112;
-    --browd-bg-soft: #151719;
-    --browd-surface: #1b1d20;
-    --browd-panel: #22252a;
-    --browd-panel-strong: #2b2f35;
-    --browd-border: #343941;
-    --browd-border-strong: #4a515c;
-    --browd-text: #f2f0ea;
-    --browd-muted: #a4a099;
-    --browd-faint: #73706b;
-    --browd-accent: #e6d7b8;
-    --browd-accent-hover: #fff0cc;
-    --browd-accent-soft: rgba(230, 215, 184, 0.14);
-    --browd-accent-text: #101112;
-    --browd-blue: #8fb4d8;
-    --browd-shadow: 0 16px 44px rgba(0, 0, 0, 0.34);
-    color-scheme: dark;
-  }
-
-  [data-browd-theme='ember'] {
-    --browd-bg: #15100d;
-    --browd-bg-soft: #1d1511;
-    --browd-surface: #241a15;
-    --browd-panel: #2b201a;
-    --browd-panel-strong: #382920;
-    --browd-border: #493529;
-    --browd-border-strong: #674a39;
-    --browd-text: #fff4e6;
-    --browd-muted: #c1aa96;
-    --browd-faint: #856f5f;
-    --browd-accent: #ff9b5f;
-    --browd-accent-hover: #ffb27e;
-    --browd-accent-soft: rgba(255, 155, 95, 0.16);
-    --browd-accent-text: #1b110c;
-    --browd-blue: #86b7d8;
-    --browd-shadow: 0 16px 44px rgba(0, 0, 0, 0.36);
+  [data-browd-theme='dark'] {
+    --browd-bg: #13151a;
+    --browd-bg-soft: #151820;
+    --browd-surface: #13151a;
+    --browd-panel: #1a1d23;
+    --browd-panel-strong: #22262e;
+    --browd-surface-overlay: #22262e;
+    --browd-border: #2a2f38;
+    --browd-border-strong: #3a424e;
+    --browd-border-subtle: #1f232a;
+    --browd-text: #ece9e2;
+    --browd-muted: #9aa0a8;
+    --browd-faint: #6f747c;
+    --browd-accent: #c96442;
+    --browd-accent-hover: #d9765a;
+    --browd-accent-soft: rgba(201, 100, 66, 0.14);
+    --browd-accent-text: #ffffff;
+    --browd-blue: #7aa2f7;
+    --browd-danger: #e5484d;
+    --browd-warning: #e2a74e;
+    --browd-success: #4fb286;
+    --browd-info: #7aa2f7;
+    --browd-chat-user-bg: #22262e;
+    --browd-chat-agent-bg: #1a1d23;
+    --browd-radius-sm: 4px;
+    --browd-radius: 6px;
+    --browd-radius-md: 8px;
+    --browd-radius-lg: 12px;
+    --browd-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
     color-scheme: dark;
   }
 
@@ -79,9 +77,7 @@
 
 @layer components {
   .browd-shell {
-    background:
-      radial-gradient(circle at top left, var(--browd-accent-soft), transparent 34rem),
-      linear-gradient(180deg, var(--browd-bg-soft), var(--browd-bg));
+    background: var(--browd-bg);
     color: var(--browd-text);
   }
 
@@ -99,7 +95,7 @@
   }
 
   .browd-input {
-    background: var(--browd-bg);
+    background: var(--browd-surface-overlay);
     border: 1px solid var(--browd-border);
     border-radius: var(--browd-radius);
     color: var(--browd-text);

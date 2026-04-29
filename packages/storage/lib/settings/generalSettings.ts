@@ -3,7 +3,7 @@ import { createStorage } from '../base/base';
 import type { BaseStorage } from '../base/types';
 
 // Interface for general settings configuration
-export type AppearanceTheme = 'claude' | 'graphite' | 'ember';
+export type AppearanceTheme = 'light' | 'dark';
 
 export interface GeneralSettingsConfig {
   appearanceTheme: AppearanceTheme;
@@ -26,7 +26,7 @@ export type GeneralSettingsStorage = BaseStorage<GeneralSettingsConfig> & {
 
 // Default settings
 export const DEFAULT_GENERAL_SETTINGS: GeneralSettingsConfig = {
-  appearanceTheme: 'claude',
+  appearanceTheme: 'light',
   maxSteps: 100,
   maxActionsPerStep: 5,
   maxFailures: 3,
@@ -44,9 +44,10 @@ const storage = createStorage<GeneralSettingsConfig>('general-settings', DEFAULT
 });
 
 const normalizeAppearanceTheme = (theme: unknown): AppearanceTheme => {
-  if (theme === 'graphite' || theme === 'mono' || theme === 'blue') return 'graphite';
-  if (theme === 'ember') return 'ember';
-  return 'claude';
+  if (theme === 'dark' || theme === 'graphite' || theme === 'mono' || theme === 'blue' || theme === 'ember') {
+    return 'dark';
+  }
+  return 'light';
 };
 
 export const generalSettingsStore: GeneralSettingsStorage = {

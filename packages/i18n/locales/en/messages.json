@@ -220,14 +220,11 @@
   "options_general_theme_desc": {
     "message": "Choose the visual tone used across Browd panels"
   },
-  "options_general_theme_claude": {
-    "message": "Claude"
+  "options_general_theme_light": {
+    "message": "Light"
   },
-  "options_general_theme_graphite": {
-    "message": "Graphite"
-  },
-  "options_general_theme_ember": {
-    "message": "Ember"
+  "options_general_theme_dark": {
+    "message": "Dark"
   },
   "options_general_maxSteps": {
     "message": "Max Steps per Task"

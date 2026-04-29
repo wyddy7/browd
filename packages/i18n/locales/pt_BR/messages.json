@@ -220,14 +220,11 @@
   "options_general_theme_desc": {
     "message": "Escolha o tom visual usado nos painéis do Browd"
   },
-  "options_general_theme_claude": {
-    "message": "Claude"
+  "options_general_theme_light": {
+    "message": "Claro"
   },
-  "options_general_theme_graphite": {
-    "message": "Grafite"
-  },
-  "options_general_theme_ember": {
-    "message": "Brasa"
+  "options_general_theme_dark": {
+    "message": "Escuro"
   },
   "options_general_maxSteps": {
     "message": "Máximo de Passos por Tarefa"
