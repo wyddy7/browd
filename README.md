@@ -1,5 +1,10 @@
 # Browd
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="./chrome-extension/public/browd-logo-dark.svg">
+  <img src="./chrome-extension/public/browd-logo.svg" alt="Browd logo" width="120">
+</picture>
+
 Browd is a fork-derived Chromium extension for local AI browser automation.
 
 The project started from Nanobrowser and is being reshaped into a cleaner open-source browser agent: modern chat-first UI, stronger provider routing, and Speech-to-Text that is not tied to one model vendor.
@@ -10,7 +15,6 @@ Early fork cleanup and product direction work is in progress.
 
 Current focus:
 
-- rebrand public surfaces from Nanobrowser to Browd;
 - simplify the extension UI;
 - decouple Speech-to-Text from Gemini-only logic;
 - add experimental OpenRouter STT support;

@@ -97,6 +97,7 @@ const SidePanel = () => {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<number | null>(null);
+  const brandLogoSrc = chrome.runtime.getURL(appearanceTheme === 'dark' ? 'browd-logo-dark.svg' : 'browd-logo.svg');
 
   // Check for dark mode preference
   useEffect(() => {
@@ -1142,7 +1143,7 @@ const SidePanel = () => {
                 {t('nav_back')}
               </button>
             ) : (
-              <img src="/icon-128.png" alt="Extension Logo" className="size-6" />
+              <img src={brandLogoSrc} alt="Browd logo" className="size-7" />
             )}
           </div>
           <div className="header-icons">
@@ -1213,7 +1214,7 @@ const SidePanel = () => {
             {hasConfiguredModels === false && (
               <div className="flex flex-1 items-center justify-center p-8 text-[var(--browd-muted)]">
                 <div className="browd-card max-w-md p-6 text-center">
-                  <img src="/icon-128.png" alt="Browd Logo" className="mx-auto mb-4 size-12" />
+                  <img src={brandLogoSrc} alt="Browd logo" className="mx-auto mb-4 size-16" />
                   <h3 className="mb-2 text-lg font-semibold text-[var(--browd-text)]">{t('welcome_title')}</h3>
                   <p className="mb-4">{t('welcome_instruction')}</p>
                   <button
