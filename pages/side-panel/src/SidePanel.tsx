@@ -910,6 +910,26 @@ const SidePanel = () => {
     }
   };
 
+  const handleBookmarkCreate = async (title: string, content: string) => {
+    try {
+      await favoritesStorage.addPrompt(title, content);
+      const prompts = await favoritesStorage.getAllPrompts();
+      setFavoritePrompts(prompts);
+    } catch (error) {
+      console.error('Failed to create favorite prompt:', error);
+    }
+  };
+
+  const handleBookmarkUpdate = async (id: number, title: string, content: string) => {
+    try {
+      await favoritesStorage.updatePrompt(id, title, content);
+      const prompts = await favoritesStorage.getAllPrompts();
+      setFavoritePrompts(prompts);
+    } catch (error) {
+      console.error('Failed to update favorite prompt:', error);
+    }
+  };
+
   const handleBookmarkDelete = async (id: number) => {
     try {
       await favoritesStorage.removePrompt(id);
@@ -1275,6 +1295,8 @@ const SidePanel = () => {
                       <BookmarkList
                         bookmarks={favoritePrompts}
                         onBookmarkSelect={handleBookmarkSelect}
+                        onBookmarkCreate={handleBookmarkCreate}
+                        onBookmarkUpdate={handleBookmarkUpdate}
                         onBookmarkUpdateTitle={handleBookmarkUpdateTitle}
                         onBookmarkDelete={handleBookmarkDelete}
                         onBookmarkReorder={handleBookmarkReorder}

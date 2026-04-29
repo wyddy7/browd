@@ -88,6 +88,12 @@
   "chat_bookmarks_header": {
     "message": "Quick Start"
   },
+  "chat_bookmarks_description": {
+    "message": "Use a saved prompt or create your own starter."
+  },
+  "chat_bookmarks_new": {
+    "message": "New"
+  },
   "chat_bookmarks_saveEdit": {
     "message": "Save changes"
   },
@@ -99,6 +105,12 @@
   },
   "chat_bookmarks_delete": {
     "message": "Delete bookmark"
+  },
+  "chat_bookmarks_titlePlaceholder": {
+    "message": "Title"
+  },
+  "chat_bookmarks_contentPlaceholder": {
+    "message": "Describe the task you want to reuse."
   },
   "chat_replay_starting": {
     "message": "Starting replay of task:\n\n\"$TASK$\"",

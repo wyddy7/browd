@@ -88,6 +88,12 @@
   "chat_bookmarks_header": {
     "message": "Início Rápido"
   },
+  "chat_bookmarks_description": {
+    "message": "Use um prompt salvo ou crie seu próprio início."
+  },
+  "chat_bookmarks_new": {
+    "message": "Novo"
+  },
   "chat_bookmarks_saveEdit": {
     "message": "Salvar alterações"
   },
@@ -99,6 +105,12 @@
   },
   "chat_bookmarks_delete": {
     "message": "Excluir favorito"
+  },
+  "chat_bookmarks_titlePlaceholder": {
+    "message": "Título"
+  },
+  "chat_bookmarks_contentPlaceholder": {
+    "message": "Descreva a tarefa que você quer reutilizar."
   },
   "chat_replay_starting": {
     "message": "Iniciando reprodução da tarefa:\n\n\"$TASK$\"",

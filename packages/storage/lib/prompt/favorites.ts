@@ -5,21 +5,55 @@ import type { BaseStorage } from '../base/types';
 // Template data
 const defaultFavoritePrompts = [
   {
-    title: '📚 Explore AI Papers',
+    title: 'Summarize this page',
     content:
-      '- Go to https://huggingface.co/papers and click through each of the first 3 papers.\n- For each paper:\n  - Record the title, URL and upvotes\n  - Summarise the abstract section\n- Finally, compile together a summary of all 3 papers, ranked by upvotes',
+      'Summarize the current page in a few concise bullets. Include the main goal, key details, and any useful next steps.',
   },
   {
-    title: '🔎 Compare Provider Options',
+    title: 'Extract structured data',
     content:
-      '- Search for current OpenRouter model options suitable for browser automation tasks.\n- Compare 3 candidates by cost, context window, and reliability.\n- Summarise which model you would choose for planning and which for navigation.',
+      'Extract the important structured information from this page and return it as a clean list or table. Include names, prices, dates, links, and statuses when available.',
   },
   {
-    title: '🌟 Explore Browd on GitHub',
+    title: 'Compare available options',
     content:
-      'Open the Browd repository at https://github.com/wyddy7/browd and summarize the project goals, current setup instructions, and the next obvious contribution.',
+      'Review the visible options on this page, compare their main differences, and recommend the best choice based on value, tradeoffs, and likely fit.',
   },
 ];
+
+const legacyDefaultPromptMatchers = [
+  (prompt: FavoritePrompt) =>
+    prompt.title === '📚 Explore AI Papers' ||
+    prompt.content.includes('https://huggingface.co/papers') ||
+    prompt.content.includes('ranked by upvotes'),
+  (prompt: FavoritePrompt) =>
+    prompt.title === '🔎 Compare Provider Options' ||
+    prompt.content.includes('OpenRouter model options') ||
+    prompt.content.includes('which model you would choose for planning'),
+  (prompt: FavoritePrompt) =>
+    prompt.title === '🌟 Explore Browd on GitHub' ||
+    prompt.title === '🌟 Explore Nanobrowser on GitHub' ||
+    prompt.content.includes('https://github.com/wyddy7/browd') ||
+    prompt.content.includes('https://github.com/nanobrowser/nanobrowser') ||
+    prompt.content.includes('next obvious contribution.'),
+];
+
+function migrateLegacyDefaultPrompts(prompts: FavoritePrompt[]): FavoritePrompt[] {
+  return prompts.map(prompt => {
+    const legacyIndex = legacyDefaultPromptMatchers.findIndex(matchPrompt => matchPrompt(prompt));
+
+    if (legacyIndex === -1) {
+      return prompt;
+    }
+
+    const replacement = defaultFavoritePrompts[legacyIndex];
+    return {
+      ...prompt,
+      title: replacement.title,
+      content: replacement.content,
+    };
+  });
+}
 
 // Define the favorite prompt type
 export interface FavoritePrompt {
@@ -162,6 +196,22 @@ export function createFavoritesStorage(): FavoritePromptsStorage {
         const newState = await favoritesStorage.get();
         prompts = newState.prompts;
       }
+
+      const migratedPrompts = migrateLegacyDefaultPrompts(prompts);
+      const hasMigrationChanges = migratedPrompts.some((prompt, index) => {
+        const originalPrompt = prompts[index];
+        return prompt.title !== originalPrompt.title || prompt.content !== originalPrompt.content;
+      });
+
+      if (hasMigrationChanges) {
+        await favoritesStorage.set(prev => ({
+          ...prev,
+          prompts: migrateLegacyDefaultPrompts(prev.prompts),
+        }));
+        const updatedState = await favoritesStorage.get();
+        prompts = updatedState.prompts;
+      }
+
       return [...prompts].sort((a, b) => b.id - a.id);
     },
 

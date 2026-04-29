@@ -88,6 +88,12 @@
   "chat_bookmarks_header": {
     "message": "快速入門"
   },
+  "chat_bookmarks_description": {
+    "message": "使用已儲存的提示，或建立你自己的起始提示。"
+  },
+  "chat_bookmarks_new": {
+    "message": "新增"
+  },
   "chat_bookmarks_saveEdit": {
     "message": "儲存變更"
   },
@@ -99,6 +105,12 @@
   },
   "chat_bookmarks_delete": {
     "message": "刪除書籤"
+  },
+  "chat_bookmarks_titlePlaceholder": {
+    "message": "標題"
+  },
+  "chat_bookmarks_contentPlaceholder": {
+    "message": "描述你想重複使用的任務。"
   },
   "chat_replay_starting": {
     "message": "開始重播任務：\n\n\"$TASK$\"",
