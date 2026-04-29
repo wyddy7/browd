@@ -32,6 +32,8 @@ type ModelOption = {
   model: string;
 };
 
+type QuickAgent = 'planner' | 'navigator';
+
 function isOpenAIReasoningModel(modelName: string): boolean {
   let modelNameWithoutProvider = modelName;
   if (modelNameWithoutProvider.startsWith('openai/')) {
@@ -77,7 +79,11 @@ const SidePanel = () => {
   const [favoritePrompts, setFavoritePrompts] = useState<FavoritePrompt[]>([]);
   const [hasConfiguredModels, setHasConfiguredModels] = useState<boolean | null>(null); // null = loading, false = no models, true = has models
   const [availableModels, setAvailableModels] = useState<ModelOption[]>([]);
-  const [selectedNavigatorModel, setSelectedNavigatorModel] = useState('');
+  const [selectedAgentModels, setSelectedAgentModels] = useState<Record<QuickAgent, string>>({
+    planner: '',
+    navigator: '',
+  });
+  const [activeQuickAgent, setActiveQuickAgent] = useState<QuickAgent>('navigator');
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessingSpeech, setIsProcessingSpeech] = useState(false);
   const [isReplaying, setIsReplaying] = useState(false);
@@ -155,13 +161,17 @@ const SidePanel = () => {
     }
   }, []);
 
-  const loadNavigatorModel = useCallback(async () => {
+  const loadAgentModels = useCallback(async () => {
     try {
-      const config = await agentModelStore.getAgentModel(AgentNameEnum.Navigator);
-      setSelectedNavigatorModel(config ? `${config.provider}>${config.modelName}` : '');
+      const plannerConfig = await agentModelStore.getAgentModel(AgentNameEnum.Planner);
+      const navigatorConfig = await agentModelStore.getAgentModel(AgentNameEnum.Navigator);
+      setSelectedAgentModels({
+        planner: plannerConfig ? `${plannerConfig.provider}>${plannerConfig.modelName}` : '',
+        navigator: navigatorConfig ? `${navigatorConfig.provider}>${navigatorConfig.modelName}` : '',
+      });
     } catch (error) {
-      console.error('Error loading navigator model:', error);
-      setSelectedNavigatorModel('');
+      console.error('Error loading agent models:', error);
+      setSelectedAgentModels({ planner: '', navigator: '' });
     }
   }, []);
 
@@ -170,8 +180,8 @@ const SidePanel = () => {
     checkModelConfiguration();
     loadGeneralSettings();
     loadAvailableModels();
-    loadNavigatorModel();
-  }, [checkModelConfiguration, loadGeneralSettings, loadAvailableModels, loadNavigatorModel]);
+    loadAgentModels();
+  }, [checkModelConfiguration, loadGeneralSettings, loadAvailableModels, loadAgentModels]);
 
   // Re-check model configuration when the side panel becomes visible again
   useEffect(() => {
@@ -181,7 +191,7 @@ const SidePanel = () => {
         checkModelConfiguration();
         loadGeneralSettings();
         loadAvailableModels();
-        loadNavigatorModel();
+        loadAgentModels();
       }
     };
 
@@ -190,7 +200,7 @@ const SidePanel = () => {
       checkModelConfiguration();
       loadGeneralSettings();
       loadAvailableModels();
-      loadNavigatorModel();
+      loadAgentModels();
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -200,15 +210,20 @@ const SidePanel = () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleFocus);
     };
-  }, [checkModelConfiguration, loadGeneralSettings, loadAvailableModels, loadNavigatorModel]);
+  }, [checkModelConfiguration, loadGeneralSettings, loadAvailableModels, loadAgentModels]);
 
-  const handleNavigatorModelChange = useCallback(
-    async (modelValue: string) => {
-      setSelectedNavigatorModel(modelValue);
+  const handleAgentModelChange = useCallback(
+    async (agent: QuickAgent, modelValue: string) => {
+      setSelectedAgentModels(prev => ({
+        ...prev,
+        [agent]: modelValue,
+      }));
 
       try {
+        const storageAgent = agent === 'planner' ? AgentNameEnum.Planner : AgentNameEnum.Navigator;
+
         if (!modelValue) {
-          await agentModelStore.resetAgentModel(AgentNameEnum.Navigator);
+          await agentModelStore.resetAgentModel(storageAgent);
           await checkModelConfiguration();
           return;
         }
@@ -216,21 +231,22 @@ const SidePanel = () => {
         const [provider, modelName] = modelValue.split('>');
         if (!provider || !modelName) return;
 
-        const newParameters = getDefaultAgentModelParams(provider, AgentNameEnum.Navigator);
+        const newParameters = getDefaultAgentModelParams(provider, storageAgent);
         const parametersToSave = isAnthropicModel(modelName)
           ? { temperature: newParameters.temperature }
           : newParameters;
 
-        await agentModelStore.setAgentModel(AgentNameEnum.Navigator, {
+        await agentModelStore.setAgentModel(storageAgent, {
           provider,
           modelName,
           parameters: parametersToSave,
-          reasoningEffort: isOpenAIReasoningModel(modelName) ? 'minimal' : undefined,
+          reasoningEffort:
+            isOpenAIReasoningModel(modelName) && storageAgent === AgentNameEnum.Navigator ? 'minimal' : undefined,
         });
 
         await checkModelConfiguration();
       } catch (error) {
-        console.error('Error saving navigator model:', error);
+        console.error(`Error saving ${agent} model:`, error);
       }
     },
     [checkModelConfiguration],
@@ -1237,8 +1253,11 @@ const SidePanel = () => {
                         onStopTask={handleStopTask}
                         onMicClick={handleMicClick}
                         availableModels={availableModels}
-                        selectedModel={selectedNavigatorModel}
-                        onModelChange={handleNavigatorModelChange}
+                        selectedModels={selectedAgentModels}
+                        activeAgent={activeQuickAgent}
+                        onActiveAgentChange={setActiveQuickAgent}
+                        onModelChange={handleAgentModelChange}
+                        preferredModelMenuDirection="down"
                         isRecording={isRecording}
                         isProcessingSpeech={isProcessingSpeech}
                         disabled={!inputEnabled || isHistoricalSession}
@@ -1276,8 +1295,11 @@ const SidePanel = () => {
                       onStopTask={handleStopTask}
                       onMicClick={handleMicClick}
                       availableModels={availableModels}
-                      selectedModel={selectedNavigatorModel}
-                      onModelChange={handleNavigatorModelChange}
+                      selectedModels={selectedAgentModels}
+                      activeAgent={activeQuickAgent}
+                      onActiveAgentChange={setActiveQuickAgent}
+                      onModelChange={handleAgentModelChange}
+                      preferredModelMenuDirection="up"
                       isRecording={isRecording}
                       isProcessingSpeech={isProcessingSpeech}
                       disabled={!inputEnabled || isHistoricalSession}

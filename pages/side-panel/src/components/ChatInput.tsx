@@ -3,6 +3,8 @@ import { FaMicrophone } from 'react-icons/fa';
 import { AiOutlineLoading3Quarters } from 'react-icons/ai';
 import { t } from '@extension/i18n';
 
+type QuickAgent = 'planner' | 'navigator';
+
 interface ModelOption {
   provider: string;
   providerName: string;
@@ -14,8 +16,11 @@ interface ChatInputProps {
   onStopTask: () => void;
   onMicClick?: () => void;
   availableModels?: ModelOption[];
-  selectedModel?: string;
-  onModelChange?: (modelValue: string) => void;
+  selectedModels?: Record<QuickAgent, string>;
+  activeAgent?: QuickAgent;
+  onActiveAgentChange?: (agent: QuickAgent) => void;
+  onModelChange?: (agent: QuickAgent, modelValue: string) => void;
+  preferredModelMenuDirection?: 'up' | 'down';
   isRecording?: boolean;
   isProcessingSpeech?: boolean;
   disabled: boolean;
@@ -39,8 +44,11 @@ export default function ChatInput({
   onStopTask,
   onMicClick,
   availableModels = [],
-  selectedModel = '',
+  selectedModels = { planner: '', navigator: '' },
+  activeAgent = 'navigator',
+  onActiveAgentChange,
   onModelChange,
+  preferredModelMenuDirection = 'up',
   isRecording = false,
   isProcessingSpeech = false,
   disabled,
@@ -52,13 +60,23 @@ export default function ChatInput({
   const [text, setText] = useState('');
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
+  const [composerWidth, setComposerWidth] = useState(0);
+  const [modelMenuDirection, setModelMenuDirection] = useState<'up' | 'down'>(preferredModelMenuDirection);
   const isSendButtonDisabled = useMemo(
     () => disabled || (text.trim() === '' && attachedFiles.length === 0),
     [disabled, text, attachedFiles],
   );
+  const composerRef = useRef<HTMLFormElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const modelMenuRef = useRef<HTMLDivElement>(null);
+  const modelMenuPanelRef = useRef<HTMLDivElement>(null);
+  const selectedModel = selectedModels[activeAgent] || '';
+  const layoutMode = useMemo(() => {
+    if (composerWidth > 0 && composerWidth < 320) return 'tight';
+    if (composerWidth > 0 && composerWidth < 430) return 'compact';
+    return 'comfortable';
+  }, [composerWidth]);
   const selectedModelOption = useMemo(
     () => availableModels.find(({ provider, model }) => `${provider}>${model}` === selectedModel),
     [availableModels, selectedModel],
@@ -71,11 +89,104 @@ export default function ChatInput({
       .replace(/^gpt-/i, 'GPT-')
       .replace(/^claude-/i, 'Claude ')
       .replace(/^gemini-/i, 'Gemini ')
-      .replace(/-/g, ' ');
+      .replace(/-/g, ' ')
+      .replace(/\bpreview\b/gi, '')
+      .replace(/\bchat latest\b/gi, 'Chat')
+      .replace(/\s+/g, ' ')
+      .trim();
   }, [selectedModelOption]);
+  const shortModelLabel = useMemo(() => {
+    if (!selectedModelOption) return t('options_models_chooseModel');
+
+    const longLabel = selectedModelLabel;
+    if (layoutMode === 'comfortable') return longLabel;
+
+    const compactLabel = longLabel
+      .replace(/\bOpenAI\b/gi, '')
+      .replace(/\bAnthropic\b/gi, '')
+      .replace(/\bGoogle\b/gi, '')
+      .replace(/\b2\.5\b/g, '2.5')
+      .replace(/\b4\.5\b/g, '4.5')
+      .trim();
+
+    if (layoutMode === 'compact') return compactLabel;
+
+    if (compactLabel.startsWith('Gemini')) return 'Gemini';
+    if (compactLabel.startsWith('Claude')) return 'Claude';
+    if (compactLabel.startsWith('GPT-')) return compactLabel.split(' ')[0];
+    return compactLabel.split(' ')[0] || compactLabel;
+  }, [layoutMode, selectedModelLabel, selectedModelOption]);
+  const menuWidth = useMemo(() => {
+    if (composerWidth <= 0) return 288;
+    if (layoutMode === 'tight') return Math.max(220, Math.min(composerWidth - 24, 320));
+    if (layoutMode === 'compact') return Math.max(240, Math.min(composerWidth - 40, 320));
+    return 288;
+  }, [composerWidth, layoutMode]);
+  const activeAgentLabel = activeAgent === 'planner' ? 'Planner' : 'Navigator';
+  const compactAgentLabel = layoutMode === 'tight' ? 'Role' : activeAgentLabel;
+
+  useEffect(() => {
+    const node = composerRef.current;
+    if (!node) return;
+
+    const updateWidth = () => {
+      setComposerWidth(node.getBoundingClientRect().width);
+    };
+
+    updateWidth();
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(node);
+    window.addEventListener('resize', updateWidth);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateWidth);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isModelMenuOpen) {
+      setModelMenuDirection(preferredModelMenuDirection);
+    }
+  }, [isModelMenuOpen, preferredModelMenuDirection]);
 
   useEffect(() => {
     if (!isModelMenuOpen) return;
+
+    const updateMenuDirection = () => {
+      const triggerRect = modelMenuRef.current?.getBoundingClientRect();
+      const menuHeight = modelMenuPanelRef.current?.offsetHeight ?? 0;
+
+      if (!triggerRect || menuHeight === 0) {
+        setModelMenuDirection(preferredModelMenuDirection);
+        return;
+      }
+
+      const spacing = 12;
+      const spaceAbove = triggerRect.top;
+      const spaceBelow = window.innerHeight - triggerRect.bottom;
+      const fitsAbove = spaceAbove >= menuHeight + spacing;
+      const fitsBelow = spaceBelow >= menuHeight + spacing;
+
+      if (preferredModelMenuDirection === 'down') {
+        if (fitsBelow) {
+          setModelMenuDirection('down');
+        } else if (fitsAbove) {
+          setModelMenuDirection('up');
+        } else {
+          setModelMenuDirection(spaceBelow >= spaceAbove ? 'down' : 'up');
+        }
+        return;
+      }
+
+      if (fitsAbove) {
+        setModelMenuDirection('up');
+      } else if (fitsBelow) {
+        setModelMenuDirection('down');
+      } else {
+        setModelMenuDirection(spaceAbove >= spaceBelow ? 'up' : 'down');
+      }
+    };
 
     const handlePointerDown = (event: MouseEvent) => {
       if (!modelMenuRef.current?.contains(event.target as Node)) {
@@ -89,13 +200,18 @@ export default function ChatInput({
       }
     };
 
+    updateMenuDirection();
     document.addEventListener('mousedown', handlePointerDown);
     document.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('resize', updateMenuDirection);
+    window.addEventListener('scroll', updateMenuDirection, true);
     return () => {
       document.removeEventListener('mousedown', handlePointerDown);
       document.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('resize', updateMenuDirection);
+      window.removeEventListener('scroll', updateMenuDirection, true);
     };
-  }, [isModelMenuOpen]);
+  }, [isModelMenuOpen, preferredModelMenuDirection]);
 
   // Handle text changes and resize textarea
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -234,6 +350,7 @@ export default function ChatInput({
 
   return (
     <form
+      ref={composerRef}
       onSubmit={handleSubmit}
       className={`browd-input overflow-visible transition-colors ${disabled ? 'cursor-not-allowed opacity-80' : ''}`}
       aria-label={t('chat_input_form')}>
@@ -272,136 +389,187 @@ export default function ChatInput({
           aria-label={t('chat_input_editor')}
         />
 
-        <div className="flex items-center justify-between border-t border-[var(--browd-border)] bg-[var(--browd-surface)] px-3 py-2">
-          <div className="flex gap-2 text-[var(--browd-muted)]">
-            {/* File attachment button */}
-            <button
-              type="button"
-              onClick={handleFileSelect}
-              disabled={disabled}
-              aria-label="Attach files"
-              title="Attach text files (txt, md, json, csv, etc.)"
-              className="browd-icon-button p-1.5 disabled:cursor-not-allowed disabled:opacity-50">
-              <span className="text-lg">📎</span>
-            </button>
+        <div
+          className={`border-t border-[var(--browd-border)] bg-[var(--browd-surface)] px-3 py-2 ${
+            layoutMode === 'tight' ? 'space-y-2' : ''
+          }`}>
+          <div
+            className={`flex ${layoutMode === 'tight' ? 'items-center justify-between gap-2' : 'items-center justify-between'}`}>
+            <div className="flex gap-2 text-[var(--browd-muted)]">
+              {/* File attachment button */}
+              <button
+                type="button"
+                onClick={handleFileSelect}
+                disabled={disabled}
+                aria-label="Attach files"
+                title="Attach text files (txt, md, json, csv, etc.)"
+                className="browd-icon-button p-1.5 disabled:cursor-not-allowed disabled:opacity-50">
+                <span className="text-lg">📎</span>
+              </button>
 
-            {/* Hidden file input */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept=".txt,.md,.markdown,.json,.csv,.log,.xml,.yaml,.yml"
-              onChange={handleFileChange}
-              className="hidden"
-              aria-hidden="true"
-            />
+              {/* Hidden file input */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept=".txt,.md,.markdown,.json,.csv,.log,.xml,.yaml,.yml"
+                onChange={handleFileChange}
+                className="hidden"
+                aria-hidden="true"
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              {onModelChange && (
+                <div ref={modelMenuRef} className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setIsModelMenuOpen(open => !open)}
+                    disabled={disabled || availableModels.length === 0}
+                    aria-haspopup="menu"
+                    aria-expanded={isModelMenuOpen}
+                    className={`flex items-center gap-2 rounded-full bg-[var(--browd-panel-strong)] px-3 py-1.5 text-sm text-[var(--browd-text)] transition-colors hover:bg-[var(--browd-control-hover)] disabled:cursor-not-allowed disabled:opacity-50 ${
+                      layoutMode === 'tight'
+                        ? 'max-w-[236px]'
+                        : layoutMode === 'compact'
+                          ? 'max-w-[282px]'
+                          : 'max-w-[336px]'
+                    }`}>
+                    <span className="shrink-0 text-[var(--browd-faint)]">{compactAgentLabel}</span>
+                    <span className="min-w-0 flex-1 truncate">{shortModelLabel}</span>
+                    <span className="shrink-0 text-xs text-[var(--browd-faint)]">v</span>
+                  </button>
+
+                  {isModelMenuOpen && (
+                    <div
+                      ref={modelMenuPanelRef}
+                      role="menu"
+                      className={`absolute right-0 z-50 w-72 overflow-hidden rounded-xl border border-[var(--browd-border)] bg-[var(--browd-panel)] py-2 text-sm text-[var(--browd-text)] shadow-[var(--browd-shadow-menu)] ${
+                        modelMenuDirection === 'up' ? 'bottom-full mb-2' : 'top-full mt-2'
+                      }`}
+                      style={{ width: `${menuWidth}px` }}>
+                      <div className="px-4 pb-2 pt-1">
+                        <div className="mb-2 text-sm text-[var(--browd-faint)]">Role</div>
+                        <div className="flex gap-4">
+                          {(['planner', 'navigator'] as QuickAgent[]).map(agent => {
+                            const isSelected = agent === activeAgent;
+                            const label = agent === 'planner' ? 'Planner' : 'Navigator';
+                            return (
+                              <button
+                                key={agent}
+                                type="button"
+                                onClick={() => onActiveAgentChange?.(agent)}
+                                className={`text-sm transition-colors ${
+                                  isSelected
+                                    ? 'font-medium text-[var(--browd-text)]'
+                                    : 'text-[var(--browd-muted)] hover:text-[var(--browd-text)]'
+                                }`}>
+                                {label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div className="border-t border-[var(--browd-border)] px-4 pb-2 pt-3 text-sm text-[var(--browd-faint)]">
+                        Model
+                      </div>
+                      <div className="max-h-72 overflow-y-auto">
+                        {availableModels.map(({ provider, providerName, model }) => {
+                          const value = `${provider}>${model}`;
+                          const isSelected = value === selectedModel;
+                          return (
+                            <button
+                              key={value}
+                              type="button"
+                              role="menuitemradio"
+                              aria-checked={isSelected}
+                              onClick={() => {
+                                onModelChange(activeAgent, value);
+                              }}
+                              className={`flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left transition-colors ${
+                                isSelected
+                                  ? 'bg-[var(--browd-panel-strong)] text-[var(--browd-text)]'
+                                  : 'text-[var(--browd-muted)] hover:bg-[var(--browd-control-hover)] hover:text-[var(--browd-text)]'
+                              }`}>
+                              <span className="min-w-0">
+                                <span className="block truncate text-[var(--browd-text)]">
+                                  {model
+                                    .replace(/^gpt-/i, 'GPT-')
+                                    .replace(/^claude-/i, 'Claude ')
+                                    .replace(/^gemini-/i, 'Gemini ')
+                                    .replace(/-/g, ' ')
+                                    .replace(/\s+/g, ' ')
+                                    .trim()}
+                                </span>
+                                <span className="block truncate text-xs text-[var(--browd-faint)]">{providerName}</span>
+                              </span>
+                              <span className={`shrink-0 text-lg ${isSelected ? 'opacity-100' : 'opacity-0'}`}>✓</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            {onModelChange && (
-              <div ref={modelMenuRef} className="relative">
+          <div className={`flex ${layoutMode === 'tight' ? 'justify-end' : 'justify-end'}`}>
+            <div className="flex items-center gap-2">
+              {onMicClick && !historicalSessionId && (
                 <button
                   type="button"
-                  onClick={() => setIsModelMenuOpen(open => !open)}
-                  disabled={disabled || availableModels.length === 0}
-                  aria-haspopup="menu"
-                  aria-expanded={isModelMenuOpen}
-                  className="flex max-w-[168px] items-center gap-2 rounded-full bg-[var(--browd-panel-strong)] px-3 py-1.5 text-sm text-[var(--browd-text)] transition-colors hover:bg-[var(--browd-control-hover)] disabled:cursor-not-allowed disabled:opacity-50">
-                  <span className="truncate">{selectedModelLabel}</span>
-                  <span className="shrink-0 text-[var(--browd-faint)]">Medium</span>
-                  <span className="shrink-0 text-xs text-[var(--browd-faint)]">v</span>
+                  onClick={onMicClick}
+                  disabled={disabled || isProcessingSpeech}
+                  aria-label={
+                    isProcessingSpeech
+                      ? t('chat_stt_processing')
+                      : isRecording
+                        ? t('chat_stt_recording_stop')
+                        : t('chat_stt_input_start')
+                  }
+                  className={`rounded-md p-1.5 transition-colors ${
+                    disabled || isProcessingSpeech
+                      ? 'cursor-not-allowed opacity-50'
+                      : isRecording
+                        ? 'bg-[var(--browd-danger)] text-white hover:bg-[var(--browd-danger-hover)]'
+                        : 'browd-icon-button'
+                  }`}>
+                  {isProcessingSpeech ? (
+                    <AiOutlineLoading3Quarters className="size-4 animate-spin" />
+                  ) : (
+                    <FaMicrophone className={`size-4 ${isRecording ? 'animate-pulse' : ''}`} />
+                  )}
                 </button>
+              )}
 
-                {isModelMenuOpen && (
-                  <div
-                    role="menu"
-                    className="absolute bottom-full right-0 z-50 mb-2 w-72 overflow-hidden rounded-xl border border-[var(--browd-border)] bg-[var(--browd-panel)] py-2 text-sm text-[var(--browd-text)] shadow-[var(--browd-shadow-menu)]">
-                    <div className="px-4 pb-2 text-sm text-[var(--browd-faint)]">Model</div>
-                    <div className="max-h-72 overflow-y-auto">
-                      {availableModels.map(({ provider, providerName, model }) => {
-                        const value = `${provider}>${model}`;
-                        const isSelected = value === selectedModel;
-                        return (
-                          <button
-                            key={value}
-                            type="button"
-                            role="menuitemradio"
-                            aria-checked={isSelected}
-                            onClick={() => {
-                              onModelChange(value);
-                              setIsModelMenuOpen(false);
-                            }}
-                            className={`flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left transition-colors ${
-                              isSelected
-                                ? 'bg-[var(--browd-panel-strong)] text-[var(--browd-text)]'
-                                : 'text-[var(--browd-muted)] hover:bg-[var(--browd-control-hover)] hover:text-[var(--browd-text)]'
-                            }`}>
-                            <span className="min-w-0">
-                              <span className="block truncate text-[var(--browd-text)]">{model}</span>
-                              <span className="block truncate text-xs text-[var(--browd-faint)]">{providerName}</span>
-                            </span>
-                            <span className={`shrink-0 text-lg ${isSelected ? 'opacity-100' : 'opacity-0'}`}>✓</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {onMicClick && !historicalSessionId && (
-              <button
-                type="button"
-                onClick={onMicClick}
-                disabled={disabled || isProcessingSpeech}
-                aria-label={
-                  isProcessingSpeech
-                    ? t('chat_stt_processing')
-                    : isRecording
-                      ? t('chat_stt_recording_stop')
-                      : t('chat_stt_input_start')
-                }
-                className={`rounded-md p-1.5 transition-colors ${
-                  disabled || isProcessingSpeech
-                    ? 'cursor-not-allowed opacity-50'
-                    : isRecording
-                      ? 'bg-[var(--browd-danger)] text-white hover:bg-[var(--browd-danger-hover)]'
-                      : 'browd-icon-button'
-                }`}>
-                {isProcessingSpeech ? (
-                  <AiOutlineLoading3Quarters className="size-4 animate-spin" />
-                ) : (
-                  <FaMicrophone className={`size-4 ${isRecording ? 'animate-pulse' : ''}`} />
-                )}
-              </button>
-            )}
-
-            {showStopButton ? (
-              <button
-                type="button"
-                onClick={onStopTask}
-                className="rounded-md bg-[var(--browd-danger)] px-3 py-1 text-white transition-colors hover:bg-[var(--browd-danger-hover)]">
-                {t('chat_buttons_stop')}
-              </button>
-            ) : historicalSessionId ? (
-              <button
-                type="button"
-                onClick={handleReplay}
-                disabled={!historicalSessionId}
-                aria-disabled={!historicalSessionId}
-                className={`browd-button-primary px-3 py-1 text-sm font-medium ${!historicalSessionId ? 'cursor-not-allowed opacity-50' : ''}`}>
-                {t('chat_buttons_replay')}
-              </button>
-            ) : (
-              <button
-                type="submit"
-                disabled={isSendButtonDisabled}
-                aria-disabled={isSendButtonDisabled}
-                className={`browd-button-primary px-3 py-1 text-sm font-medium ${isSendButtonDisabled ? 'cursor-not-allowed opacity-50' : ''}`}>
-                {t('chat_buttons_send')}
-              </button>
-            )}
+              {showStopButton ? (
+                <button
+                  type="button"
+                  onClick={onStopTask}
+                  className="rounded-md bg-[var(--browd-danger)] px-3 py-1 text-white transition-colors hover:bg-[var(--browd-danger-hover)]">
+                  {t('chat_buttons_stop')}
+                </button>
+              ) : historicalSessionId ? (
+                <button
+                  type="button"
+                  onClick={handleReplay}
+                  disabled={!historicalSessionId}
+                  aria-disabled={!historicalSessionId}
+                  className={`browd-button-primary px-3 py-1 text-sm font-medium ${!historicalSessionId ? 'cursor-not-allowed opacity-50' : ''}`}>
+                  {t('chat_buttons_replay')}
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={isSendButtonDisabled}
+                  aria-disabled={isSendButtonDisabled}
+                  className={`browd-button-primary px-3 py-1 text-sm font-medium ${isSendButtonDisabled ? 'cursor-not-allowed opacity-50' : ''}`}>
+                  {t('chat_buttons_send')}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
