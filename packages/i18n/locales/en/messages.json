@@ -367,7 +367,7 @@
     "message": "Reasoning"
   },
   "options_models_stt_desc": {
-    "message": "Configure the provider/model used for microphone speech-to-text. Gemini works directly, OpenRouter is model-dependent, and Grok uses xAI's dedicated STT API."
+    "message": "Configure the provider/model used for microphone speech-to-text. Gemini works directly, OpenRouter requires an audio-input chat model, and Grok uses xAI's dedicated STT API."
   },
   "options_models_chooseModel": {
     "message": "Choose Model"

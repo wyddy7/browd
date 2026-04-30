@@ -10,15 +10,10 @@ import {
   normalizeProviderBaseUrl,
 } from '../../../../../packages/storage/lib/settings/llmProviders';
 import {
-  buildOpenRouterResponsesAudioPayload,
-  buildOpenRouterResponsesFilePayload,
   buildOpenRouterTranscriptionPayload,
   buildXaiSpeechToTextFormData,
-  extractOpenRouterResponsesTranscript,
   extractOpenRouterTranscript,
   parseAudioDataUrl,
-  shouldRetryOpenRouterResponsesWithAlternateContent,
-  shouldRetryOpenRouterWithResponses,
 } from '../speechToTextUtils';
 
 const webmAudioDataUrl = 'data:audio/webm;base64,AAAA';
@@ -90,48 +85,6 @@ describe('speech-to-text payload helpers', () => {
     });
   });
 
-  it('builds OpenRouter responses audio payloads with input_audio content', () => {
-    const parsed = parseAudioDataUrl(webmAudioDataUrl);
-    const payload = buildOpenRouterResponsesAudioPayload('openai/gpt-4o-transcribe', parsed);
-    const messageContent = payload.input[0].content;
-
-    expect(payload.model).toBe('openai/gpt-4o-transcribe');
-    expect(payload.input[0].id).toBe('speech-to-text-input');
-    expect(payload.input[0].type).toBe('message');
-    expect(Array.isArray(messageContent)).toBe(true);
-    expect(messageContent[0]).toEqual({
-      type: 'input_text',
-      text: 'Please transcribe this audio file. Return only the transcribed text without any additional formatting or explanations.',
-    });
-    expect(messageContent[1]).toEqual({
-      type: 'input_audio',
-      input_audio: {
-        data: parsed.base64Data,
-        format: parsed.format,
-      },
-    });
-  });
-
-  it('builds OpenRouter responses file payloads with data URL content', () => {
-    const parsed = parseAudioDataUrl(webmAudioDataUrl);
-    const payload = buildOpenRouterResponsesFilePayload('openai/gpt-4o-transcribe', parsed);
-    const messageContent = payload.input[0].content;
-
-    expect(payload.model).toBe('openai/gpt-4o-transcribe');
-    expect(payload.input[0].id).toBe('speech-to-text-input');
-    expect(payload.input[0].type).toBe('message');
-    expect(Array.isArray(messageContent)).toBe(true);
-    expect(messageContent[0]).toEqual({
-      type: 'input_text',
-      text: 'Please transcribe this audio file. Return only the transcribed text without any additional formatting or explanations.',
-    });
-    expect(messageContent[1]).toEqual({
-      type: 'input_file',
-      file_data: parsed.dataUrl,
-      filename: parsed.fileName,
-    });
-  });
-
   it('builds xAI multipart form data with file last', () => {
     const parsed = parseAudioDataUrl(webmAudioDataUrl);
     const formData = buildXaiSpeechToTextFormData(parsed);
@@ -158,45 +111,6 @@ describe('speech-to-text payload helpers', () => {
     });
 
     expect(transcript).toBe('hello from audio');
-  });
-
-  it('extracts transcript text from OpenRouter responses output', () => {
-    const transcript = extractOpenRouterResponsesTranscript({
-      output: [
-        {
-          type: 'message',
-          content: [
-            {
-              type: 'output_text',
-              text: 'hello from responses audio',
-            },
-          ],
-        },
-      ],
-    });
-
-    expect(transcript).toBe('hello from responses audio');
-  });
-
-  it('retries OpenRouter STT through responses when input_audio is rejected', () => {
-    expect(
-      shouldRetryOpenRouterWithResponses(
-        400,
-        `{"error":{"message":"Invalid value: 'input_audio'. Supported values are: 'input_text', 'input_image', 'output_text', 'refusal', 'input_file'"}}`,
-      ),
-    ).toBe(true);
-  });
-
-  it('retries OpenRouter responses with alternate content when content validation fails', () => {
-    expect(shouldRetryOpenRouterResponsesWithAlternateContent(400, '{"error":{"message":"Invalid content"}}')).toBe(
-      true,
-    );
-    expect(
-      shouldRetryOpenRouterResponsesWithAlternateContent(
-        400,
-        '{"error":{"code":"invalid_prompt","message":"Invalid Responses API request"},"metadata":{"raw":"invalid_union"}}',
-      ),
-    ).toBe(true);
   });
 });
 

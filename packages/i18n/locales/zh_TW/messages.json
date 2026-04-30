@@ -362,7 +362,7 @@
     "message": "推理"
   },
   "options_models_stt_desc": {
-    "message": "設定麥克風語音轉文字所使用的供應商與模型。Gemini 可直接使用，OpenRouter 取決於模型能力，Grok 則使用 xAI 專用 STT API。"
+    "message": "設定麥克風語音轉文字所使用的供應商與模型。Gemini 可直接使用，OpenRouter 需要支援音訊輸入的聊天模型，Grok 則使用 xAI 專用 STT API。"
   },
   "options_models_chooseModel": {
     "message": "選擇模型"

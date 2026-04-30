@@ -8,16 +8,11 @@ import {
   speechToTextModelStore,
 } from '@extension/storage';
 import {
-  buildOpenRouterResponsesAudioPayload,
-  buildOpenRouterResponsesFilePayload,
   buildOpenRouterTranscriptionPayload,
   buildXaiSpeechToTextFormData,
-  extractOpenRouterResponsesTranscript,
   extractOpenRouterTranscript,
   isGrokSpeechToTextModel,
   parseAudioDataUrl,
-  shouldRetryOpenRouterResponsesWithAlternateContent,
-  shouldRetryOpenRouterWithResponses,
 } from './speechToTextUtils';
 
 const logger = createLogger('SpeechToText');
@@ -92,67 +87,8 @@ class OpenRouterSpeechToTextAdapter implements SpeechToTextAdapter {
     }
 
     const chatErrorText = await chatResponse.text();
-
-    if (!shouldRetryOpenRouterWithResponses(chatResponse.status, chatErrorText)) {
-      logger.error('OpenRouter chat transcription failed', chatResponse.status);
-      throw new Error(`OpenRouter STT request failed (${chatResponse.status}): ${chatErrorText.slice(0, 1200)}`);
-    }
-
-    logger.warning(
-      'OpenRouter chat route rejected input_audio, retrying with responses-compatible content',
-      this.modelName,
-    );
-
-    const responsesAudioResponse = await this.sendOpenRouterResponsesRequest(
-      buildOpenRouterResponsesAudioPayload(this.modelName, audio),
-    );
-
-    if (responsesAudioResponse.ok) {
-      const responseJson = (await responsesAudioResponse.json()) as Record<string, any>;
-      return extractOpenRouterResponsesTranscript(responseJson);
-    }
-
-    const responsesAudioErrorText = await responsesAudioResponse.text();
-
-    if (!shouldRetryOpenRouterResponsesWithAlternateContent(responsesAudioResponse.status, responsesAudioErrorText)) {
-      logger.error('OpenRouter responses audio transcription failed', responsesAudioResponse.status);
-      throw new Error(
-        `OpenRouter STT request failed (${responsesAudioResponse.status}): ${responsesAudioErrorText.slice(0, 1200)}`,
-      );
-    }
-
-    logger.warning(
-      'OpenRouter responses route rejected input_audio content, retrying with input_file data URL',
-      this.modelName,
-    );
-
-    const responsesFileResponse = await this.sendOpenRouterResponsesRequest(
-      buildOpenRouterResponsesFilePayload(this.modelName, audio),
-    );
-
-    if (!responsesFileResponse.ok) {
-      const responsesFileErrorText = await responsesFileResponse.text();
-      logger.error('OpenRouter responses file transcription failed', responsesFileResponse.status);
-      throw new Error(
-        `OpenRouter STT request failed (${responsesFileResponse.status}): ${responsesFileErrorText.slice(0, 1200)}`,
-      );
-    }
-
-    const responseJson = (await responsesFileResponse.json()) as Record<string, any>;
-    return extractOpenRouterResponsesTranscript(responseJson);
-  }
-
-  private sendOpenRouterResponsesRequest(body: Record<string, unknown>) {
-    return fetch(`${this.provider.baseUrl || 'https://openrouter.ai/api/v1'}/responses`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${this.provider.apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://github.com/wyddy7/browd',
-        'X-Title': 'Browd',
-      },
-      body: JSON.stringify(body),
-    });
+    logger.error('OpenRouter chat transcription failed', chatResponse.status);
+    throw new Error(`OpenRouter STT request failed (${chatResponse.status}): ${chatErrorText.slice(0, 1200)}`);
   }
 }
 

@@ -366,7 +366,7 @@
     "message": "Raciocínio"
   },
   "options_models_stt_desc": {
-    "message": "Configure o provedor/modelo usado para fala em texto no microfone. Gemini funciona diretamente, OpenRouter depende do modelo e Grok usa a API dedicada de STT da xAI."
+    "message": "Configure o provedor/modelo usado para fala em texto no microfone. Gemini funciona diretamente, OpenRouter requer um modelo de chat com entrada de áudio e Grok usa a API dedicada de STT da xAI."
   },
   "options_models_chooseModel": {
     "message": "Escolher Modelo"
