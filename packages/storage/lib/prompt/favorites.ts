@@ -5,9 +5,9 @@ import type { BaseStorage } from '../base/types';
 // Template data
 const defaultFavoritePrompts = [
   {
-    title: 'Summarize this page',
+    title: 'Explore Browd on GitHub',
     content:
-      'Summarize the current page in a few concise bullets. Include the main goal, key details, and any useful next steps.',
+      'Open the Browd repository at https://github.com/wyddy7/browd and summarize what the project does, how to run it locally, and one concrete way I could improve it next.',
   },
   {
     title: 'Extract structured data',
@@ -15,13 +15,13 @@ const defaultFavoritePrompts = [
       'Extract the important structured information from this page and return it as a clean list or table. Include names, prices, dates, links, and statuses when available.',
   },
   {
-    title: 'Compare available options',
+    title: 'Create a reusable workflow',
     content:
-      'Review the visible options on this page, compare their main differences, and recommend the best choice based on value, tradeoffs, and likely fit.',
+      'Look at the current page and draft a reusable step-by-step workflow for this task. Keep it concise and actionable so I can reuse it later.',
   },
 ];
 
-const legacyDefaultPromptMatchers = [
+const systemPromptMatchers = [
   (prompt: FavoritePrompt) =>
     prompt.title === '📚 Explore AI Papers' ||
     prompt.content.includes('https://huggingface.co/papers') ||
@@ -31,28 +31,48 @@ const legacyDefaultPromptMatchers = [
     prompt.content.includes('OpenRouter model options') ||
     prompt.content.includes('which model you would choose for planning'),
   (prompt: FavoritePrompt) =>
+    prompt.title === '🐦 Follow us on X/Twitter!' ||
+    prompt.title.includes('Twitter') ||
+    prompt.title.includes('X/Twitter') ||
+    prompt.content.includes('x.com/nanobrowser_ai') ||
+    prompt.content.includes('latest news and features'),
+  (prompt: FavoritePrompt) =>
+    prompt.title === '🌟 Star us on GitHub!' ||
     prompt.title === '🌟 Explore Browd on GitHub' ||
     prompt.title === '🌟 Explore Nanobrowser on GitHub' ||
+    prompt.title === 'Explore Browd on GitHub' ||
     prompt.content.includes('https://github.com/wyddy7/browd') ||
     prompt.content.includes('https://github.com/nanobrowser/nanobrowser') ||
-    prompt.content.includes('next obvious contribution.'),
+    prompt.content.includes('next obvious contribution.') ||
+    prompt.content.includes('support us by giving us a star'),
+  (prompt: FavoritePrompt) =>
+    prompt.title === 'Summarize this page' ||
+    prompt.content.includes('Summarize the current page in a few concise bullets.'),
+  (prompt: FavoritePrompt) =>
+    prompt.title === 'Extract structured data' ||
+    prompt.content.includes('Extract the important structured information from this page'),
+  (prompt: FavoritePrompt) =>
+    prompt.title === 'Compare available options' ||
+    prompt.content.includes('Review the visible options on this page, compare their main differences'),
+  (prompt: FavoritePrompt) =>
+    prompt.title === 'Create a reusable workflow' ||
+    prompt.content.includes('draft a reusable step-by-step workflow for this task'),
 ];
 
-function migrateLegacyDefaultPrompts(prompts: FavoritePrompt[]): FavoritePrompt[] {
-  return prompts.map(prompt => {
-    const legacyIndex = legacyDefaultPromptMatchers.findIndex(matchPrompt => matchPrompt(prompt));
+function isSystemPrompt(prompt: FavoritePrompt): boolean {
+  return systemPromptMatchers.some(matchPrompt => matchPrompt(prompt));
+}
 
-    if (legacyIndex === -1) {
-      return prompt;
-    }
+function rebuildDefaultPrompts(prompts: FavoritePrompt[]): FavoritePrompt[] {
+  const customPrompts = prompts.filter(prompt => !isSystemPrompt(prompt));
+  const rebuilt = [...defaultFavoritePrompts, ...customPrompts];
+  const total = rebuilt.length;
 
-    const replacement = defaultFavoritePrompts[legacyIndex];
-    return {
-      ...prompt,
-      title: replacement.title,
-      content: replacement.content,
-    };
-  });
+  return rebuilt.map((prompt, index) => ({
+    id: total - index,
+    title: prompt.title,
+    content: prompt.content,
+  }));
 }
 
 // Define the favorite prompt type
@@ -197,19 +217,37 @@ export function createFavoritesStorage(): FavoritePromptsStorage {
         prompts = newState.prompts;
       }
 
-      const migratedPrompts = migrateLegacyDefaultPrompts(prompts);
-      const hasMigrationChanges = migratedPrompts.some((prompt, index) => {
-        const originalPrompt = prompts[index];
-        return prompt.title !== originalPrompt.title || prompt.content !== originalPrompt.content;
-      });
+      const hasSystemPrompts = prompts.some(isSystemPrompt);
 
-      if (hasMigrationChanges) {
+      if (hasSystemPrompts) {
+        const rebuiltPrompts = rebuildDefaultPrompts(prompts);
+        const hasMigrationChanges =
+          rebuiltPrompts.length !== prompts.length ||
+          rebuiltPrompts.some((prompt, index) => {
+            const originalPrompt = prompts[index];
+            return (
+              !originalPrompt || prompt.title !== originalPrompt.title || prompt.content !== originalPrompt.content
+            );
+          });
+
+        if (hasMigrationChanges) {
+          await favoritesStorage.set(prev => {
+            const nextPrompts = rebuildDefaultPrompts(prev.prompts);
+            return {
+              nextId: nextPrompts.length + 1,
+              prompts: nextPrompts,
+            };
+          });
+          const updatedState = await favoritesStorage.get();
+          prompts = updatedState.prompts;
+        }
+      }
+
+      if (!hasSystemPrompts && currentState.prompts.length === 0 && currentState.nextId === 1) {
         await favoritesStorage.set(prev => ({
-          ...prev,
-          prompts: migrateLegacyDefaultPrompts(prev.prompts),
+          nextId: prev.nextId,
+          prompts: prev.prompts,
         }));
-        const updatedState = await favoritesStorage.get();
-        prompts = updatedState.prompts;
       }
 
       return [...prompts].sort((a, b) => b.id - a.id);
