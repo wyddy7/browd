@@ -1431,7 +1431,7 @@ const SidePanel = () => {
             {hasConfiguredModels === true && (
               <>
                 {messages.length === 0 && (
-                  <div className="flex flex-1 flex-col justify-center">
+                  <>
                     <div className="mb-2 border-t border-[var(--browd-border)] p-2">
                       <ChatInput
                         onSendMessage={handleSendMessage}
@@ -1458,7 +1458,7 @@ const SidePanel = () => {
                         onReplay={handleReplay}
                       />
                     </div>
-                    <div className="max-h-[42vh] overflow-y-auto bg-[var(--browd-bg)]/35">
+                    <div className="flex-1 overflow-y-auto bg-[var(--browd-bg)]/35">
                       <BookmarkList
                         bookmarks={favoritePrompts}
                         onBookmarkSelect={handleBookmarkSelect}
@@ -1470,7 +1470,7 @@ const SidePanel = () => {
                         isDarkMode={isDarkMode}
                       />
                     </div>
-                  </div>
+                  </>
                 )}
                 {messages.length > 0 && (
                   <div className="scrollbar-gutter-stable flex-1 overflow-x-hidden overflow-y-scroll bg-[var(--browd-bg)]/60 p-3 scroll-smooth">
