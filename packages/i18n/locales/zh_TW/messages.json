@@ -158,7 +158,7 @@
     "message": "處理語音輸入失敗"
   },
   "chat_stt_model_notFound": {
-    "message": "尚未設定語音轉文字模型，或所選擇的不是 Gemini 模型。請在設定中選擇 Gemini 模型。"
+    "message": "尚未設定受支援的語音轉文字供應商或模型。請在設定中選擇 Gemini、OpenRouter 或 Grok。"
   },
   "chat_stt_recognitionFailed": {
     "message": "語音辨識失敗"
@@ -362,7 +362,7 @@
     "message": "推理"
   },
   "options_models_stt_desc": {
-    "message": "設定在使用麥克風功能時，將語音轉換為文字所使用的 Gemini 模型。"
+    "message": "設定麥克風語音轉文字所使用的供應商與模型。Gemini 可直接使用，OpenRouter 取決於模型能力，Grok 則使用 xAI 專用 STT API。"
   },
   "options_models_chooseModel": {
     "message": "選擇模型"

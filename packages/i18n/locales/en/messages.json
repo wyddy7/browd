@@ -158,7 +158,7 @@
     "message": "Failed to process speech recording"
   },
   "chat_stt_model_notFound": {
-    "message": "No speech-to-text model configured or not a Gemini model. Please configure a Gemini model in settings."
+    "message": "No supported speech-to-text provider/model configured. Choose a Gemini, OpenRouter, or Grok option in settings."
   },
   "chat_stt_recognitionFailed": {
     "message": "Speech recognition failed"
@@ -367,7 +367,7 @@
     "message": "Reasoning"
   },
   "options_models_stt_desc": {
-    "message": "Configure the Gemini model used for converting speech to text when using the microphone feature."
+    "message": "Configure the provider/model used for microphone speech-to-text. Gemini works directly, OpenRouter is model-dependent, and Grok uses xAI's dedicated STT API."
   },
   "options_models_chooseModel": {
     "message": "Choose Model"

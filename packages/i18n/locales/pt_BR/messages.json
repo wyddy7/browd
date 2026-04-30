@@ -158,7 +158,7 @@
     "message": "Falha ao processar gravação de fala"
   },
   "chat_stt_model_notFound": {
-    "message": "Nenhum modelo de conversão de fala para texto configurado ou não é um modelo Gemini. Por favor, configure um modelo Gemini nas configurações."
+    "message": "Nenhum provedor/modelo compatível de fala para texto foi configurado. Escolha uma opção Gemini, OpenRouter ou Grok nas configurações."
   },
   "chat_stt_recognitionFailed": {
     "message": "Reconhecimento de fala falhou"
@@ -366,7 +366,7 @@
     "message": "Raciocínio"
   },
   "options_models_stt_desc": {
-    "message": "Configure o modelo Gemini usado para converter fala em texto ao usar o recurso de microfone."
+    "message": "Configure o provedor/modelo usado para fala em texto no microfone. Gemini funciona diretamente, OpenRouter depende do modelo e Grok usa a API dedicada de STT da xAI."
   },
   "options_models_chooseModel": {
     "message": "Escolher Modelo"

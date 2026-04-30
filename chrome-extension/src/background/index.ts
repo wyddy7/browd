@@ -212,14 +212,8 @@ chrome.runtime.onConnect.addListener(port => {
               // Create speech-to-text service with all providers
               const speechToTextService = await SpeechToTextService.create(providers);
 
-              // Extract base64 audio data (remove data URL prefix if present)
-              let base64Audio = message.audio;
-              if (base64Audio.startsWith('data:')) {
-                base64Audio = base64Audio.split(',')[1];
-              }
-
               // Transcribe audio
-              const transcribedText = await speechToTextService.transcribeAudio(base64Audio);
+              const transcribedText = await speechToTextService.transcribeAudio(message.audio);
 
               logger.info('Speech-to-text completed successfully');
               return port.postMessage({

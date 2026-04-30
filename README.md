@@ -16,8 +16,8 @@ Early fork cleanup and product direction work is in progress.
 Current focus:
 
 - simplify the extension UI;
-- decouple Speech-to-Text from Gemini-only logic;
-- add experimental OpenRouter STT support;
+- keep Speech-to-Text provider-agnostic across Gemini, OpenRouter, and Grok/xAI;
+- harden experimental OpenRouter STT and dedicated Grok STT flows with real-browser QA;
 - keep local extension development easy to run in Chromium-based browsers.
 
 ## Local Setup

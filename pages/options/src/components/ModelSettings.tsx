@@ -12,6 +12,8 @@ import { Button } from '@extension/ui';
 import {
   llmProviderStore,
   agentModelStore,
+  GROK_SPEECH_TO_TEXT_MODEL,
+  getSpeechToTextOptions,
   speechToTextModelStore,
   AgentNameEnum,
   llmProviderModelNames,
@@ -75,6 +77,14 @@ const rangeStyle = (value: number) => ({
   background: `linear-gradient(to right, var(--browd-accent) 0%, var(--browd-accent) ${value}%, var(--browd-border-strong) ${value}%, var(--browd-border-strong) 100%)`,
 });
 
+function getSpeechToTextOptionLabel(providerName: string, modelName: string): string {
+  if (modelName === GROK_SPEECH_TO_TEXT_MODEL) {
+    return `${providerName} > Grok Speech-to-Text API`;
+  }
+
+  return `${providerName} > ${modelName}`;
+}
+
 export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
   const [providers, setProviders] = useState<Record<string, ProviderConfig>>({});
   const [modifiedProviders, setModifiedProviders] = useState<Set<string>>(new Set());
@@ -104,6 +114,9 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
   // Create a non-async wrapper for use in render functions
   const [availableModels, setAvailableModels] = useState<
     Array<{ provider: string; providerName: string; model: string }>
+  >([]);
+  const [availableSpeechToTextOptions, setAvailableSpeechToTextOptions] = useState<
+    Array<{ provider: string; providerName: string; modelName: string }>
   >([]);
   // State for model input handling
 
@@ -271,15 +284,31 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
     return models;
   }, []);
 
+  const getAvailableSpeechToTextOptionsCallback = useCallback(async () => {
+    try {
+      const storedProviders = await llmProviderStore.getAllProviders();
+      return getSpeechToTextOptions(storedProviders).map(option => ({
+        provider: option.provider,
+        providerName: option.providerName,
+        modelName: option.modelName,
+      }));
+    } catch (error) {
+      console.error('Error loading providers for speech-to-text selection:', error);
+      return [];
+    }
+  }, []);
+
   // Update available models whenever providers change
   useEffect(() => {
     const updateAvailableModels = async () => {
       const models = await getAvailableModelsCallback();
       setAvailableModels(models);
+      const speechToTextOptions = await getAvailableSpeechToTextOptionsCallback();
+      setAvailableSpeechToTextOptions(speechToTextOptions);
     };
 
     updateAvailableModels();
-  }, [getAvailableModelsCallback]); // Only depends on the callback
+  }, [getAvailableModelsCallback, getAvailableSpeechToTextOptionsCallback]); // Only depends on the callbacks
 
   const handleApiKeyChange = (provider: string, apiKey: string, baseUrl?: string) => {
     setModifiedProviders(prev => new Set(prev).add(provider));
@@ -520,6 +549,8 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
       // Refresh available models
       const models = await getAvailableModelsCallback();
       setAvailableModels(models);
+      const speechToTextOptions = await getAvailableSpeechToTextOptionsCallback();
+      setAvailableSpeechToTextOptions(speechToTextOptions);
     } catch (error) {
       console.error('Error saving API key:', error);
     }
@@ -554,6 +585,8 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
       // Refresh available models
       const models = await getAvailableModelsCallback();
       setAvailableModels(models);
+      const speechToTextOptions = await getAvailableSpeechToTextOptionsCallback();
+      setAvailableSpeechToTextOptions(speechToTextOptions);
     } catch (error) {
       console.error('Error deleting provider:', error);
     }
@@ -1599,17 +1632,11 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
               value={selectedSpeechToTextModel}
               onChange={e => handleSpeechToTextModelChange(e.target.value)}>
               <option value="">{t('options_models_chooseModel')}</option>
-              {/* Filter available models to show only Gemini models */}
-              {availableModels
-                .filter(({ provider }) => {
-                  const providerConfig = providers[provider];
-                  return providerConfig?.type === ProviderTypeEnum.Gemini;
-                })
-                .map(({ provider, providerName, model }) => (
-                  <option key={`${provider}>${model}`} value={`${provider}>${model}`}>
-                    {`${providerName} > ${model}`}
-                  </option>
-                ))}
+              {availableSpeechToTextOptions.map(({ provider, providerName, modelName }) => (
+                <option key={`${provider}>${modelName}`} value={`${provider}>${modelName}`}>
+                  {getSpeechToTextOptionLabel(providerName, modelName)}
+                </option>
+              ))}
             </select>
           </div>
         </div>
