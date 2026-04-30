@@ -19,6 +19,13 @@ type OpenRouterMessageContent =
         }
     >;
 
+type OpenRouterResponsesOutputContent =
+  | {
+      type?: string;
+      text?: string;
+    }
+  | string;
+
 const MIME_TYPE_TO_EXTENSION: Record<string, string> = {
   'audio/aac': 'aac',
   'audio/flac': 'flac',
@@ -92,6 +99,28 @@ export function buildOpenRouterTranscriptionPayload(modelName: string, audio: Pa
   };
 }
 
+export function buildOpenRouterResponsesTranscriptionPayload(modelName: string, audio: ParsedAudioData) {
+  return {
+    model: modelName,
+    instructions:
+      'Transcribe this audio file. Return only the transcribed text without any additional formatting or explanations.',
+    input: [
+      {
+        type: 'message',
+        role: 'user',
+        content: [
+          {
+            type: 'input_file',
+            file_data: audio.base64Data,
+            filename: audio.fileName,
+          },
+        ],
+      },
+    ],
+    stream: false,
+  };
+}
+
 export function buildXaiSpeechToTextFormData(audio: ParsedAudioData): FormData {
   const formData = new FormData();
   formData.append('format', 'true');
@@ -129,6 +158,49 @@ export function extractOpenRouterTranscript(responseJson: Record<string, any>): 
   }
 
   throw new Error('OpenRouter did not return a transcript');
+}
+
+export function extractOpenRouterResponsesTranscript(responseJson: Record<string, any>): string {
+  const output = responseJson?.output;
+
+  if (!Array.isArray(output)) {
+    throw new Error('OpenRouter responses API did not return output items');
+  }
+
+  const text = output
+    .flatMap(item => (Array.isArray(item?.content) ? item.content : []))
+    .map((part: OpenRouterResponsesOutputContent) => {
+      if (typeof part === 'string') {
+        return part;
+      }
+
+      if (part?.type === 'output_text' && typeof part.text === 'string') {
+        return part.text;
+      }
+
+      return '';
+    })
+    .join(' ')
+    .trim();
+
+  if (!text) {
+    throw new Error('OpenRouter responses API did not return a transcript');
+  }
+
+  return text;
+}
+
+export function shouldRetryOpenRouterWithResponses(status: number, errorText: string): boolean {
+  if (status !== 400) {
+    return false;
+  }
+
+  return (
+    errorText.includes("Invalid value: 'input_audio'") ||
+    (errorText.includes('Supported values are:') &&
+      errorText.includes("'input_file'") &&
+      !errorText.includes("'input_audio'"))
+  );
 }
 
 export function isGrokSpeechToTextModel(modelName: string): boolean {

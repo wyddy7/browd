@@ -7,13 +7,15 @@ import {
   ProviderTypeEnum,
   speechToTextModelStore,
 } from '@extension/storage';
-import { t } from '@extension/i18n';
 import {
+  buildOpenRouterResponsesTranscriptionPayload,
   buildOpenRouterTranscriptionPayload,
   buildXaiSpeechToTextFormData,
+  extractOpenRouterResponsesTranscript,
   extractOpenRouterTranscript,
   isGrokSpeechToTextModel,
   parseAudioDataUrl,
+  shouldRetryOpenRouterWithResponses,
 } from './speechToTextUtils';
 
 const logger = createLogger('SpeechToText');
@@ -71,7 +73,7 @@ class OpenRouterSpeechToTextAdapter implements SpeechToTextAdapter {
     const audio = parseAudioDataUrl(audioDataUrl);
     logger.info('Starting OpenRouter audio transcription...', this.modelName, audio.mimeType, audio.byteLength);
 
-    const response = await fetch(`${this.provider.baseUrl || 'https://openrouter.ai/api/v1'}/chat/completions`, {
+    const chatResponse = await fetch(`${this.provider.baseUrl || 'https://openrouter.ai/api/v1'}/chat/completions`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${this.provider.apiKey}`,
@@ -82,14 +84,41 @@ class OpenRouterSpeechToTextAdapter implements SpeechToTextAdapter {
       body: JSON.stringify(buildOpenRouterTranscriptionPayload(this.modelName, audio)),
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      logger.error('OpenRouter transcription failed', response.status);
-      throw new Error(`OpenRouter STT request failed (${response.status}): ${errorText.slice(0, 300)}`);
+    if (chatResponse.ok) {
+      const responseJson = (await chatResponse.json()) as Record<string, any>;
+      return extractOpenRouterTranscript(responseJson);
     }
 
-    const responseJson = (await response.json()) as Record<string, any>;
-    return extractOpenRouterTranscript(responseJson);
+    const chatErrorText = await chatResponse.text();
+
+    if (!shouldRetryOpenRouterWithResponses(chatResponse.status, chatErrorText)) {
+      logger.error('OpenRouter chat transcription failed', chatResponse.status);
+      throw new Error(`OpenRouter STT request failed (${chatResponse.status}): ${chatErrorText.slice(0, 300)}`);
+    }
+
+    logger.warning('OpenRouter chat route rejected input_audio, retrying with responses input_file', this.modelName);
+
+    const responsesResponse = await fetch(`${this.provider.baseUrl || 'https://openrouter.ai/api/v1'}/responses`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.provider.apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://github.com/wyddy7/browd',
+        'X-Title': 'Browd',
+      },
+      body: JSON.stringify(buildOpenRouterResponsesTranscriptionPayload(this.modelName, audio)),
+    });
+
+    if (!responsesResponse.ok) {
+      const responsesErrorText = await responsesResponse.text();
+      logger.error('OpenRouter responses transcription failed', responsesResponse.status);
+      throw new Error(
+        `OpenRouter STT request failed (${responsesResponse.status}): ${responsesErrorText.slice(0, 300)}`,
+      );
+    }
+
+    const responseJson = (await responsesResponse.json()) as Record<string, any>;
+    return extractOpenRouterResponsesTranscript(responseJson);
   }
 }
 
@@ -141,14 +170,18 @@ export class SpeechToTextService {
       const config = await speechToTextModelStore.getSpeechToTextModel();
 
       if (!config?.provider || !config?.modelName) {
-        throw new Error(t('chat_stt_model_notFound'));
+        throw new Error(
+          'Speech-to-text is not configured yet. Pick a model in Settings -> Models -> Speech-to-Text Model.',
+        );
       }
 
       const provider = providers[config.provider];
       logger.info('Found provider for speech-to-text:', provider ? 'yes' : 'no', provider?.type);
 
       if (!provider?.type) {
-        throw new Error(t('chat_stt_model_notFound'));
+        throw new Error(
+          `Speech-to-text provider "${config.provider}" was not found in saved providers. Re-save that provider in Settings -> Models.`,
+        );
       }
 
       let adapter: SpeechToTextAdapter;
@@ -170,13 +203,17 @@ export class SpeechToTextService {
         }
         case ProviderTypeEnum.Grok: {
           if (!isGrokSpeechToTextModel(config.modelName)) {
-            throw new Error(t('chat_stt_model_notFound'));
+            throw new Error(
+              `Saved STT model "${config.modelName}" is not a valid Grok STT option. Re-select "Grok Speech-to-Text API" in settings.`,
+            );
           }
           adapter = new GrokSpeechToTextAdapter(provider);
           break;
         }
         default:
-          throw new Error(t('chat_stt_model_notFound'));
+          throw new Error(
+            `Provider "${config.provider}" of type "${provider.type}" is not supported for speech-to-text in Browd.`,
+          );
       }
 
       logger.info(`Speech-to-text service created with provider/model: ${provider.type} ${config.modelName}`);
