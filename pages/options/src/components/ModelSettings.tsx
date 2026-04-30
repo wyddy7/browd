@@ -59,6 +59,8 @@ interface ModelSettingsProps {
   isDarkMode?: boolean; // Controls dark/light theme styling
 }
 
+type ModelSelectionTab = AgentNameEnum | 'stt';
+
 const cardClass = 'browd-card p-6 text-left';
 const innerCardClass = 'rounded-lg border border-[var(--browd-border)] bg-[var(--browd-panel-strong)] p-4';
 const titleClass = 'mb-4 text-xl font-semibold text-[var(--browd-text)]';
@@ -83,6 +85,11 @@ function getSpeechToTextOptionLabel(providerName: string, modelName: string): st
   }
 
   return `${providerName} > ${modelName}`;
+}
+
+function isSupportedOpenRouterSpeechToTextModel(modelName: string): boolean {
+  const normalizedModelName = modelName.toLowerCase();
+  return !normalizedModelName.includes('whisper') && !normalizedModelName.includes('transcribe');
 }
 
 export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
@@ -121,6 +128,7 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
   // State for model input handling
 
   const [selectedSpeechToTextModel, setSelectedSpeechToTextModel] = useState<string>('');
+  const [activeModelSelectionTab, setActiveModelSelectionTab] = useState<ModelSelectionTab>(AgentNameEnum.Planner);
 
   useEffect(() => {
     const loadProviders = async () => {
@@ -287,11 +295,61 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
   const getAvailableSpeechToTextOptionsCallback = useCallback(async () => {
     try {
       const storedProviders = await llmProviderStore.getAllProviders();
-      return getSpeechToTextOptions(storedProviders).map(option => ({
+
+      const options = getSpeechToTextOptions(storedProviders).map(option => ({
         provider: option.provider,
         providerName: option.providerName,
         modelName: option.modelName,
       }));
+
+      const openRouterProviders = Object.entries(storedProviders).filter(
+        ([, config]) => config.type === ProviderTypeEnum.OpenRouter,
+      );
+
+      if (openRouterProviders.length === 0) {
+        return options;
+      }
+
+      try {
+        const response = await fetch('https://openrouter.ai/api/v1/models');
+        if (!response.ok) {
+          throw new Error(`OpenRouter models request failed: ${response.status}`);
+        }
+
+        const payload = (await response.json()) as {
+          data?: Array<{ id?: string; architecture?: { input_modalities?: string[] } }>;
+        };
+
+        const remoteAudioModels = (payload.data || [])
+          .filter(model => (model.architecture?.input_modalities || []).includes('audio'))
+          .map(model => model.id)
+          .filter((modelId): modelId is string => Boolean(modelId))
+          .filter(isSupportedOpenRouterSpeechToTextModel)
+          .sort((left, right) => left.localeCompare(right));
+
+        const mergedOptions = new Map(
+          options.map(option => [`${option.provider}>${option.modelName}`, option] as const),
+        );
+
+        for (const [providerId, config] of openRouterProviders) {
+          const providerName = config.name || providerId;
+          for (const modelName of remoteAudioModels) {
+            mergedOptions.set(`${providerId}>${modelName}`, {
+              provider: providerId,
+              providerName,
+              modelName,
+            });
+          }
+        }
+
+        return Array.from(mergedOptions.values()).sort((left, right) =>
+          `${left.providerName}>${left.modelName}`.localeCompare(`${right.providerName}>${right.modelName}`),
+        );
+      } catch (openRouterError) {
+        console.error('Error loading OpenRouter speech-to-text models:', openRouterError);
+      }
+
+      return options;
     } catch (error) {
       console.error('Error loading providers for speech-to-text selection:', error);
       return [];
@@ -899,6 +957,31 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
             </div>
           </div>
         )}
+      </div>
+    </div>
+  );
+
+  const renderSpeechToTextSelect = () => (
+    <div className={innerCardClass}>
+      <h3 className="mb-2 text-lg font-medium text-[var(--browd-text)]">{t('options_models_speechToText_header')}</h3>
+      <p className="mb-4 text-sm font-normal text-[var(--browd-muted)]">{t('options_models_stt_desc')}</p>
+
+      <div className="flex items-center">
+        <label htmlFor="speech-to-text-model" className={fieldLabelClass}>
+          {t('options_models_labels_model')}
+        </label>
+        <select
+          id="speech-to-text-model"
+          className={fieldInputClass}
+          value={selectedSpeechToTextModel}
+          onChange={e => handleSpeechToTextModelChange(e.target.value)}>
+          <option value="">{t('options_models_chooseModel')}</option>
+          {availableSpeechToTextOptions.map(({ provider, providerName, modelName }) => (
+            <option key={`${provider}>${modelName}`} value={`${provider}>${modelName}`}>
+              {getSpeechToTextOptionLabel(providerName, modelName)}
+            </option>
+          ))}
+        </select>
       </div>
     </div>
   );
@@ -1609,37 +1692,26 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
       {/* Updated Agent Models Section */}
       <div className={cardClass}>
         <h2 className={titleClass}>{t('options_models_selection_header')}</h2>
-        <div className="space-y-4">
-          {[AgentNameEnum.Planner, AgentNameEnum.Navigator].map(agentName => (
-            <div key={agentName}>{renderModelSelect(agentName)}</div>
+        <div className="mb-4 flex flex-wrap gap-2">
+          {[
+            { id: AgentNameEnum.Planner, label: 'Planner' },
+            { id: AgentNameEnum.Navigator, label: 'Navigator' },
+            { id: 'stt' as const, label: 'STT' },
+          ].map(tab => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveModelSelectionTab(tab.id)}
+              className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+                activeModelSelectionTab === tab.id
+                  ? 'bg-[var(--browd-accent)] text-white'
+                  : 'border border-[var(--browd-border)] bg-[var(--browd-panel-strong)] text-[var(--browd-muted)] hover:text-[var(--browd-text)]'
+              }`}>
+              {tab.label}
+            </button>
           ))}
         </div>
-      </div>
-
-      {/* Speech-to-Text Model Selection */}
-      <div className={cardClass}>
-        <h2 className={titleClass}>{t('options_models_speechToText_header')}</h2>
-        <p className="mb-4 text-sm text-[var(--browd-muted)]">{t('options_models_stt_desc')}</p>
-
-        <div className={innerCardClass}>
-          <div className="flex items-center">
-            <label htmlFor="speech-to-text-model" className={fieldLabelClass}>
-              {t('options_models_labels_model')}
-            </label>
-            <select
-              id="speech-to-text-model"
-              className={fieldInputClass}
-              value={selectedSpeechToTextModel}
-              onChange={e => handleSpeechToTextModelChange(e.target.value)}>
-              <option value="">{t('options_models_chooseModel')}</option>
-              {availableSpeechToTextOptions.map(({ provider, providerName, modelName }) => (
-                <option key={`${provider}>${modelName}`} value={`${provider}>${modelName}`}>
-                  {getSpeechToTextOptionLabel(providerName, modelName)}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
+        {activeModelSelectionTab === 'stt' ? renderSpeechToTextSelect() : renderModelSelect(activeModelSelectionTab)}
       </div>
     </section>
   );

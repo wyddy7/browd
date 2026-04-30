@@ -12,6 +12,11 @@ interface ModelOption {
   model: string;
 }
 
+export interface ChatInputContentController {
+  setText: (text: string) => void;
+  appendText: (text: string) => void;
+}
+
 interface ChatInputProps {
   onSendMessage: (text: string, displayText?: string) => void;
   onStopTask: () => void;
@@ -26,7 +31,7 @@ interface ChatInputProps {
   isProcessingSpeech?: boolean;
   disabled: boolean;
   showStopButton: boolean;
-  setContent?: (setter: (text: string) => void) => void;
+  setContent?: (controller: ChatInputContentController) => void;
   isDarkMode?: boolean;
   // Historical session ID - if provided, shows replay button instead of send button
   historicalSessionId?: string | null;
@@ -179,32 +184,43 @@ export default function ChatInput({
 
   // Handle text changes and resize textarea
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const newText = e.target.value;
-    setText(newText);
-
-    // Resize textarea
-    const textarea = textareaRef.current;
-    if (textarea) {
-      textarea.style.height = 'auto';
-      textarea.style.height = `${Math.min(textarea.scrollHeight, 100)}px`;
-    }
+    setText(e.target.value);
   };
+
+  const resizeTextarea = useCallback(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) {
+      return;
+    }
+
+    textarea.style.height = 'auto';
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 100)}px`;
+  }, []);
 
   // Expose a method to set content from outside
   useEffect(() => {
     if (setContent) {
-      setContent(setText);
+      setContent({
+        setText: (nextText: string) => {
+          setText(nextText);
+        },
+        appendText: (nextText: string) => {
+          const normalizedText = nextText.trim();
+          if (!normalizedText) {
+            return;
+          }
+
+          setText(previousText =>
+            previousText.trim() ? `${previousText.replace(/\s+$/, '')} ${normalizedText}` : normalizedText,
+          );
+        },
+      });
     }
   }, [setContent]);
 
-  // Initial resize when component mounts
   useEffect(() => {
-    const textarea = textareaRef.current;
-    if (textarea) {
-      textarea.style.height = 'auto';
-      textarea.style.height = `${Math.min(textarea.scrollHeight, 100)}px`;
-    }
-  }, []);
+    resizeTextarea();
+  }, [text, resizeTextarea]);
 
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {

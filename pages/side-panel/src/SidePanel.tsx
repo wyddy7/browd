@@ -20,7 +20,7 @@ import {
 import favoritesStorage, { type FavoritePrompt } from '@extension/storage/lib/prompt/favorites';
 import { t } from '@extension/i18n';
 import MessageList from './components/MessageList';
-import ChatInput from './components/ChatInput';
+import ChatInput, { type ChatInputContentController } from './components/ChatInput';
 import ChatHistoryList from './components/ChatHistoryList';
 import BookmarkList from './components/BookmarkList';
 import { EventType, type AgentEvent, ExecutionState } from './types/event';
@@ -170,7 +170,7 @@ const SidePanel = () => {
   const portRef = useRef<chrome.runtime.Port | null>(null);
   const heartbeatIntervalRef = useRef<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const setInputTextRef = useRef<((text: string) => void) | null>(null);
+  const inputContentControllerRef = useRef<ChatInputContentController | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<number | null>(null);
@@ -534,8 +534,8 @@ const SidePanel = () => {
           setShowStopButton(false);
         } else if (message && message.type === 'speech_to_text_result') {
           // Handle speech-to-text result
-          if (message.text && setInputTextRef.current) {
-            setInputTextRef.current(message.text);
+          if (message.text && inputContentControllerRef.current) {
+            inputContentControllerRef.current.appendText(message.text);
           }
           setIsProcessingSpeech(false);
         } else if (message && message.type === 'speech_to_text_error') {
@@ -970,8 +970,8 @@ const SidePanel = () => {
   };
 
   const handleBookmarkSelect = (content: string) => {
-    if (setInputTextRef.current) {
-      setInputTextRef.current(content);
+    if (inputContentControllerRef.current) {
+      inputContentControllerRef.current.setText(content);
     }
   };
 
@@ -1355,8 +1355,8 @@ const SidePanel = () => {
                         isProcessingSpeech={isProcessingSpeech}
                         disabled={!inputEnabled || isHistoricalSession}
                         showStopButton={showStopButton}
-                        setContent={setter => {
-                          setInputTextRef.current = setter;
+                        setContent={controller => {
+                          inputContentControllerRef.current = controller;
                         }}
                         isDarkMode={isDarkMode}
                         historicalSessionId={isHistoricalSession && replayEnabled ? currentSessionId : null}
@@ -1399,8 +1399,8 @@ const SidePanel = () => {
                       isProcessingSpeech={isProcessingSpeech}
                       disabled={!inputEnabled || isHistoricalSession}
                       showStopButton={showStopButton}
-                      setContent={setter => {
-                        setInputTextRef.current = setter;
+                      setContent={controller => {
+                        inputContentControllerRef.current = controller;
                       }}
                       isDarkMode={isDarkMode}
                       historicalSessionId={isHistoricalSession && replayEnabled ? currentSessionId : null}
