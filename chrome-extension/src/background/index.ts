@@ -26,6 +26,10 @@ let currentExecutor: Executor | null = null;
 let currentPort: chrome.runtime.Port | null = null;
 const SIDE_PANEL_URL = chrome.runtime.getURL('side-panel/index.html');
 
+chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(error => {
+  logger.error('Failed to configure side panel behavior:', error);
+});
+
 async function maybeAutoGroupTab(tabId: number) {
   const generalSettings = await generalSettingsStore.getSettings();
   if (!generalSettings.autoGroupOnLaunch) {
@@ -61,7 +65,9 @@ async function openSidePanelForLaunch(tabId?: number) {
 }
 
 chrome.action.onClicked.addListener(tab => {
-  void openSidePanelForLaunch(tab.id);
+  if (tab.id) {
+    void maybeAutoGroupTab(tab.id);
+  }
 });
 
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {

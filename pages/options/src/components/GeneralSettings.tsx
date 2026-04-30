@@ -20,9 +20,7 @@ function formatShortcutFromEvent(event: React.KeyboardEvent<HTMLElement>): strin
     return null;
   }
 
-  // Reserve Meta shortcuts for the browser/OS to avoid capturing combinations
-  // that Chrome or macOS intercept before the extension can react.
-  if (event.metaKey || (!event.ctrlKey && !event.altKey && !event.shiftKey)) {
+  if (!event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
     return null;
   }
 

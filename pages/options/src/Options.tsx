@@ -23,6 +23,7 @@ const TABS: { id: TabTypes; icon: React.ComponentType<{ className?: string }>; l
 type ShortcutParts = {
   key: string;
   ctrl: boolean;
+  meta: boolean;
   alt: boolean;
   shift: boolean;
 };
@@ -61,6 +62,7 @@ function parseShortcut(shortcut: string): ShortcutParts | null {
   return {
     key: key.length === 1 ? key.toUpperCase() : key.toLowerCase(),
     ctrl: modifiers.has('ctrl') || modifiers.has('control'),
+    meta: modifiers.has('meta') || modifiers.has('cmd') || modifiers.has('command'),
     alt: modifiers.has('alt') || modifiers.has('option'),
     shift: modifiers.has('shift'),
   };
@@ -77,9 +79,9 @@ function matchesShortcut(event: KeyboardEvent, shortcut: string): boolean {
   return (
     eventKey === parsed.key &&
     event.ctrlKey === parsed.ctrl &&
+    event.metaKey === parsed.meta &&
     event.altKey === parsed.alt &&
-    event.shiftKey === parsed.shift &&
-    !event.metaKey
+    event.shiftKey === parsed.shift
   );
 }
 

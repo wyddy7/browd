@@ -203,10 +203,10 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
             }}
             aria-label={t('chat_bookmarks_edit')}
             aria-pressed={isEditMode}
-            className={`browd-button-ghost inline-flex items-center rounded-full px-2 py-1.5 text-sm ${
+            className={`browd-button-ghost inline-flex min-w-[54px] items-center justify-center rounded-full px-3 py-1.5 text-sm transition-all duration-200 ${
               isEditMode ? 'bg-[var(--browd-accent-soft)] text-[var(--browd-text)]' : 'text-[var(--browd-text)]'
             }`}>
-            <FaPen size={12} />
+            {isEditMode ? 'Done' : 'Edit'}
           </button>
         </div>
       </div>
