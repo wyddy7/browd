@@ -97,6 +97,7 @@ describe('speech-to-text payload helpers', () => {
 
     expect(payload.model).toBe('openai/gpt-4o-transcribe');
     expect(payload.input[0].id).toBe('speech-to-text-input');
+    expect(payload.input[0].type).toBe('message');
     expect(Array.isArray(messageContent)).toBe(true);
     expect(messageContent[0]).toEqual({
       type: 'input_text',
@@ -118,6 +119,7 @@ describe('speech-to-text payload helpers', () => {
 
     expect(payload.model).toBe('openai/gpt-4o-transcribe');
     expect(payload.input[0].id).toBe('speech-to-text-input');
+    expect(payload.input[0].type).toBe('message');
     expect(Array.isArray(messageContent)).toBe(true);
     expect(messageContent[0]).toEqual({
       type: 'input_text',
@@ -189,6 +191,12 @@ describe('speech-to-text payload helpers', () => {
     expect(shouldRetryOpenRouterResponsesWithAlternateContent(400, '{"error":{"message":"Invalid content"}}')).toBe(
       true,
     );
+    expect(
+      shouldRetryOpenRouterResponsesWithAlternateContent(
+        400,
+        '{"error":{"code":"invalid_prompt","message":"Invalid Responses API request"},"metadata":{"raw":"invalid_union"}}',
+      ),
+    ).toBe(true);
   });
 });
 

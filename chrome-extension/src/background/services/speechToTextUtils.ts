@@ -107,6 +107,7 @@ export function buildOpenRouterResponsesAudioPayload(modelName: string, audio: P
     input: [
       {
         id: 'speech-to-text-input',
+        type: 'message',
         role: 'user',
         content: [
           {
@@ -133,6 +134,7 @@ export function buildOpenRouterResponsesFilePayload(modelName: string, audio: Pa
     input: [
       {
         id: 'speech-to-text-input',
+        type: 'message',
         role: 'user',
         content: [
           {
@@ -238,7 +240,12 @@ export function shouldRetryOpenRouterResponsesWithAlternateContent(status: numbe
     return false;
   }
 
-  return errorText.includes('Invalid content');
+  return (
+    errorText.includes('Invalid content') ||
+    errorText.includes('invalid_prompt') ||
+    errorText.includes('invalid_union') ||
+    errorText.includes('Invalid Responses API request')
+  );
 }
 
 export function isGrokSpeechToTextModel(modelName: string): boolean {

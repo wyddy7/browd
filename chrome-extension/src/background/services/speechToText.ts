@@ -95,7 +95,7 @@ class OpenRouterSpeechToTextAdapter implements SpeechToTextAdapter {
 
     if (!shouldRetryOpenRouterWithResponses(chatResponse.status, chatErrorText)) {
       logger.error('OpenRouter chat transcription failed', chatResponse.status);
-      throw new Error(`OpenRouter STT request failed (${chatResponse.status}): ${chatErrorText.slice(0, 300)}`);
+      throw new Error(`OpenRouter STT request failed (${chatResponse.status}): ${chatErrorText.slice(0, 1200)}`);
     }
 
     logger.warning(
@@ -117,7 +117,7 @@ class OpenRouterSpeechToTextAdapter implements SpeechToTextAdapter {
     if (!shouldRetryOpenRouterResponsesWithAlternateContent(responsesAudioResponse.status, responsesAudioErrorText)) {
       logger.error('OpenRouter responses audio transcription failed', responsesAudioResponse.status);
       throw new Error(
-        `OpenRouter STT request failed (${responsesAudioResponse.status}): ${responsesAudioErrorText.slice(0, 300)}`,
+        `OpenRouter STT request failed (${responsesAudioResponse.status}): ${responsesAudioErrorText.slice(0, 1200)}`,
       );
     }
 
@@ -134,7 +134,7 @@ class OpenRouterSpeechToTextAdapter implements SpeechToTextAdapter {
       const responsesFileErrorText = await responsesFileResponse.text();
       logger.error('OpenRouter responses file transcription failed', responsesFileResponse.status);
       throw new Error(
-        `OpenRouter STT request failed (${responsesFileResponse.status}): ${responsesFileErrorText.slice(0, 300)}`,
+        `OpenRouter STT request failed (${responsesFileResponse.status}): ${responsesFileErrorText.slice(0, 1200)}`,
       );
     }
 
