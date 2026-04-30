@@ -11,17 +11,18 @@ import { t } from '@extension/i18n';
 const settingTitleClass = 'text-base font-medium text-[var(--browd-text)]';
 const settingDescriptionClass = 'text-sm font-normal text-[var(--browd-muted)]';
 const numberInputClass = 'browd-input w-20 px-3 py-2';
-const shortcutInputClass =
-  'browd-input min-w-[160px] rounded-full px-3 py-2 text-center text-sm text-[var(--browd-text)]';
+const shortcutButtonClass = 'browd-input min-w-[160px] rounded-full px-4 py-2 text-center text-sm transition-colors';
 
 const modifierKeys = new Set(['Control', 'Meta', 'Alt', 'Shift']);
 
-function formatShortcutFromEvent(event: React.KeyboardEvent<HTMLInputElement>): string | null {
+function formatShortcutFromEvent(event: React.KeyboardEvent<HTMLElement>): string | null {
   if (modifierKeys.has(event.key) || event.key === 'Tab' || event.key === 'Escape') {
     return null;
   }
 
-  if (!event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
+  // Reserve Meta shortcuts for the browser/OS to avoid capturing combinations
+  // that Chrome or macOS intercept before the extension can react.
+  if (event.metaKey || (!event.ctrlKey && !event.altKey && !event.shiftKey)) {
     return null;
   }
 
@@ -44,6 +45,7 @@ interface GeneralSettingsProps {
 
 export const GeneralSettings = ({ onAppearanceThemeChange }: GeneralSettingsProps) => {
   const [settings, setSettings] = useState<GeneralSettingsConfig>(DEFAULT_GENERAL_SETTINGS);
+  const [isCapturingShortcut, setIsCapturingShortcut] = useState(false);
 
   useEffect(() => {
     // Load initial settings
@@ -242,15 +244,34 @@ export const GeneralSettings = ({ onAppearanceThemeChange }: GeneralSettingsProp
               <h3 className={settingTitleClass}>{t('options_general_launchShortcut')}</h3>
               <p className={settingDescriptionClass}>{t('options_general_launchShortcut_desc')}</p>
             </div>
-            <input
-              type="text"
-              value={settings.launchShortcut}
-              readOnly
+            <button
+              type="button"
               aria-label={t('options_general_launchShortcut')}
+              aria-pressed={isCapturingShortcut}
+              onClick={e => {
+                setIsCapturingShortcut(true);
+                e.currentTarget.focus();
+              }}
+              onBlur={() => setIsCapturingShortcut(false)}
               onKeyDown={e => {
+                if (!isCapturingShortcut) {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setIsCapturingShortcut(true);
+                  }
+                  return;
+                }
+
                 if (e.key === 'Backspace' || e.key === 'Delete') {
                   e.preventDefault();
+                  setIsCapturingShortcut(false);
                   void updateSetting('launchShortcut', '');
+                  return;
+                }
+
+                if (e.key === 'Escape') {
+                  e.preventDefault();
+                  setIsCapturingShortcut(false);
                   return;
                 }
 
@@ -260,10 +281,16 @@ export const GeneralSettings = ({ onAppearanceThemeChange }: GeneralSettingsProp
                 }
 
                 e.preventDefault();
+                setIsCapturingShortcut(false);
                 void updateSetting('launchShortcut', shortcut);
               }}
-              className={shortcutInputClass}
-            />
+              className={`${shortcutButtonClass} ${
+                isCapturingShortcut
+                  ? 'bg-[var(--browd-accent-soft)] text-[var(--browd-text)] shadow-[var(--browd-shadow-focus)]'
+                  : 'text-[var(--browd-text)]'
+              }`}>
+              {isCapturingShortcut ? 'Press shortcut...' : settings.launchShortcut || 'Set shortcut'}
+            </button>
           </div>
         </div>
       </div>

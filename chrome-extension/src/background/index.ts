@@ -45,12 +45,19 @@ async function maybeAutoGroupTab(tabId: number) {
 }
 
 async function openSidePanelForLaunch(tabId?: number) {
-  if (!tabId) {
+  let resolvedTabId = tabId;
+
+  if (!resolvedTabId) {
+    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    resolvedTabId = activeTab?.id;
+  }
+
+  if (!resolvedTabId) {
     return;
   }
 
-  await chrome.sidePanel.open({ tabId });
-  await maybeAutoGroupTab(tabId);
+  await chrome.sidePanel.open({ tabId: resolvedTabId });
+  await maybeAutoGroupTab(resolvedTabId);
 }
 
 chrome.action.onClicked.addListener(tab => {
