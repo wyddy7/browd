@@ -106,7 +106,7 @@ export function buildOpenRouterResponsesAudioPayload(modelName: string, audio: P
     model: modelName,
     input: [
       {
-        type: 'message',
+        id: 'speech-to-text-input',
         role: 'user',
         content: [
           {
@@ -132,7 +132,7 @@ export function buildOpenRouterResponsesFilePayload(modelName: string, audio: Pa
     model: modelName,
     input: [
       {
-        type: 'message',
+        id: 'speech-to-text-input',
         role: 'user',
         content: [
           {

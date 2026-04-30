@@ -96,6 +96,7 @@ describe('speech-to-text payload helpers', () => {
     const messageContent = payload.input[0].content;
 
     expect(payload.model).toBe('openai/gpt-4o-transcribe');
+    expect(payload.input[0].id).toBe('speech-to-text-input');
     expect(Array.isArray(messageContent)).toBe(true);
     expect(messageContent[0]).toEqual({
       type: 'input_text',
@@ -116,6 +117,7 @@ describe('speech-to-text payload helpers', () => {
     const messageContent = payload.input[0].content;
 
     expect(payload.model).toBe('openai/gpt-4o-transcribe');
+    expect(payload.input[0].id).toBe('speech-to-text-input');
     expect(Array.isArray(messageContent)).toBe(true);
     expect(messageContent[0]).toEqual({
       type: 'input_text',
