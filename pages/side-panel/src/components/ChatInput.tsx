@@ -3,6 +3,7 @@ import { FaMicrophone } from 'react-icons/fa';
 import { AiOutlineLoading3Quarters } from 'react-icons/ai';
 import { FiPaperclip } from 'react-icons/fi';
 import { t } from '@extension/i18n';
+import { chatInputDraftStorage } from '@extension/storage';
 
 type QuickAgent = 'planner' | 'navigator';
 
@@ -68,6 +69,7 @@ export default function ChatInput({
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
   const [composerWidth, setComposerWidth] = useState(0);
   const [modelMenuDirection, setModelMenuDirection] = useState<'up' | 'down'>(preferredModelMenuDirection);
+  const [isDraftHydrated, setIsDraftHydrated] = useState(false);
   const isSendButtonDisabled = useMemo(
     () => disabled || (text.trim() === '' && attachedFiles.length === 0),
     [disabled, text, attachedFiles],
@@ -110,6 +112,31 @@ export default function ChatInput({
     return () => {
       observer.disconnect();
       window.removeEventListener('resize', updateWidth);
+    };
+  }, []);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const loadDraft = async () => {
+      try {
+        const draftText = await chatInputDraftStorage.getDraft();
+        if (!isCancelled && draftText) {
+          setText(previousText => (previousText.length > 0 ? previousText : draftText));
+        }
+      } catch (error) {
+        console.error('Failed to load chat input draft:', error);
+      } finally {
+        if (!isCancelled) {
+          setIsDraftHydrated(true);
+        }
+      }
+    };
+
+    loadDraft();
+
+    return () => {
+      isCancelled = true;
     };
   }, []);
 
@@ -222,6 +249,32 @@ export default function ChatInput({
     resizeTextarea();
   }, [text, resizeTextarea]);
 
+  useEffect(() => {
+    if (!isDraftHydrated) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      const persistDraft = async () => {
+        try {
+          if (text.length > 0) {
+            await chatInputDraftStorage.setDraft(text);
+          } else {
+            await chatInputDraftStorage.clearDraft();
+          }
+        } catch (error) {
+          console.error('Failed to save chat input draft:', error);
+        }
+      };
+
+      void persistDraft();
+    }, 400);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [text, isDraftHydrated]);
+
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
@@ -254,6 +307,7 @@ export default function ChatInput({
         onSendMessage(messageContent, displayContent);
         setText('');
         setAttachedFiles([]);
+        void chatInputDraftStorage.clearDraft();
       }
     },
     [text, attachedFiles, onSendMessage],

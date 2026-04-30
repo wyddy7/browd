@@ -6,6 +6,7 @@ Browd is a Chromium browser extension for local AI browser automation.
 
 - Provider configuration and user-provided API keys in browser extension storage.
 - Chat history, task state, and extension settings in browser extension storage.
+- Unsent draft prompts/composer text in browser extension local storage so draft input can be restored after the side panel closes.
 - Speech-to-Text audio only for the active transcription request flow.
 
 ## What Browd sends
