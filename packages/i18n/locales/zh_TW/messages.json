@@ -293,10 +293,10 @@
     "message": "開啟擴充功能時，自動將目前分頁加入 Browd 群組。"
   },
   "options_general_launchShortcut": {
-    "message": "啟動快捷鍵"
+    "message": "瀏覽器快捷鍵"
   },
   "options_general_launchShortcut_desc": {
-    "message": "聚焦此欄位後按下快捷鍵，即可從目前頁面開啟 Browd。按 Delete 可清除。"
+    "message": "可靠的啟動快捷鍵由瀏覽器管理。預設為 Ctrl+E，而在 macOS 上是 Command+E。請到瀏覽器快捷鍵設定中修改。"
   },
   "options_models_providers_header": {
     "message": "LLM 提供者"

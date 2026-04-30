@@ -293,10 +293,10 @@
     "message": "Automatically group the current tab into a Browd group when opening the extension."
   },
   "options_general_launchShortcut": {
-    "message": "Launch Shortcut"
+    "message": "Browser Shortcut"
   },
   "options_general_launchShortcut_desc": {
-    "message": "Focus this field and press a shortcut to open Browd from the current page. Press Delete to clear it."
+    "message": "Reliable launch shortcuts are managed by the browser. Default is Ctrl+E, and Command+E on macOS. Change it in browser shortcut settings."
   },
 
   "options_models_providers_header": {

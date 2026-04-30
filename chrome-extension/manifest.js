@@ -79,6 +79,14 @@ const manifest = withOperaSidebar(
     action: {
       default_icon: 'icon-32.png',
     },
+    commands: {
+      _execute_action: {
+        suggested_key: {
+          default: 'Ctrl+E',
+          mac: 'Command+E',
+        },
+      },
+    },
     icons: {
       128: 'icon-128.png',
     },

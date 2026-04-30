@@ -20,9 +20,18 @@ export function ToggleSwitch({ id, checked, onChange, disabled, label, className
       />
       <label
         htmlFor={id}
-        className="block h-6 w-11 cursor-pointer rounded-full bg-[var(--browd-toggle-track-off)] transition-colors peer-checked:bg-[var(--browd-info)] peer-focus-visible:outline-none peer-focus-visible:ring-4 peer-focus-visible:ring-[var(--browd-accent-soft)] peer-disabled:cursor-not-allowed peer-disabled:opacity-50">
+        className={cn(
+          'relative block h-6 w-11 rounded-full transition-colors peer-focus-visible:outline-none peer-focus-visible:ring-4 peer-focus-visible:ring-[var(--browd-accent-soft)]',
+          checked ? 'bg-[var(--browd-info)]' : 'bg-[var(--browd-toggle-track-off)]',
+          disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
+        )}>
         <span className="sr-only">{label}</span>
-        <span className="block size-5 translate-x-[2px] translate-y-[2px] rounded-full border border-[var(--browd-border)] bg-[var(--browd-toggle-thumb)] shadow-sm transition-transform peer-checked:translate-x-6 peer-checked:border-transparent" />
+        <span
+          className={cn(
+            'absolute top-[2px] block size-5 rounded-full border bg-[var(--browd-toggle-thumb)] shadow-sm transition-all duration-200 ease-out',
+            checked ? 'left-[22px] border-transparent' : 'left-[2px] border border-[var(--browd-border)]',
+          )}
+        />
       </label>
     </div>
   );

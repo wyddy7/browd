@@ -11,31 +11,7 @@ import { t } from '@extension/i18n';
 const settingTitleClass = 'text-base font-medium text-[var(--browd-text)]';
 const settingDescriptionClass = 'text-sm font-normal text-[var(--browd-muted)]';
 const numberInputClass = 'browd-input w-20 px-3 py-2';
-const shortcutButtonClass = 'browd-input min-w-[160px] rounded-full px-4 py-2 text-center text-sm transition-colors';
-
-const modifierKeys = new Set(['Control', 'Meta', 'Alt', 'Shift']);
-
-function formatShortcutFromEvent(event: React.KeyboardEvent<HTMLElement>): string | null {
-  if (modifierKeys.has(event.key) || event.key === 'Tab' || event.key === 'Escape') {
-    return null;
-  }
-
-  if (!event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
-    return null;
-  }
-
-  const parts: string[] = [];
-
-  if (event.ctrlKey) parts.push('Ctrl');
-  if (event.metaKey) parts.push('Meta');
-  if (event.altKey) parts.push('Alt');
-  if (event.shiftKey) parts.push('Shift');
-
-  const normalizedKey = event.key.length === 1 ? event.key.toUpperCase() : event.key;
-  parts.push(normalizedKey);
-
-  return parts.join('+');
-}
+const shortcutButtonClass = 'browd-input min-w-[180px] rounded-full px-4 py-2 text-center text-sm transition-colors';
 
 interface GeneralSettingsProps {
   onAppearanceThemeChange?: (theme: AppearanceTheme) => void;
@@ -43,7 +19,6 @@ interface GeneralSettingsProps {
 
 export const GeneralSettings = ({ onAppearanceThemeChange }: GeneralSettingsProps) => {
   const [settings, setSettings] = useState<GeneralSettingsConfig>(DEFAULT_GENERAL_SETTINGS);
-  const [isCapturingShortcut, setIsCapturingShortcut] = useState(false);
 
   useEffect(() => {
     // Load initial settings
@@ -242,53 +217,19 @@ export const GeneralSettings = ({ onAppearanceThemeChange }: GeneralSettingsProp
               <h3 className={settingTitleClass}>{t('options_general_launchShortcut')}</h3>
               <p className={settingDescriptionClass}>{t('options_general_launchShortcut_desc')}</p>
             </div>
-            <button
-              type="button"
-              aria-label={t('options_general_launchShortcut')}
-              aria-pressed={isCapturingShortcut}
-              onClick={e => {
-                setIsCapturingShortcut(true);
-                e.currentTarget.focus();
-              }}
-              onBlur={() => setIsCapturingShortcut(false)}
-              onKeyDown={e => {
-                if (!isCapturingShortcut) {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    setIsCapturingShortcut(true);
-                  }
-                  return;
-                }
-
-                if (e.key === 'Backspace' || e.key === 'Delete') {
-                  e.preventDefault();
-                  setIsCapturingShortcut(false);
-                  void updateSetting('launchShortcut', '');
-                  return;
-                }
-
-                if (e.key === 'Escape') {
-                  e.preventDefault();
-                  setIsCapturingShortcut(false);
-                  return;
-                }
-
-                const shortcut = formatShortcutFromEvent(e);
-                if (!shortcut) {
-                  return;
-                }
-
-                e.preventDefault();
-                setIsCapturingShortcut(false);
-                void updateSetting('launchShortcut', shortcut);
-              }}
-              className={`${shortcutButtonClass} ${
-                isCapturingShortcut
-                  ? 'bg-[var(--browd-accent-soft)] text-[var(--browd-text)] shadow-[var(--browd-shadow-focus)]'
-                  : 'text-[var(--browd-text)]'
-              }`}>
-              {isCapturingShortcut ? 'Press shortcut...' : settings.launchShortcut || 'Set shortcut'}
-            </button>
+            <div className="flex items-center gap-3">
+              <div className="browd-input min-w-[120px] rounded-full px-4 py-2 text-center text-sm text-[var(--browd-text)]">
+                {settings.launchShortcut}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  void chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
+                }}
+                className={`${shortcutButtonClass} text-[var(--browd-text)] hover:bg-[var(--browd-panel-strong)]`}>
+                Open Shortcuts
+              </button>
+            </div>
           </div>
         </div>
       </div>
