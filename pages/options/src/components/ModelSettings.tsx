@@ -1692,27 +1692,24 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
       {/* Updated Agent Models Section */}
       <div className={cardClass}>
         <h2 className={titleClass}>{t('options_models_selection_header')}</h2>
-        <div className="mb-4 rounded-lg border border-[var(--browd-border)] bg-[var(--browd-panel-strong)] px-4 py-3">
-          <div className="mb-2 text-sm text-[var(--browd-faint)]">Role</div>
-          <div className="flex flex-wrap gap-4">
-            {[
-              { id: AgentNameEnum.Planner, label: 'Planner' },
-              { id: AgentNameEnum.Navigator, label: 'Navigator' },
-              { id: 'stt' as const, label: 'STT' },
-            ].map(tab => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveModelSelectionTab(tab.id)}
-                className={`text-sm transition-colors ${
-                  activeModelSelectionTab === tab.id
-                    ? 'font-medium text-[var(--browd-text)]'
-                    : 'text-[var(--browd-muted)] hover:text-[var(--browd-text)]'
-                }`}>
-                {tab.label}
-              </button>
-            ))}
-          </div>
+        <div className="mb-4 flex flex-wrap gap-2">
+          {[
+            { id: AgentNameEnum.Planner, label: 'Planner' },
+            { id: AgentNameEnum.Navigator, label: 'Navigator' },
+            { id: 'stt' as const, label: 'STT' },
+          ].map(tab => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveModelSelectionTab(tab.id)}
+              className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+                activeModelSelectionTab === tab.id
+                  ? 'bg-[var(--browd-accent)] text-white'
+                  : 'border border-[var(--browd-border)] bg-[var(--browd-panel-strong)] text-[var(--browd-muted)] hover:text-[var(--browd-text)]'
+              }`}>
+              {tab.label}
+            </button>
+          ))}
         </div>
         {activeModelSelectionTab === 'stt' ? renderSpeechToTextSelect() : renderModelSelect(activeModelSelectionTab)}
       </div>
