@@ -21,6 +21,7 @@ import {
   getDefaultDisplayNameFromProviderId,
   getDefaultProviderConfig,
   getDefaultAgentModelParams,
+  type ModelConfig,
   type ProviderConfig,
 } from '@extension/storage';
 import { t } from '@extension/i18n';
@@ -67,6 +68,7 @@ const titleClass = 'mb-4 text-xl font-semibold text-[var(--browd-text)]';
 const fieldLabelClass = 'w-24 text-sm font-medium text-[var(--browd-text)]';
 const narrowFieldLabelClass = 'w-20 text-sm font-medium text-[var(--browd-text)]';
 const fieldInputClass = 'browd-input flex-1 px-3 py-2 text-sm';
+const textareaInputClass = 'browd-input min-h-28 flex-1 resize-y px-3 py-2 text-sm leading-relaxed';
 const smallFieldInputClass = 'browd-input w-20 px-2 py-1 text-sm';
 const invalidFieldInputClass =
   'flex-1 rounded-md border border-[var(--browd-danger)] bg-[var(--browd-danger-soft)] p-2 text-sm text-[var(--browd-text)] outline-none focus:border-[var(--browd-danger-hover)] focus:ring-2 focus:ring-[var(--browd-danger-soft)]';
@@ -103,6 +105,10 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
   const [modelParameters, setModelParameters] = useState<Record<AgentNameEnum, { temperature: number; topP: number }>>({
     [AgentNameEnum.Navigator]: { temperature: 0, topP: 0 },
     [AgentNameEnum.Planner]: { temperature: 0, topP: 0 },
+  });
+  const [systemPrompts, setSystemPrompts] = useState<Record<AgentNameEnum, string>>({
+    [AgentNameEnum.Navigator]: '',
+    [AgentNameEnum.Planner]: '',
   });
 
   // State for reasoning effort for O-series models
@@ -184,6 +190,10 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
                 [agent]: config.reasoningEffort as 'minimal' | 'low' | 'medium' | 'high',
               }));
             }
+            setSystemPrompts(prev => ({
+              ...prev,
+              [agent]: config.systemPrompt || '',
+            }));
           }
         }
         setSelectedModels(models);
@@ -719,6 +729,7 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
         await agentModelStore.setAgentModel(agentName, {
           provider,
           modelName: model,
+          systemPrompt: systemPrompts[agentName]?.trim() || undefined,
           parameters: parametersToSave,
           reasoningEffort: isOpenAIReasoningModel(modelValue)
             ? reasoningEffort[agentName] || (agentName === AgentNameEnum.Planner ? 'low' : 'minimal')
@@ -730,6 +741,42 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
       }
     } catch (error) {
       console.error('Error saving agent model:', error);
+    }
+  };
+
+  const updateStoredAgentModel = async (agentName: AgentNameEnum, updates: Partial<ModelConfig>) => {
+    const selectedModel = selectedModels[agentName];
+    if (!selectedModel) {
+      return;
+    }
+
+    const [provider, modelName] = selectedModel.split('>');
+    if (!provider || !modelName) {
+      return;
+    }
+
+    await agentModelStore.setAgentModel(agentName, {
+      provider,
+      modelName,
+      parameters: modelParameters[agentName],
+      reasoningEffort: reasoningEffort[agentName],
+      systemPrompt: systemPrompts[agentName]?.trim() || undefined,
+      ...updates,
+    });
+  };
+
+  const handleSystemPromptChange = async (agentName: AgentNameEnum, value: string) => {
+    setSystemPrompts(prev => ({
+      ...prev,
+      [agentName]: value,
+    }));
+
+    try {
+      await updateStoredAgentModel(agentName, {
+        systemPrompt: value.trim() || undefined,
+      });
+    } catch (error) {
+      console.error('Error saving agent system prompt:', error);
     }
   };
 
@@ -753,6 +800,7 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
             provider,
             modelName,
             parameters: modelParameters[agentName],
+            systemPrompt: systemPrompts[agentName]?.trim() || undefined,
             reasoningEffort: value,
           });
         }
@@ -789,6 +837,8 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
             provider,
             modelName,
             parameters: parametersToSave,
+            systemPrompt: systemPrompts[agentName]?.trim() || undefined,
+            reasoningEffort: reasoningEffort[agentName],
           });
         }
       } catch (error) {
@@ -847,6 +897,22 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
               </option>
             ))}
           </select>
+        </div>
+
+        <div className="flex items-start">
+          <label htmlFor={`${agentName}-system-prompt`} className={`${fieldLabelClass} pt-2`}>
+            {t('options_models_labels_systemPrompt')}
+          </label>
+          <div className="flex-1">
+            <textarea
+              id={`${agentName}-system-prompt`}
+              className={textareaInputClass}
+              value={systemPrompts[agentName]}
+              placeholder={t('options_models_systemPrompt_placeholder')}
+              onChange={e => handleSystemPromptChange(agentName, e.target.value)}
+            />
+            <p className={helpTextClass}>{t('options_models_systemPrompt_desc')}</p>
+          </div>
         </div>
 
         {/* Temperature Slider - Only show for non-reasoning models */}

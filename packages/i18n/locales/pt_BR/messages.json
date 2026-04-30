@@ -238,6 +238,21 @@
   "options_general_theme_dark": {
     "message": "Escuro"
   },
+  "options_general_language": {
+    "message": "Idioma da Interface"
+  },
+  "options_general_language_desc": {
+    "message": "Escolha o idioma usado nas configurações e painéis do Browd"
+  },
+  "options_general_language_system": {
+    "message": "Sistema"
+  },
+  "options_general_language_en": {
+    "message": "Inglês"
+  },
+  "options_general_language_ru": {
+    "message": "Russo"
+  },
   "options_general_maxSteps": {
     "message": "Máximo de Passos por Tarefa"
   },
@@ -364,6 +379,15 @@
   },
   "options_models_labels_reasoning": {
     "message": "Raciocínio"
+  },
+  "options_models_labels_systemPrompt": {
+    "message": "Prompt do Sistema"
+  },
+  "options_models_systemPrompt_placeholder": {
+    "message": "Exemplo: Sempre responda em russo. Seja conciso. Atue como um assistente de pesquisa cuidadoso."
+  },
+  "options_models_systemPrompt_desc": {
+    "message": "Instruções persistentes opcionais para função, estilo ou idioma de resposta deste agente."
   },
   "options_models_stt_desc": {
     "message": "Configure o provedor/modelo usado para fala em texto no microfone. Gemini funciona diretamente, OpenRouter requer um modelo de chat com entrada de áudio e Grok usa a API dedicada de STT da xAI."

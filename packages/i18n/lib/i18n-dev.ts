@@ -1,13 +1,24 @@
 import type { DevLocale, MessageKey } from './type';
 import { defaultLocale, getMessageFromLocale } from './getMessageFromLocale';
 
+const LANGUAGE_OVERRIDE_KEY = 'browd-interface-language';
+
 type I18nValue = {
   message: string;
   placeholders?: Record<string, { content?: string; example?: string }>;
 };
 
+function getActiveLocale() {
+  const override =
+    typeof globalThis.localStorage === 'undefined' ? undefined : globalThis.localStorage.getItem(LANGUAGE_OVERRIDE_KEY);
+  if (override && override !== 'system') {
+    return override;
+  }
+  return t.devLocale;
+}
+
 function translate(key: MessageKey, substitutions?: string | string[]) {
-  const value = getMessageFromLocale(t.devLocale)[key] as I18nValue;
+  const value = getMessageFromLocale(getActiveLocale())[key] as I18nValue;
   let message = value.message;
   /**
    * This is a placeholder replacement logic. But it's not perfect.

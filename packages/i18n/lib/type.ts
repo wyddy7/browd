@@ -4,8 +4,12 @@
  */
 import type enMessage from '../locales/en/messages.json';
 import type pt_BRMessage from '../locales/pt_BR/messages.json';
+import type ruMessage from '../locales/ru/messages.json';
 import type zh_TWMessage from '../locales/zh_TW/messages.json';
 
-export type MessageKey = keyof typeof enMessage & keyof typeof pt_BRMessage & keyof typeof zh_TWMessage;
+export type MessageKey = keyof typeof enMessage &
+  keyof typeof pt_BRMessage &
+  keyof typeof ruMessage &
+  keyof typeof zh_TWMessage;
 
-export type DevLocale = 'en' | 'pt_BR' | 'zh_TW';
+export type DevLocale = 'en' | 'pt_BR' | 'ru' | 'zh_TW';

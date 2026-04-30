@@ -8,6 +8,7 @@ export interface ModelConfig {
   // providerId, the key of the provider in the llmProviderStore, not the provider name
   provider: string;
   modelName: string;
+  systemPrompt?: string;
   parameters?: Record<string, unknown>;
   reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high'; // For o-series models (OpenAI and Azure)
 }

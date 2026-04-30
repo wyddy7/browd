@@ -35,6 +35,7 @@ type ModelOption = {
 };
 
 type QuickAgent = 'planner' | 'navigator';
+const LANGUAGE_OVERRIDE_KEY = 'browd-interface-language';
 
 function isOpenAIReasoningModel(modelName: string): boolean {
   let modelNameWithoutProvider = modelName;
@@ -213,6 +214,7 @@ const SidePanel = () => {
       const settings = await generalSettingsStore.getSettings();
       setReplayEnabled(settings.replayHistoricalTasks);
       setAppearanceTheme(settings.appearanceTheme);
+      window.localStorage.setItem(LANGUAGE_OVERRIDE_KEY, settings.interfaceLanguage);
     } catch (error) {
       console.error('Error loading general settings:', error);
       setReplayEnabled(false);
@@ -378,6 +380,7 @@ const SidePanel = () => {
         const [provider, modelName] = modelValue.split('>');
         if (!provider || !modelName) return;
 
+        const existingConfig = await agentModelStore.getAgentModel(storageAgent);
         const newParameters = getDefaultAgentModelParams(provider, storageAgent);
         const parametersToSave = isAnthropicModel(modelName)
           ? { temperature: newParameters.temperature }
@@ -386,6 +389,7 @@ const SidePanel = () => {
         await agentModelStore.setAgentModel(storageAgent, {
           provider,
           modelName,
+          systemPrompt: existingConfig?.systemPrompt,
           parameters: parametersToSave,
           reasoningEffort:
             isOpenAIReasoningModel(modelName) && storageAgent === AgentNameEnum.Navigator ? 'minimal' : undefined,

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   type AppearanceTheme,
   type GeneralSettingsConfig,
+  type InterfaceLanguage,
   generalSettingsStore,
   DEFAULT_GENERAL_SETTINGS,
 } from '@extension/storage';
@@ -11,7 +12,9 @@ import { t } from '@extension/i18n';
 const settingTitleClass = 'text-base font-medium text-[var(--browd-text)]';
 const settingDescriptionClass = 'text-sm font-normal text-[var(--browd-muted)]';
 const numberInputClass = 'browd-input w-20 px-3 py-2';
+const selectInputClass = 'browd-input min-w-[180px] px-3 py-2 text-sm';
 const shortcutButtonClass = 'browd-input min-w-[180px] rounded-full px-4 py-2 text-center text-sm transition-colors';
+const LANGUAGE_OVERRIDE_KEY = 'browd-interface-language';
 
 interface GeneralSettingsProps {
   onAppearanceThemeChange?: (theme: AppearanceTheme) => void;
@@ -22,7 +25,10 @@ export const GeneralSettings = ({ onAppearanceThemeChange }: GeneralSettingsProp
 
   useEffect(() => {
     // Load initial settings
-    generalSettingsStore.getSettings().then(setSettings);
+    generalSettingsStore.getSettings().then(settings => {
+      setSettings(settings);
+      window.localStorage.setItem(LANGUAGE_OVERRIDE_KEY, settings.interfaceLanguage);
+    });
   }, []);
 
   const updateSetting = async <K extends keyof GeneralSettingsConfig>(key: K, value: GeneralSettingsConfig[K]) => {
@@ -30,6 +36,9 @@ export const GeneralSettings = ({ onAppearanceThemeChange }: GeneralSettingsProp
     setSettings(prevSettings => ({ ...prevSettings, [key]: value }));
     if (key === 'appearanceTheme') {
       onAppearanceThemeChange?.(value as AppearanceTheme);
+    }
+    if (key === 'interfaceLanguage') {
+      window.localStorage.setItem(LANGUAGE_OVERRIDE_KEY, value as InterfaceLanguage);
     }
 
     // Call the store to update the setting
@@ -39,6 +48,10 @@ export const GeneralSettings = ({ onAppearanceThemeChange }: GeneralSettingsProp
     // fetch the latest settings from the store and update the local state again to ensure UI consistency.
     const latestSettings = await generalSettingsStore.getSettings();
     setSettings(latestSettings);
+
+    if (key === 'interfaceLanguage') {
+      window.setTimeout(() => window.location.reload(), 50);
+    }
   };
 
   return (
@@ -60,6 +73,25 @@ export const GeneralSettings = ({ onAppearanceThemeChange }: GeneralSettingsProp
                 dark: t('options_general_theme_dark'),
               }}
             />
+          </div>
+
+          <div className="flex items-center justify-between gap-6">
+            <div>
+              <h3 className={settingTitleClass}>{t('options_general_language')}</h3>
+              <p className={settingDescriptionClass}>{t('options_general_language_desc')}</p>
+            </div>
+            <label htmlFor="interfaceLanguage" className="sr-only">
+              {t('options_general_language')}
+            </label>
+            <select
+              id="interfaceLanguage"
+              value={settings.interfaceLanguage}
+              onChange={e => updateSetting('interfaceLanguage', e.target.value as InterfaceLanguage)}
+              className={selectInputClass}>
+              <option value="system">{t('options_general_language_system')}</option>
+              <option value="en">{t('options_general_language_en')}</option>
+              <option value="ru">{t('options_general_language_ru')}</option>
+            </select>
           </div>
 
           <div className="flex items-center justify-between">

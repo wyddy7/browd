@@ -238,6 +238,21 @@
   "options_general_theme_dark": {
     "message": "深色"
   },
+  "options_general_language": {
+    "message": "介面語言"
+  },
+  "options_general_language_desc": {
+    "message": "選擇 Browd 設定與面板使用的語言"
+  },
+  "options_general_language_system": {
+    "message": "系統"
+  },
+  "options_general_language_en": {
+    "message": "英文"
+  },
+  "options_general_language_ru": {
+    "message": "俄文"
+  },
   "options_general_maxSteps": {
     "message": "單一任務的步驟上限"
   },
@@ -360,6 +375,15 @@
   },
   "options_models_labels_reasoning": {
     "message": "推理"
+  },
+  "options_models_labels_systemPrompt": {
+    "message": "系統提示"
+  },
+  "options_models_systemPrompt_placeholder": {
+    "message": "範例：永遠用俄文回答。保持精簡。扮演謹慎的研究助理。"
+  },
+  "options_models_systemPrompt_desc": {
+    "message": "此代理的角色、風格或回覆語言的選填持久指令。"
   },
   "options_models_stt_desc": {
     "message": "設定麥克風語音轉文字所使用的供應商與模型。Gemini 可直接使用，OpenRouter 需要支援音訊輸入的聊天模型，Grok 則使用 xAI 專用 STT API。"

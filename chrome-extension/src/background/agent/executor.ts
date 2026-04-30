@@ -31,6 +31,7 @@ export interface ExecutorExtraArgs {
   plannerLLM?: BaseChatModel;
   extractorLLM?: BaseChatModel;
   agentOptions?: Partial<AgentOptions>;
+  agentSystemPrompts?: Partial<Record<'planner' | 'navigator', string>>;
   generalSettings?: GeneralSettingsConfig;
 }
 
@@ -64,8 +65,11 @@ export class Executor {
 
     this.generalSettings = extraArgs?.generalSettings;
     this.tasks.push(task);
-    this.navigatorPrompt = new NavigatorPrompt(context.options.maxActionsPerStep);
-    this.plannerPrompt = new PlannerPrompt();
+    this.navigatorPrompt = new NavigatorPrompt(
+      context.options.maxActionsPerStep,
+      extraArgs?.agentSystemPrompts?.navigator,
+    );
+    this.plannerPrompt = new PlannerPrompt(extraArgs?.agentSystemPrompts?.planner);
 
     const actionBuilder = new ActionBuilder(context, extractorLLM);
     const navigatorActionRegistry = new NavigatorActionRegistry(actionBuilder.buildDefaultActions());

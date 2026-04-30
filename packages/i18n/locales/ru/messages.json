@@ -1,17 +1,17 @@
 {
   "app_metadata_description": {
     "description": "Extension description",
-    "message": "Automate web tasks with AI. Browd is an open-source browser extension for local browser agents, data extraction, form filling, and more."
+    "message": "Автоматизируйте веб-задачи с AI. Browd — open-source расширение браузера для локальных браузерных агентов, извлечения данных, заполнения форм и не только."
   },
   "app_metadata_name": {
     "description": "Extension name",
     "message": "Browd: AI Browser Agent"
   },
   "errors_unknown": {
-    "message": "Unknown error occurred"
+    "message": "Произошла неизвестная ошибка"
   },
   "errors_conn_serviceWorker": {
-    "message": "Failed to connect to service worker"
+    "message": "Не удалось подключиться к service worker"
   },
   "errors_cmd_unknown": {
     "message": "Unsupported command: $COMMAND$.\n\nAvailable commands: /state, /nohighlight, /replay <historySessionId>",
@@ -23,94 +23,94 @@
     }
   },
   "nav_newChat_a11y": {
-    "message": "New Chat"
+    "message": "Новый чат"
   },
   "nav_loadHistory_a11y": {
-    "message": "Load History"
+    "message": "Загрузить историю"
   },
   "nav_settings_a11y": {
-    "message": "Settings"
+    "message": "Настройки"
   },
   "nav_back": {
-    "message": "← Back"
+    "message": "← Назад"
   },
   "nav_back_a11y": {
-    "message": "Back to chat"
+    "message": "Назад к чату"
   },
   "welcome_title": {
-    "message": "Welcome to Browd!"
+    "message": "Добро пожаловать в Browd!"
   },
   "welcome_instruction": {
-    "message": "To get started, please configure your API keys in the settings page."
+    "message": "Чтобы начать, настройте API-ключи на странице настроек."
   },
   "welcome_openSettings": {
-    "message": "Open Settings"
+    "message": "Открыть настройки"
   },
   "welcome_quickStart": {
-    "message": "Quick Start Guide"
+    "message": "Быстрый старт"
   },
   "welcome_joinCommunity": {
-    "message": "View GitHub"
+    "message": "Открыть GitHub"
   },
   "status_checkingConfig": {
-    "message": "Checking configuration..."
+    "message": "Проверяем конфигурацию..."
   },
   "chat_buttons_stop": {
-    "message": "Stop"
+    "message": "Стоп"
   },
   "chat_buttons_replay": {
-    "message": "Replay"
+    "message": "Повторить"
   },
   "chat_buttons_send": {
-    "message": "Send"
+    "message": "Отправить"
   },
   "chat_input_placeholder": {
-    "message": "What can I help you with?"
+    "message": "Чем я могу помочь?"
   },
   "chat_input_form": {
-    "message": "Chat input form"
+    "message": "Форма ввода сообщения"
   },
   "chat_input_editor": {
-    "message": "Message input"
+    "message": "Поле сообщения"
   },
   "chat_history_title": {
-    "message": "Chat History"
+    "message": "История чатов"
   },
   "chat_history_empty": {
-    "message": "No chat history available"
+    "message": "История чатов пуста"
   },
   "chat_history_bookmark": {
-    "message": "Bookmark session"
+    "message": "Добавить сессию в быстрый старт"
   },
   "chat_history_delete": {
-    "message": "Delete session"
+    "message": "Удалить сессию"
   },
   "chat_bookmarks_header": {
-    "message": "Quick Start"
+    "message": "Быстрый старт"
   },
   "chat_bookmarks_description": {
-    "message": "Use a saved prompt or create your own starter."
+    "message": "Используйте сохраненный промпт или создайте свой шаблон."
   },
   "chat_bookmarks_new": {
-    "message": "New"
+    "message": "Новый"
   },
   "chat_bookmarks_saveEdit": {
-    "message": "Save changes"
+    "message": "Сохранить изменения"
   },
   "chat_bookmarks_cancelEdit": {
-    "message": "Cancel changes"
+    "message": "Отменить изменения"
   },
   "chat_bookmarks_edit": {
-    "message": "Edit bookmark title"
+    "message": "Редактировать название"
   },
   "chat_bookmarks_delete": {
-    "message": "Delete bookmark"
+    "message": "Удалить быстрый старт"
   },
   "chat_bookmarks_titlePlaceholder": {
-    "message": "Title"
+    "message": "Название"
   },
   "chat_bookmarks_contentPlaceholder": {
-    "message": "Describe the task you want to reuse."
+    "message": "Опишите задачу, которую хотите переиспользовать."
   },
   "chat_replay_starting": {
     "message": "Starting replay of task:\n\n\"$TASK$\"",
@@ -131,10 +131,10 @@
     }
   },
   "chat_replay_invalidArgs": {
-    "message": "Invalid arguments. Please use the format: /replay <historySessionId>"
+    "message": "Неверные аргументы. Используйте формат: /replay <historySessionId>"
   },
   "chat_replay_disabled": {
-    "message": "Replay is disabled in general settings. Please enable \"Replay Historical Tasks\" in the extension settings to use this feature."
+    "message": "Повтор истории выключен в общих настройках. Включите \"Повторять исторические задачи\" в настройках расширения."
   },
   "chat_replay_noHistory": {
     "message": "No action history found for session \"$SESSION_ID$...\". This session may not contain replayable actions.\n\nIt's a replay session itself (replay sessions cannot be replayed again), or it was created before the replay feature was available.",
@@ -146,234 +146,229 @@
     }
   },
   "chat_stt_processing": {
-    "message": "Processing speech..."
+    "message": "Обрабатываем речь..."
   },
   "chat_stt_recording_stop": {
-    "message": "Stop recording"
+    "message": "Остановить запись"
   },
   "chat_stt_input_start": {
-    "message": "Start voice input"
+    "message": "Начать голосовой ввод"
   },
   "chat_stt_processingFailed": {
-    "message": "Failed to process speech recording"
+    "message": "Не удалось обработать запись речи"
   },
   "chat_stt_model_notFound": {
-    "message": "No supported speech-to-text provider/model configured. Choose a Gemini, OpenRouter, or Grok option in settings."
+    "message": "Не настроен поддерживаемый speech-to-text провайдер/модель. Выберите Gemini, OpenRouter или Grok в настройках."
   },
   "chat_stt_recognitionFailed": {
-    "message": "Speech recognition failed"
+    "message": "Распознавание речи не удалось"
   },
   "chat_stt_microphone_permissionDenied": {
-    "message": "Microphone access denied. Please enable microphone permissions in browser settings."
+    "message": "Доступ к микрофону запрещен. Разрешите микрофон в настройках браузера."
   },
   "chat_stt_microphone_accessFailed": {
-    "message": "Failed to access microphone. "
+    "message": "Не удалось получить доступ к микрофону. "
   },
   "chat_stt_microphone_grantPermission": {
-    "message": "Please grant microphone permission."
+    "message": "Разрешите доступ к микрофону."
   },
   "chat_stt_microphone_notFound": {
-    "message": "No microphone found."
+    "message": "Микрофон не найден."
   },
   "permissions_microphone_title": {
-    "message": "Enable Voice Input"
+    "message": "Включить голосовой ввод"
   },
   "permissions_microphone_description": {
-    "message": "Browd needs microphone access to convert your speech to text."
+    "message": "Browd нужен доступ к микрофону, чтобы преобразовывать речь в текст."
   },
   "permissions_microphone_grantButton": {
-    "message": "Grant Microphone Permission"
+    "message": "Разрешить микрофон"
   },
   "permissions_microphone_requesting": {
-    "message": "Requesting microphone permission..."
+    "message": "Запрашиваем доступ к микрофону..."
   },
   "permissions_microphone_grantedSuccess": {
-    "message": "✅ Microphone permission granted! You can now use voice input."
+    "message": "✅ Доступ к микрофону разрешен! Теперь можно использовать голосовой ввод."
   },
   "permissions_microphone_grantedButton": {
-    "message": "Permission Granted"
+    "message": "Разрешение получено"
   },
   "permissions_microphone_denied": {
-    "message": "Permission denied. "
+    "message": "Доступ запрещен. "
   },
   "permissions_microphone_allowHelp": {
-    "message": "Please click \"Allow\" when prompted for microphone access."
+    "message": "Нажмите \"Разрешить\" в запросе доступа к микрофону."
   },
   "permissions_microphone_notFound": {
-    "message": "No microphone found. Please check your audio devices."
+    "message": "Микрофон не найден. Проверьте аудиоустройства."
   },
   "permissions_microphone_alreadyGranted": {
-    "message": "✅ Microphone permission already granted!"
+    "message": "✅ Доступ к микрофону уже разрешен!"
   },
   "permissions_microphone_alreadyGrantedButton": {
-    "message": "Permission Already Granted"
+    "message": "Разрешение уже есть"
   },
   "options_nav_header": {
-    "message": "Settings"
+    "message": "Настройки"
   },
   "options_tabs_general": {
-    "message": "General"
+    "message": "Общие"
   },
   "options_tabs_models": {
-    "message": "Models"
+    "message": "Модели"
   },
   "options_tabs_firewall": {
     "message": "Firewall"
   },
   "options_tabs_help": {
-    "message": "Help"
+    "message": "Помощь"
   },
   "options_general_header": {
-    "message": "General"
+    "message": "Общие"
   },
   "options_general_theme": {
-    "message": "Appearance Theme"
+    "message": "Тема оформления"
   },
   "options_general_theme_desc": {
-    "message": "Choose the visual tone used across Browd panels"
+    "message": "Выберите визуальный стиль панелей Browd"
   },
   "options_general_theme_light": {
-    "message": "Light"
+    "message": "Светлая"
   },
   "options_general_theme_dark": {
-    "message": "Dark"
+    "message": "Темная"
   },
   "options_general_language": {
-    "message": "Interface Language"
+    "message": "Язык интерфейса"
   },
   "options_general_language_desc": {
-    "message": "Choose the language used in Browd settings and panels"
+    "message": "Выберите язык настроек и панелей Browd"
   },
   "options_general_language_system": {
-    "message": "System"
+    "message": "Системный"
   },
   "options_general_language_en": {
-    "message": "English"
+    "message": "Английский"
   },
   "options_general_language_ru": {
-    "message": "Russian"
+    "message": "Русский"
   },
   "options_general_maxSteps": {
-    "message": "Max Steps per Task"
+    "message": "Максимум шагов на задачу"
   },
   "options_general_maxSteps_desc": {
-    "message": "Step limit per task"
+    "message": "Лимит шагов на задачу"
   },
   "options_general_maxActions": {
-    "message": "Max Actions per Step"
+    "message": "Максимум действий на шаг"
   },
   "options_general_maxActions_desc": {
-    "message": "Action limit per step"
+    "message": "Лимит действий на один шаг"
   },
   "options_general_maxFailures": {
-    "message": "Failure Tolerance"
+    "message": "Допуск ошибок"
   },
   "options_general_maxFailures_desc": {
-    "message": "How many consecutive failures before stopping"
+    "message": "Сколько подряд ошибок допускается перед остановкой"
   },
   "options_general_enableVision": {
-    "message": "Enable Vision"
+    "message": "Включить vision"
   },
   "options_general_enableVision_desc": {
-    "message": "Use vision capability of LLMs (consumes more tokens for better results)"
+    "message": "Использовать vision-возможности LLM (тратит больше токенов, но может улучшить результат)"
   },
   "options_general_displayHighlights": {
-    "message": "Display Highlights"
+    "message": "Показывать подсветку"
   },
   "options_general_displayHighlights_desc": {
-    "message": "Show visual highlights on interactive elements (e.g. buttons, links, etc.)"
+    "message": "Показывать визуальную подсветку интерактивных элементов (кнопок, ссылок и т.д.)"
   },
   "options_general_planningInterval": {
-    "message": "Replanning Frequency"
+    "message": "Частота перепланирования"
   },
   "options_general_planningInterval_desc": {
-    "message": "Reconsider and update the plan every [Number] steps"
+    "message": "Пересматривать и обновлять план каждые [Number] шагов"
   },
   "options_general_minWaitPageLoad": {
-    "message": "Page Load Wait Time"
+    "message": "Ожидание загрузки страницы"
   },
   "options_general_minWaitPageLoad_desc": {
-    "message": "Minimum wait time after page loads (250-5000ms)"
+    "message": "Минимальное ожидание после загрузки страницы (250-5000 мс)"
   },
   "options_general_replayHistoricalTasks": {
-    "message": "Replay Historical Tasks( experimental )"
+    "message": "Повторять исторические задачи (экспериментально)"
   },
   "options_general_replayHistoricalTasks_desc": {
-    "message": "Enable storing and replaying of agent step history (experimental, may have issues)"
+    "message": "Включить сохранение и повтор истории шагов агента (экспериментально, возможны проблемы)"
   },
   "options_general_launchShortcut": {
-    "message": "Browser Shortcut"
+    "message": "Горячая клавиша браузера"
   },
   "options_general_launchShortcut_desc": {
-    "message": "Reliable launch shortcuts are managed by the browser. Default is Ctrl+E, and Command+E on macOS. Change it in browser shortcut settings."
+    "message": "Надежные горячие клавиши управляются браузером. По умолчанию Ctrl+E, на macOS Command+E. Изменить можно в настройках горячих клавиш браузера."
   },
-
   "options_models_providers_header": {
-    "message": "LLM Providers"
+    "message": "LLM-провайдеры"
   },
   "options_models_providers_notConfigured": {
-    "message": "No providers configured yet. Add a provider to get started."
+    "message": "Провайдеры еще не настроены. Добавьте провайдера, чтобы начать."
   },
   "options_models_providers_btnCancel": {
-    "message": "Cancel"
+    "message": "Отмена"
   },
   "options_models_providers_btnSave": {
-    "message": "Save"
+    "message": "Сохранить"
   },
   "options_models_providers_btnDelete": {
-    "message": "Delete"
+    "message": "Удалить"
   },
   "options_models_providers_setupInstructions": {
-    "message": "Enter your API key and click Save to set it up."
+    "message": "Введите API-ключ и нажмите Сохранить."
   },
   "options_models_providers_custom_name": {
-    "message": "Name"
+    "message": "Название"
   },
   "options_models_providers_custom_name_desc": {
-    "message": "Provider name (spaces are not allowed when saving)"
+    "message": "Название провайдера (при сохранении пробелы запрещены)"
   },
   "options_models_providers_custom_name_placeholder": {
-    "message": "Provider name"
+    "message": "Название провайдера"
   },
-
   "options_models_providers_apiKey": {
-    "message": "API Key"
+    "message": "API-ключ"
   },
   "options_models_providers_apiKey_placeholder_optional": {
-    "message": "API Key (optional)"
+    "message": "API-ключ (необязательно)"
   },
   "options_models_providers_apiKey_placeholder_required": {
-    "message": "API Key (required)"
+    "message": "API-ключ (обязательно)"
   },
   "options_models_providers_apiKey_placeholder_ollama": {
-    "message": "API Key (leave empty for Ollama)"
+    "message": "API-ключ (для Ollama можно оставить пустым)"
   },
   "options_models_providers_apiKey_hide": {
-    "message": "Hide API key"
+    "message": "Скрыть API-ключ"
   },
   "options_models_providers_apiKey_show": {
-    "message": "Show API key"
+    "message": "Показать API-ключ"
   },
-
   "options_models_selection_header": {
-    "message": "Model Selection"
+    "message": "Выбор моделей"
   },
   "options_models_speechToText_header": {
-    "message": "Speech-to-Text Model"
+    "message": "Speech-to-Text модель"
   },
-
   "options_models_agents_navigator": {
-    "message": "Navigates websites and performs actions"
+    "message": "Навигирует по сайтам и выполняет действия"
   },
   "options_models_agents_planner": {
-    "message": "Develops and refines strategies to complete tasks"
+    "message": "Разрабатывает и уточняет стратегию выполнения задач"
   },
-
   "options_models_labels_model": {
-    "message": "Model"
+    "message": "Модель"
   },
   "options_models_labels_temperature": {
-    "message": "Temperature"
+    "message": "Температура"
   },
   "options_models_labels_topP": {
     "message": "Top P"
@@ -382,25 +377,25 @@
     "message": "Reasoning"
   },
   "options_models_labels_systemPrompt": {
-    "message": "System Prompt"
+    "message": "Системный промпт"
   },
   "options_models_systemPrompt_placeholder": {
-    "message": "Example: Always answer in Russian. Be concise. Act as a careful research assistant."
+    "message": "Например: Всегда отвечай на русском. Будь кратким. Действуй как внимательный research assistant."
   },
   "options_models_systemPrompt_desc": {
-    "message": "Optional persistent instructions for this agent's role, style, or response language."
+    "message": "Необязательные постоянные инструкции для роли, стиля или языка ответов этого агента."
   },
   "options_models_stt_desc": {
-    "message": "Configure the provider/model used for microphone speech-to-text. Gemini works directly, OpenRouter requires an audio-input chat model, and Grok uses xAI's dedicated STT API."
+    "message": "Настройте провайдера/модель для speech-to-text с микрофона. Gemini работает напрямую, OpenRouter требует chat-модель с audio input, а Grok использует отдельный STT API xAI."
   },
   "options_models_chooseModel": {
-    "message": "Choose Model"
+    "message": "Выберите модель"
   },
   "options_models_addNewProvider": {
-    "message": "Add New Provider"
+    "message": "Добавить провайдера"
   },
   "options_models_providers_openaiCompatible": {
-    "message": "OpenAI-compatible API Provider"
+    "message": "OpenAI-compatible API провайдер"
   },
   "options_models_providers_baseUrl": {
     "message": "Base URL"
@@ -415,46 +410,46 @@
     "message": "API Version"
   },
   "options_models_providers_models": {
-    "message": "Models"
+    "message": "Модели"
   },
   "options_models_providers_placeholders_baseUrl_custom": {
-    "message": "Required OpenAI-compatible API endpoint"
+    "message": "Обязательный OpenAI-compatible API endpoint"
   },
   "options_models_providers_placeholders_baseUrl_azure": {
     "message": "https://YOUR_RESOURCE_NAME.openai.azure.com/"
   },
   "options_models_providers_placeholders_baseUrl_openrouter": {
-    "message": "OpenRouter Base URL (optional, defaults to https://openrouter.ai/api/v1)"
+    "message": "OpenRouter Base URL (необязательно, по умолчанию https://openrouter.ai/api/v1)"
   },
   "options_models_providers_placeholders_baseUrl_llama": {
-    "message": "Llama API Base URL (defaults to https://api.llama.com/v1)"
+    "message": "Llama API Base URL (по умолчанию https://api.llama.com/v1)"
   },
   "options_models_providers_placeholders_baseUrl_ollama": {
-    "message": "Ollama base URL"
+    "message": "Base URL Ollama"
   },
   "options_models_providers_placeholders_azureDeployment": {
-    "message": "Enter Azure model name (e.g. gpt-4o, gpt-4o-mini)"
+    "message": "Введите имя Azure модели (например, gpt-4o, gpt-4o-mini)"
   },
   "options_models_providers_placeholders_azureApiVersion": {
-    "message": "e.g., 2025-04-01-preview"
+    "message": "например, 2025-04-01-preview"
   },
   "options_models_providers_deployment_desc": {
-    "message": "Type model name and press Enter or Space to set. Deployment name should match OpenAI model name (e.g., gpt-4o) for best compatibility."
+    "message": "Введите имя модели и нажмите Enter или Space. Для лучшей совместимости deployment name должен совпадать с именем OpenAI модели."
   },
   "options_models_providers_models_instructions": {
-    "message": "Type and Press Enter or Space to add."
+    "message": "Введите и нажмите Enter или Space, чтобы добавить."
   },
   "options_models_providers_models_openrouter_empty": {
-    "message": "No models selected. Add model names manually if needed."
+    "message": "Модели не выбраны. При необходимости добавьте имена моделей вручную."
   },
   "options_models_providers_ollama_reminder": {
-    "message": "environment variable MUST be set for the Ollama server."
+    "message": "переменная окружения ДОЛЖНА быть установлена для сервера Ollama."
   },
   "options_models_providers_ollama_learnMore": {
-    "message": "Learn more"
+    "message": "Подробнее"
   },
   "options_models_providers_errors_spacesNotAllowed": {
-    "message": "Spaces are not allowed in provider names. Please use underscores or other characters instead."
+    "message": "Пробелы в названиях провайдеров запрещены. Используйте подчеркивания или другие символы."
   },
   "options_models_providers_errors_baseUrlRequired": {
     "message": "Base URL is required for $PROVIDER$. Please enter it.",
@@ -465,44 +460,42 @@
       }
     }
   },
-
   "options_firewall_header": {
     "message": "Firewall"
   },
   "options_firewall_enableToggle": {
-    "message": "Enable Firewall"
+    "message": "Включить Firewall"
   },
   "options_firewall_toggleFirewall_a11y": {
-    "message": "Toggle Firewall"
+    "message": "Переключить Firewall"
   },
   "options_firewall_allowList_header": {
-    "message": "Allow List"
+    "message": "Allow list"
   },
   "options_firewall_allowList_empty": {
-    "message": "No domains in allow list. Empty allow list means all non-denied domains are allowed."
+    "message": "Allow list пуст. Пустой allow list означает, что разрешены все не запрещенные домены."
   },
   "options_firewall_denyList_header": {
-    "message": "Deny List"
+    "message": "Deny list"
   },
   "options_firewall_denyList_empty": {
-    "message": "No domains in deny list"
+    "message": "Deny list пуст"
   },
   "options_firewall_placeholders_domainUrl": {
-    "message": "Enter domain or URL (e.g. example.com, localhost, 127.0.0.1)"
+    "message": "Введите домен или URL (например, example.com, localhost, 127.0.0.1)"
   },
   "options_firewall_btnAdd": {
-    "message": "Add"
+    "message": "Добавить"
   },
   "options_firewall_btnRemove": {
-    "message": "Remove"
+    "message": "Удалить"
   },
   "options_firewall_howItWorks_header": {
-    "message": "How the Firewall Works"
+    "message": "Как работает Firewall"
   },
   "options_firewall_howItWorks": {
     "message": "The firewall contains a deny list and an allow list.\nIf both lists are empty, all URLs are allowed\nDeny list takes priority - if a URL matches any deny list entry, it's blocked\nWhen allow list is empty, all non-denied URLs are allowed\nWhen allow list is not empty, only matching URLs are allowed\nWildcards are NOT supported yet\nAllow list is preferred over deny list"
   },
-
   "bg_errors_noTabId": {
     "message": "No tab ID provided"
   },
@@ -546,7 +539,7 @@
     "message": "Replay failed"
   },
   "bg_setup_noApiKeys": {
-    "message": "Please configure API keys in the settings first"
+    "message": "Сначала настройте API-ключи в настройках"
   },
   "bg_setup_noProvider": {
     "message": "Provider $PROVIDER$ not found in the settings",
@@ -558,19 +551,19 @@
     }
   },
   "bg_setup_noNavigatorModel": {
-    "message": "Please choose a model for the navigator in the settings first"
+    "message": "Сначала выберите модель для Navigator в настройках"
   },
   "exec_errors_maxStepsReached": {
-    "message": "Max steps reached"
+    "message": "Достигнут лимит шагов"
   },
   "exec_errors_maxFailuresReached": {
-    "message": "Max failures reached"
+    "message": "Достигнут лимит ошибок"
   },
   "exec_task_cancel": {
-    "message": "Task cancelled"
+    "message": "Задача отменена"
   },
   "exec_task_pause": {
-    "message": "Task paused"
+    "message": "Задача на паузе"
   },
   "exec_task_fail": {
     "message": "Task failed: \n\n$ERROR_MESSAGE$",
@@ -582,10 +575,10 @@
     }
   },
   "exec_replay_cancel": {
-    "message": "Replay cancelled"
+    "message": "Повтор отменен"
   },
   "exec_replay_ok": {
-    "message": "Replay completed"
+    "message": "Повтор завершен"
   },
   "exec_replay_fail": {
     "message": "Replay failed: \n\n$ERROR_MESSAGE$",
@@ -597,12 +590,11 @@
     }
   },
   "exec_replay_historyNotFound": {
-    "message": "History not found"
+    "message": "История не найдена"
   },
   "exec_replay_historyEmpty": {
-    "message": "History is empty"
+    "message": "История пуста"
   },
-
   "act_searchGoogle_start": {
     "message": "Searching for \"$QUERY$\" in Google",
     "placeholders": {
@@ -640,10 +632,10 @@
     }
   },
   "act_goBack_start": {
-    "message": "Navigating back"
+    "message": "Возвращаемся назад"
   },
   "act_goBack_ok": {
-    "message": "Navigated back"
+    "message": "Вернулись назад"
   },
   "act_wait_start": {
     "message": "Waiting for $SECONDS$ seconds",
@@ -828,28 +820,28 @@
     }
   },
   "act_scrollToTop_start": {
-    "message": "Scroll to top"
+    "message": "Скроллим наверх"
   },
   "act_scrollToTop_ok": {
-    "message": "Scrolled to top"
+    "message": "Проскроллили наверх"
   },
   "act_scrollToBottom_start": {
-    "message": "Scroll to bottom"
+    "message": "Скроллим вниз"
   },
   "act_scrollToBottom_ok": {
-    "message": "Scrolled to bottom"
+    "message": "Проскроллили вниз"
   },
   "act_previousPage_start": {
-    "message": "Scroll to previous page"
+    "message": "Скроллим на предыдущую страницу"
   },
   "act_previousPage_ok": {
-    "message": "Scrolled to previous page"
+    "message": "Проскроллили на предыдущую страницу"
   },
   "act_nextPage_start": {
-    "message": "Scroll to next page"
+    "message": "Скроллим на следующую страницу"
   },
   "act_nextPage_ok": {
-    "message": "Scrolled to next page"
+    "message": "Проскроллили на следующую страницу"
   },
   "act_errors_alreadyAtTop": {
     "message": "Element with index $INDEX$ is already at top, cannot scroll to previous page",

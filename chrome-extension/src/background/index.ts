@@ -333,6 +333,10 @@ async function setupExecutor(taskId: string, task: string, browserContext: Brows
 
   const executor = new Executor(task, taskId, browserContext, navigatorLLM, {
     plannerLLM: plannerLLM ?? navigatorLLM,
+    agentSystemPrompts: {
+      planner: plannerModel?.systemPrompt,
+      navigator: navigatorModel.systemPrompt,
+    },
     agentOptions: {
       maxSteps: generalSettings.maxSteps,
       maxFailures: generalSettings.maxFailures,

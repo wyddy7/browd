@@ -4,9 +4,11 @@ import type { BaseStorage } from '../base/types';
 
 // Interface for general settings configuration
 export type AppearanceTheme = 'light' | 'dark';
+export type InterfaceLanguage = 'system' | 'en' | 'ru';
 
 export interface GeneralSettingsConfig {
   appearanceTheme: AppearanceTheme;
+  interfaceLanguage: InterfaceLanguage;
   maxSteps: number;
   maxActionsPerStep: number;
   maxFailures: number;
@@ -28,6 +30,7 @@ export type GeneralSettingsStorage = BaseStorage<GeneralSettingsConfig> & {
 // Default settings
 export const DEFAULT_GENERAL_SETTINGS: GeneralSettingsConfig = {
   appearanceTheme: 'light',
+  interfaceLanguage: 'system',
   maxSteps: 100,
   maxActionsPerStep: 5,
   maxFailures: 3,
@@ -60,6 +63,13 @@ const normalizeShortcut = (shortcut: unknown): string => {
   return shortcut.trim();
 };
 
+const normalizeInterfaceLanguage = (language: unknown): InterfaceLanguage => {
+  if (language === 'en' || language === 'ru') {
+    return language;
+  }
+  return 'system';
+};
+
 export const generalSettingsStore: GeneralSettingsStorage = {
   ...storage,
   async updateSettings(settings: Partial<GeneralSettingsConfig>) {
@@ -70,6 +80,7 @@ export const generalSettingsStore: GeneralSettingsStorage = {
     };
 
     updatedSettings.appearanceTheme = normalizeAppearanceTheme(updatedSettings.appearanceTheme);
+    updatedSettings.interfaceLanguage = normalizeInterfaceLanguage(updatedSettings.interfaceLanguage);
     updatedSettings.launchShortcut = normalizeShortcut(updatedSettings.launchShortcut);
 
     // If useVision is true, displayHighlights must also be true
@@ -85,6 +96,7 @@ export const generalSettingsStore: GeneralSettingsStorage = {
       ...DEFAULT_GENERAL_SETTINGS,
       ...settings,
       appearanceTheme: normalizeAppearanceTheme(settings?.appearanceTheme),
+      interfaceLanguage: normalizeInterfaceLanguage(settings?.interfaceLanguage),
       launchShortcut: normalizeShortcut(settings?.launchShortcut),
     };
   },
