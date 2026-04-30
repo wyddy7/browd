@@ -4,6 +4,7 @@ import type { BaseStorage } from '../base/types';
 import { type AgentNameEnum, llmProviderModelNames, llmProviderParameters, ProviderTypeEnum } from './types';
 
 const AZURE_API_VERSION = '2025-04-01-preview';
+const INVISIBLE_HEADER_UNSAFE_CHARS = /[\u0000-\u001F\u007F-\u009F\u200B-\u200D\uFEFF]/g;
 
 // Interface for a single provider configuration
 export interface ProviderConfig {
@@ -16,6 +17,50 @@ export interface ProviderConfig {
   // Azure Specific Fields:
   azureDeploymentNames?: string[]; // Azure deployment names array
   azureApiVersion?: string;
+}
+
+function stripInvisibleHeaderUnsafeChars(value: string): string {
+  return value.replace(INVISIBLE_HEADER_UNSAFE_CHARS, '');
+}
+
+function hasNonLatin1Chars(value: string): boolean {
+  return [...value].some(char => char.codePointAt(0)! > 255);
+}
+
+export function normalizeProviderApiKey(apiKey: string): string {
+  return stripInvisibleHeaderUnsafeChars(apiKey).trim();
+}
+
+export function normalizeProviderBaseUrl(
+  baseUrl: string | undefined,
+  providerType: ProviderTypeEnum,
+): string | undefined {
+  if (!baseUrl) {
+    return baseUrl;
+  }
+
+  let normalized = stripInvisibleHeaderUnsafeChars(baseUrl).trim();
+
+  if (providerType === ProviderTypeEnum.OpenRouter) {
+    normalized = normalized.replace(/\/chat\/completions\/?$/i, '');
+    normalized = normalized.replace(/\/$/, '');
+  }
+
+  return normalized;
+}
+
+function validateProviderHeaderFields(providerId: string, providerType: ProviderTypeEnum, config: ProviderConfig) {
+  if (config.apiKey && hasNonLatin1Chars(config.apiKey)) {
+    throw new Error(
+      `${getDefaultDisplayNameFromProviderId(providerId)} API key contains non-Latin-1 characters. Re-enter it manually instead of pasting rich text.`,
+    );
+  }
+
+  if (config.name && hasNonLatin1Chars(config.name) && providerType === ProviderTypeEnum.OpenRouter) {
+    throw new Error(
+      `${getDefaultDisplayNameFromProviderId(providerId)} provider name contains characters that are unsafe for browser request headers.`,
+    );
+  }
 }
 
 // Interface for storing multiple LLM provider configurations
@@ -176,6 +221,7 @@ function ensureBackwardCompatibility(providerId: string, config: ProviderConfig)
   // console.log(`[ensureBackwardCompatibility] Input for ${providerId}:`, JSON.stringify(config));
 
   const updatedConfig = { ...config };
+  const providerType = updatedConfig.type || getProviderTypeByProviderId(providerId);
 
   // Ensure name exists
   if (!updatedConfig.name) {
@@ -183,11 +229,14 @@ function ensureBackwardCompatibility(providerId: string, config: ProviderConfig)
   }
   // Ensure type exists
   if (!updatedConfig.type) {
-    updatedConfig.type = getProviderTypeByProviderId(providerId);
+    updatedConfig.type = providerType;
   }
 
+  updatedConfig.apiKey = normalizeProviderApiKey(updatedConfig.apiKey || '');
+  updatedConfig.baseUrl = normalizeProviderBaseUrl(updatedConfig.baseUrl, providerType);
+
   // Handle Azure specifics
-  if (updatedConfig.type === ProviderTypeEnum.AzureOpenAI) {
+  if (providerType === ProviderTypeEnum.AzureOpenAI) {
     // Ensure Azure fields exist, provide defaults if missing
     if (updatedConfig.azureApiVersion === undefined) {
       // console.log(`[ensureBackwardCompatibility] Adding default azureApiVersion for ${providerId}`);
@@ -217,6 +266,8 @@ function ensureBackwardCompatibility(providerId: string, config: ProviderConfig)
     updatedConfig.createdAt = new Date('03/04/2025').getTime();
   }
 
+  validateProviderHeaderFields(providerId, providerType, updatedConfig);
+
   // Log output config
   // console.log(`[ensureBackwardCompatibility] Output for ${providerId}:`, JSON.stringify(updatedConfig));
   return updatedConfig;
@@ -234,49 +285,56 @@ export const llmProviderStore: LLMProviderStorage = {
     }
 
     const providerType = config.type || getProviderTypeByProviderId(providerId);
+    const normalizedApiKey = normalizeProviderApiKey(config.apiKey || '');
+    const normalizedBaseUrl = normalizeProviderBaseUrl(config.baseUrl, providerType);
+
+    const normalizedConfig: ProviderConfig = {
+      ...config,
+      apiKey: normalizedApiKey,
+      baseUrl: normalizedBaseUrl,
+    };
 
     if (providerType === ProviderTypeEnum.AzureOpenAI) {
-      if (!config.baseUrl?.trim()) {
+      if (!normalizedConfig.baseUrl?.trim()) {
         throw new Error('Azure Endpoint (baseUrl) is required');
       }
-      if (!config.azureDeploymentNames || config.azureDeploymentNames.length === 0) {
+      if (!normalizedConfig.azureDeploymentNames || normalizedConfig.azureDeploymentNames.length === 0) {
         throw new Error('At least one Azure Deployment Name is required');
       }
-      if (!config.azureApiVersion?.trim()) {
+      if (!normalizedConfig.azureApiVersion?.trim()) {
         throw new Error('Azure API Version is required');
       }
-      if (!config.apiKey?.trim()) {
+      if (!normalizedConfig.apiKey?.trim()) {
         throw new Error('API Key is required for Azure OpenAI');
       }
     } else if (providerType !== ProviderTypeEnum.CustomOpenAI && providerType !== ProviderTypeEnum.Ollama) {
-      if (!config.apiKey?.trim()) {
+      if (!normalizedConfig.apiKey?.trim()) {
         throw new Error(`API Key is required for ${getDefaultDisplayNameFromProviderId(providerId)}`);
       }
     }
 
     if (providerType !== ProviderTypeEnum.AzureOpenAI) {
-      if (!config.modelNames || config.modelNames.length === 0) {
+      if (!normalizedConfig.modelNames || normalizedConfig.modelNames.length === 0) {
         console.warn(`Provider ${providerId} of type ${providerType} is being saved without model names.`);
       }
     }
 
     const completeConfig: ProviderConfig = {
-      apiKey: config.apiKey || '',
-      baseUrl: config.baseUrl,
-      name: config.name || getDefaultDisplayNameFromProviderId(providerId),
+      apiKey: normalizedConfig.apiKey || '',
+      baseUrl: normalizedConfig.baseUrl,
+      name: normalizedConfig.name || getDefaultDisplayNameFromProviderId(providerId),
       type: providerType,
-      createdAt: config.createdAt || Date.now(),
+      createdAt: normalizedConfig.createdAt || Date.now(),
       ...(providerType === ProviderTypeEnum.AzureOpenAI
         ? {
-            azureDeploymentNames: config.azureDeploymentNames || [],
-            azureApiVersion: config.azureApiVersion,
+            azureDeploymentNames: normalizedConfig.azureDeploymentNames || [],
+            azureApiVersion: normalizedConfig.azureApiVersion,
           }
         : {
-            modelNames: config.modelNames || [],
+            modelNames: normalizedConfig.modelNames || [],
           }),
     };
-
-    console.log(`[llmProviderStore.setProvider] Saving config for ${providerId}:`, JSON.stringify(completeConfig));
+    validateProviderHeaderFields(providerId, providerType, completeConfig);
 
     const current = (await storage.get()) || { providers: {} };
     await storage.set({

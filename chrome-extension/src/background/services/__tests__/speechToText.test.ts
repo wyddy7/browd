@@ -6,6 +6,10 @@ import {
   GROK_SPEECH_TO_TEXT_MODEL,
 } from '../../../../../packages/storage/lib/settings/speechToText';
 import {
+  normalizeProviderApiKey,
+  normalizeProviderBaseUrl,
+} from '../../../../../packages/storage/lib/settings/llmProviders';
+import {
   buildOpenRouterTranscriptionPayload,
   buildXaiSpeechToTextFormData,
   extractOpenRouterTranscript,
@@ -107,5 +111,17 @@ describe('speech-to-text payload helpers', () => {
     });
 
     expect(transcript).toBe('hello from audio');
+  });
+});
+
+describe('provider normalization helpers', () => {
+  it('removes zero-width characters from API keys', () => {
+    expect(normalizeProviderApiKey('sk-or-v1-\u200babc123')).toBe('sk-or-v1-abc123');
+  });
+
+  it('normalizes OpenRouter base URLs to the API root', () => {
+    expect(normalizeProviderBaseUrl('https://openrouter.ai/api/v1/chat/completions', ProviderTypeEnum.OpenRouter)).toBe(
+      'https://openrouter.ai/api/v1',
+    );
   });
 });

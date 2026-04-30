@@ -11,6 +11,18 @@ import { ChatDeepSeek } from '@langchain/deepseek';
 
 const maxTokens = 1024 * 4;
 
+function assertHeaderSafeValue(label: string, value: string | undefined) {
+  if (!value) {
+    return;
+  }
+
+  for (const char of value) {
+    if (char.codePointAt(0)! > 255) {
+      throw new Error(`${label} contains non-Latin-1 characters and cannot be used in browser request headers.`);
+    }
+  }
+}
+
 // Custom ChatLlama class to handle Llama API response format
 class ChatLlama extends ChatOpenAI {
   constructor(args: any) {
@@ -101,6 +113,7 @@ function createOpenAIChatModel(
   // Add optional extra fetch options for headers etc.
   extraFetchOptions: { headers?: Record<string, string> } | undefined,
 ): BaseChatModel {
+  assertHeaderSafeValue('API key', providerConfig.apiKey);
   const args: {
     model: string;
     apiKey?: string;
@@ -123,6 +136,9 @@ function createOpenAIChatModel(
     configuration.baseURL = providerConfig.baseUrl;
   }
   if (extraFetchOptions?.headers) {
+    Object.entries(extraFetchOptions.headers).forEach(([key, value]) => {
+      assertHeaderSafeValue(`Header "${key}"`, value);
+    });
     configuration.defaultHeaders = extraFetchOptions.headers;
   }
   args.configuration = configuration;
