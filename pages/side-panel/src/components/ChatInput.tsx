@@ -101,10 +101,7 @@ export default function ChatInput({
     if (layoutMode === 'compact') return Math.max(240, Math.min(composerWidth - 40, 320));
     return 288;
   }, [composerWidth, layoutMode]);
-  const modelButtonHint =
-    visibleModels.length > 0
-      ? `${visibleModels.length} model${visibleModels.length === 1 ? '' : 's'}`
-      : t('options_models_chooseModel');
+  const modelButtonHint = visibleModels.length > 0 ? `${visibleModels.length}` : t('options_models_chooseModel');
 
   useEffect(() => {
     const node = composerRef.current;

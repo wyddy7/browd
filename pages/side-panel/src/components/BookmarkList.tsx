@@ -102,6 +102,12 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
     setIsCreating(false);
   };
 
+  const handleToggleEditMode = () => {
+    setIsEditMode(value => !value);
+    setIsCreating(false);
+    setEditingId(null);
+  };
+
   const handleDragStart = (e: React.DragEvent, id: number) => {
     setDraggedId(id);
     e.dataTransfer.setData('text/plain', id.toString());
@@ -182,48 +188,43 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
     <div className="p-3">
       <div className="mb-3 flex items-start justify-between gap-3">
         <h3 className="text-sm font-medium text-[var(--browd-text)]">{t('chat_bookmarks_header')}</h3>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => {
-              setIsCreating(true);
-              setIsEditMode(true);
-              setEditingId(null);
-            }}
-            className="browd-button-ghost inline-flex items-center px-2 py-1.5 text-sm text-[var(--browd-text)]"
-            aria-label={t('chat_bookmarks_new')}>
-            <FiPlus size={14} />
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setIsEditMode(value => !value);
-              setIsCreating(false);
-              setEditingId(null);
-            }}
-            aria-label={t('chat_bookmarks_edit')}
-            aria-pressed={isEditMode}
-            className={`browd-button-ghost inline-flex min-w-[54px] items-center justify-center rounded-full px-3 py-1.5 text-sm transition-all duration-200 ${
-              isEditMode ? 'bg-[var(--browd-accent-soft)] text-[var(--browd-text)]' : 'text-[var(--browd-text)]'
-            }`}>
-            {isEditMode ? 'Done' : 'Edit'}
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={handleToggleEditMode}
+          aria-label={t('chat_bookmarks_edit')}
+          aria-pressed={isEditMode}
+          className={`browd-button-ghost inline-flex min-w-[54px] items-center justify-center rounded-full px-3 py-1.5 text-sm transition-all duration-200 ${
+            isEditMode ? 'bg-[var(--browd-accent-soft)] text-[var(--browd-text)]' : 'text-[var(--browd-text)]'
+          }`}>
+          {isEditMode ? 'Done' : 'Edit'}
+        </button>
       </div>
 
       <div className="mt-3 flex flex-col gap-2">
-        {isCreating &&
-          renderPromptForm({
-            title: draftTitle,
-            content: draftContent,
-            onTitleChange: setDraftTitle,
-            onContentChange: setDraftContent,
-            onSave: handleCreate,
-            onCancel: handleCancelCreate,
-          })}
-
         {isEditMode ? (
           <div className="browd-quick-start-enter flex flex-col gap-2">
+            {isCreating ? (
+              renderPromptForm({
+                title: draftTitle,
+                content: draftContent,
+                onTitleChange: setDraftTitle,
+                onContentChange: setDraftContent,
+                onSave: handleCreate,
+                onCancel: handleCancelCreate,
+              })
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsCreating(true);
+                  setEditingId(null);
+                }}
+                className="flex items-center justify-center gap-2 rounded-[10px] border border-dashed border-[var(--browd-border-strong)] bg-[var(--browd-panel)] px-3 py-3 text-sm font-medium text-[var(--browd-muted)] transition-colors hover:bg-[var(--browd-panel-strong)] hover:text-[var(--browd-text)]"
+                aria-label={t('chat_bookmarks_new')}>
+                <FiPlus size={15} />
+                {t('chat_bookmarks_new')}
+              </button>
+            )}
             {bookmarks.map(bookmark => (
               <div key={bookmark.id} className="min-w-0">
                 {editingId === bookmark.id ? (
@@ -278,7 +279,7 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
           <div className="browd-quick-start-enter flex flex-col items-center gap-2 min-[430px]:flex-row min-[430px]:flex-wrap min-[430px]:justify-center">
             {bookmarks.map(bookmark => (
               <div key={bookmark.id} className="min-w-0">
-                <div className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-[var(--browd-border)] bg-[var(--browd-panel)] px-3 py-2 transition-colors hover:bg-[var(--browd-panel-strong)]">
+                <div className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-[var(--browd-border)] bg-[var(--browd-panel)] px-2.5 py-1.5 transition-colors hover:bg-[var(--browd-panel-strong)]">
                   <button
                     type="button"
                     onClick={() => onBookmarkSelect(bookmark.content)}
@@ -287,7 +288,7 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
                         onBookmarkSelect(bookmark.content);
                       }
                     }}
-                    className="max-w-[180px] truncate text-sm font-medium text-[var(--browd-text)]">
+                    className="max-w-[160px] truncate text-xs font-medium text-[var(--browd-text)]">
                     {getDisplayTitle(bookmark.title)}
                   </button>
                 </div>
