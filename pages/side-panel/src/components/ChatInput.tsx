@@ -84,6 +84,7 @@ export default function ChatInput({
   );
   const composerRef = useRef<HTMLFormElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const baseTextareaHeightRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const modelMenuRef = useRef<HTMLDivElement>(null);
   const modelMenuPanelRef = useRef<HTMLDivElement>(null);
@@ -232,7 +233,19 @@ export default function ChatInput({
     }
 
     textarea.style.height = 'auto';
-    textarea.style.height = `${Math.min(textarea.scrollHeight, 100)}px`;
+    const measuredBaseHeight =
+      baseTextareaHeightRef.current ??
+      Math.max(textarea.scrollHeight, textarea.getBoundingClientRect().height || 0, textarea.clientHeight || 0);
+
+    if (baseTextareaHeightRef.current === null && measuredBaseHeight > 0) {
+      baseTextareaHeightRef.current = measuredBaseHeight;
+    }
+
+    const baseHeight = baseTextareaHeightRef.current ?? measuredBaseHeight;
+    const maxExpandedHeight = Math.round(baseHeight * 1.2);
+    const nextHeight = Math.min(Math.max(textarea.scrollHeight, baseHeight), maxExpandedHeight);
+
+    textarea.style.height = `${nextHeight}px`;
   }, []);
 
   // Expose a method to set content from outside
@@ -429,7 +442,7 @@ export default function ChatInput({
           disabled={disabled}
           aria-disabled={disabled}
           rows={5}
-          className="w-full resize-none border-none bg-[var(--browd-bg)] p-3 text-sm leading-6 text-[var(--browd-text)] placeholder:text-[var(--browd-faint)] focus:outline-none disabled:cursor-not-allowed disabled:text-[var(--browd-faint)]"
+          className="w-full resize-none overflow-y-auto border-none bg-[var(--browd-bg)] p-3 text-sm leading-6 text-[var(--browd-text)] transition-[height] duration-200 ease-out placeholder:text-[var(--browd-faint)] focus:outline-none disabled:cursor-not-allowed disabled:text-[var(--browd-faint)]"
           placeholder={attachedFiles.length > 0 ? 'Add a message (optional)...' : t('chat_input_placeholder')}
           aria-label={t('chat_input_editor')}
         />

@@ -279,7 +279,7 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
           <div className="browd-quick-start-enter flex flex-col items-center gap-2 min-[430px]:flex-row min-[430px]:flex-wrap min-[430px]:justify-center">
             {bookmarks.map(bookmark => (
               <div key={bookmark.id} className="min-w-0">
-                <div className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-[var(--browd-border)] bg-[var(--browd-panel)] px-2.5 py-1.5 transition-colors hover:bg-[var(--browd-panel-strong)]">
+                <div className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-[var(--browd-border)] bg-[var(--browd-panel)] px-3 py-2 transition-colors hover:bg-[var(--browd-panel-strong)]">
                   <button
                     type="button"
                     onClick={() => onBookmarkSelect(bookmark.content)}
@@ -288,7 +288,7 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
                         onBookmarkSelect(bookmark.content);
                       }
                     }}
-                    className="max-w-[160px] truncate text-xs font-medium text-[var(--browd-text)]">
+                    className="max-w-[180px] truncate text-sm font-medium text-[var(--browd-text)]">
                     {getDisplayTitle(bookmark.title)}
                   </button>
                 </div>
