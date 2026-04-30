@@ -94,6 +94,11 @@ export function buildOpenRouterTranscriptionPayload(modelName: string, audio: Pa
   };
 }
 
+export function isUnsupportedOpenRouterSpeechToTextModel(modelName: string): boolean {
+  const normalizedModelName = modelName.toLowerCase();
+  return normalizedModelName.includes('whisper') || normalizedModelName.includes('transcribe');
+}
+
 export function buildXaiSpeechToTextFormData(audio: ParsedAudioData): FormData {
   const formData = new FormData();
   formData.append('format', 'true');

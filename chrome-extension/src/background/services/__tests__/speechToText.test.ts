@@ -13,13 +13,14 @@ import {
   buildOpenRouterTranscriptionPayload,
   buildXaiSpeechToTextFormData,
   extractOpenRouterTranscript,
+  isUnsupportedOpenRouterSpeechToTextModel,
   parseAudioDataUrl,
 } from '../speechToTextUtils';
 
 const webmAudioDataUrl = 'data:audio/webm;base64,AAAA';
 
 describe('speech-to-text provider helpers', () => {
-  it('returns configured Gemini and OpenRouter models plus Grok sentinel', () => {
+  it('returns configured Gemini and supported OpenRouter models plus Grok sentinel', () => {
     const options = getSpeechToTextOptions({
       gemini: {
         apiKey: 'gem-key',
@@ -31,7 +32,7 @@ describe('speech-to-text provider helpers', () => {
         apiKey: 'or-key',
         type: ProviderTypeEnum.OpenRouter,
         name: 'OpenRouter',
-        modelNames: ['openai/whisper-1'],
+        modelNames: ['openai/whisper-1', 'google/gemini-2.5-flash'],
       },
       grok: {
         apiKey: 'xai-key',
@@ -43,7 +44,7 @@ describe('speech-to-text provider helpers', () => {
 
     expect(options).toEqual([
       { provider: 'gemini', providerName: 'Gemini', modelName: 'gemini-2.5-flash' },
-      { provider: 'openrouter', providerName: 'OpenRouter', modelName: 'openai/whisper-1' },
+      { provider: 'openrouter', providerName: 'OpenRouter', modelName: 'google/gemini-2.5-flash' },
       { provider: 'grok', providerName: 'Grok', modelName: GROK_SPEECH_TO_TEXT_MODEL },
     ]);
   });
@@ -111,6 +112,12 @@ describe('speech-to-text payload helpers', () => {
     });
 
     expect(transcript).toBe('hello from audio');
+  });
+
+  it('flags OpenRouter transcription endpoint models as unsupported for chat audio STT', () => {
+    expect(isUnsupportedOpenRouterSpeechToTextModel('openai/whisper-1')).toBe(true);
+    expect(isUnsupportedOpenRouterSpeechToTextModel('openai/gpt-4o-transcribe')).toBe(true);
+    expect(isUnsupportedOpenRouterSpeechToTextModel('google/gemini-2.5-flash')).toBe(false);
   });
 });
 

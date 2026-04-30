@@ -12,6 +12,7 @@ import {
   buildXaiSpeechToTextFormData,
   extractOpenRouterTranscript,
   isGrokSpeechToTextModel,
+  isUnsupportedOpenRouterSpeechToTextModel,
   parseAudioDataUrl,
 } from './speechToTextUtils';
 
@@ -67,6 +68,12 @@ class OpenRouterSpeechToTextAdapter implements SpeechToTextAdapter {
   }
 
   async transcribe(audioDataUrl: string): Promise<string> {
+    if (isUnsupportedOpenRouterSpeechToTextModel(this.modelName)) {
+      throw new Error(
+        `OpenRouter model "${this.modelName}" is a transcription endpoint model, not an audio-input chat model. Choose an OpenRouter model with audio input support, such as a Gemini audio model.`,
+      );
+    }
+
     const audio = parseAudioDataUrl(audioDataUrl);
     logger.info('Starting OpenRouter audio transcription...', this.modelName, audio.mimeType, audio.byteLength);
 

@@ -17,6 +17,11 @@ export interface SpeechToTextOption {
 
 export const GROK_SPEECH_TO_TEXT_MODEL = 'grok-speech-to-text';
 
+function isOpenRouterChatAudioModel(modelName: string): boolean {
+  const normalizedModelName = modelName.toLowerCase();
+  return !normalizedModelName.includes('whisper') && !normalizedModelName.includes('transcribe');
+}
+
 export function supportsSpeechToTextProvider(config?: ProviderConfig): boolean {
   return (
     config?.type === ProviderTypeEnum.Gemini ||
@@ -35,6 +40,10 @@ export function getSpeechToTextModelsForProvider(providerId: string, config: Pro
   }
 
   if (config.modelNames && config.modelNames.length > 0) {
+    if (config.type === ProviderTypeEnum.OpenRouter) {
+      return config.modelNames.filter(isOpenRouterChatAudioModel);
+    }
+
     return config.modelNames;
   }
 
