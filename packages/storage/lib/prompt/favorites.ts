@@ -5,17 +5,17 @@ import type { BaseStorage } from '../base/types';
 // Template data
 const defaultFavoritePrompts = [
   {
-    title: 'Explore Browd on GitHub',
+    title: 'Explore Browd',
     content:
       'Open the Browd repository at https://github.com/wyddy7/browd and summarize what the project does, how to run it locally, and one concrete way I could improve it next.',
   },
   {
-    title: 'Extract structured data',
+    title: 'Extract Info',
     content:
       'Extract the important structured information from this page and return it as a clean list or table. Include names, prices, dates, links, and statuses when available.',
   },
   {
-    title: 'Create a reusable workflow',
+    title: 'Create Workflow',
     content:
       'Look at the current page and draft a reusable step-by-step workflow for this task. Keep it concise and actionable so I can reuse it later.',
   },
@@ -41,6 +41,7 @@ const systemPromptMatchers = [
     prompt.title === '🌟 Explore Browd on GitHub' ||
     prompt.title === '🌟 Explore Nanobrowser on GitHub' ||
     prompt.title === 'Explore Browd on GitHub' ||
+    prompt.title === 'Explore Browd' ||
     prompt.content.includes('https://github.com/wyddy7/browd') ||
     prompt.content.includes('https://github.com/nanobrowser/nanobrowser') ||
     prompt.content.includes('next obvious contribution.') ||
@@ -49,12 +50,14 @@ const systemPromptMatchers = [
     prompt.title === 'Summarize this page' ||
     prompt.content.includes('Summarize the current page in a few concise bullets.'),
   (prompt: FavoritePrompt) =>
+    prompt.title === 'Extract Info' ||
     prompt.title === 'Extract structured data' ||
     prompt.content.includes('Extract the important structured information from this page'),
   (prompt: FavoritePrompt) =>
     prompt.title === 'Compare available options' ||
     prompt.content.includes('Review the visible options on this page, compare their main differences'),
   (prompt: FavoritePrompt) =>
+    prompt.title === 'Create Workflow' ||
     prompt.title === 'Create a reusable workflow' ||
     prompt.content.includes('draft a reusable step-by-step workflow for this task'),
 ];

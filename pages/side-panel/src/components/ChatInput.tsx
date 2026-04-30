@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { FaMicrophone } from 'react-icons/fa';
 import { AiOutlineLoading3Quarters } from 'react-icons/ai';
+import { FiPaperclip } from 'react-icons/fi';
 import { t } from '@extension/i18n';
 
 type QuickAgent = 'planner' | 'navigator';
@@ -71,59 +72,22 @@ export default function ChatInput({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const modelMenuRef = useRef<HTMLDivElement>(null);
   const modelMenuPanelRef = useRef<HTMLDivElement>(null);
-  const selectedModel = selectedModels[activeAgent] || '';
+  const currentSelectedModel = selectedModels[activeAgent] || '';
   const layoutMode = useMemo(() => {
     if (composerWidth > 0 && composerWidth < 320) return 'tight';
     if (composerWidth > 0 && composerWidth < 430) return 'compact';
     return 'comfortable';
   }, [composerWidth]);
-  const selectedModelOption = useMemo(
-    () => availableModels.find(({ provider, model }) => `${provider}>${model}` === selectedModel),
-    [availableModels, selectedModel],
-  );
-  const selectedModelLabel = useMemo(() => {
-    if (!selectedModelOption) return t('options_models_chooseModel');
-
-    const model = selectedModelOption.model.split('/').pop() || selectedModelOption.model;
-    return model
-      .replace(/^gpt-/i, 'GPT-')
-      .replace(/^claude-/i, 'Claude ')
-      .replace(/^gemini-/i, 'Gemini ')
-      .replace(/-/g, ' ')
-      .replace(/\bpreview\b/gi, '')
-      .replace(/\bchat latest\b/gi, 'Chat')
-      .replace(/\s+/g, ' ')
-      .trim();
-  }, [selectedModelOption]);
-  const shortModelLabel = useMemo(() => {
-    if (!selectedModelOption) return t('options_models_chooseModel');
-
-    const longLabel = selectedModelLabel;
-    if (layoutMode === 'comfortable') return longLabel;
-
-    const compactLabel = longLabel
-      .replace(/\bOpenAI\b/gi, '')
-      .replace(/\bAnthropic\b/gi, '')
-      .replace(/\bGoogle\b/gi, '')
-      .replace(/\b2\.5\b/g, '2.5')
-      .replace(/\b4\.5\b/g, '4.5')
-      .trim();
-
-    if (layoutMode === 'compact') return compactLabel;
-
-    if (compactLabel.startsWith('Gemini')) return 'Gemini';
-    if (compactLabel.startsWith('Claude')) return 'Claude';
-    if (compactLabel.startsWith('GPT-')) return compactLabel.split(' ')[0];
-    return compactLabel.split(' ')[0] || compactLabel;
-  }, [layoutMode, selectedModelLabel, selectedModelOption]);
   const menuWidth = useMemo(() => {
     if (composerWidth <= 0) return 288;
     if (layoutMode === 'tight') return Math.max(220, Math.min(composerWidth - 24, 320));
     if (layoutMode === 'compact') return Math.max(240, Math.min(composerWidth - 40, 320));
     return 288;
   }, [composerWidth, layoutMode]);
-  const activeAgentLabel = activeAgent === 'planner' ? 'Planner' : 'Navigator';
-  const compactAgentLabel = layoutMode === 'tight' ? 'Role' : activeAgentLabel;
+  const modelButtonHint =
+    availableModels.length > 0
+      ? `${availableModels.length} model${availableModels.length === 1 ? '' : 's'}`
+      : t('options_models_chooseModel');
 
   useEffect(() => {
     const node = composerRef.current;
@@ -404,7 +368,7 @@ export default function ChatInput({
                 aria-label="Attach files"
                 title="Attach text files (txt, md, json, csv, etc.)"
                 className="browd-icon-button p-1.5 disabled:cursor-not-allowed disabled:opacity-50">
-                <span className="text-lg">📎</span>
+                <FiPaperclip className="size-4" />
               </button>
 
               {/* Hidden file input */}
@@ -428,25 +392,30 @@ export default function ChatInput({
                     disabled={disabled || availableModels.length === 0}
                     aria-haspopup="menu"
                     aria-expanded={isModelMenuOpen}
-                    className={`flex items-center gap-2 rounded-full bg-[var(--browd-panel-strong)] px-3 py-1.5 text-sm text-[var(--browd-text)] transition-colors hover:bg-[var(--browd-control-hover)] disabled:cursor-not-allowed disabled:opacity-50 ${
+                    className={`browd-model-trigger inline-flex items-center gap-2 rounded-full bg-[var(--browd-panel-strong)] px-3 py-1.5 text-sm text-[var(--browd-text)] transition-colors hover:bg-[var(--browd-control-hover)] disabled:cursor-not-allowed disabled:opacity-50 ${
                       layoutMode === 'tight'
-                        ? 'max-w-[236px]'
+                        ? 'max-w-[154px]'
                         : layoutMode === 'compact'
-                          ? 'max-w-[282px]'
-                          : 'max-w-[336px]'
+                          ? 'max-w-[172px]'
+                          : 'max-w-[188px]'
                     }`}>
-                    <span className="shrink-0 text-[var(--browd-faint)]">{compactAgentLabel}</span>
-                    <span className="min-w-0 flex-1 truncate">{shortModelLabel}</span>
-                    <span className="shrink-0 text-xs text-[var(--browd-faint)]">v</span>
+                    <span className="min-w-0 truncate font-medium text-[var(--browd-text)]">Models</span>
+                    <span className="shrink-0 text-[11px] text-[var(--browd-faint)]">{modelButtonHint}</span>
+                    <span
+                      className={`shrink-0 text-xs text-[var(--browd-faint)] transition-transform duration-200 ${
+                        isModelMenuOpen ? 'rotate-180' : ''
+                      }`}>
+                      v
+                    </span>
                   </button>
 
                   {isModelMenuOpen && (
                     <div
                       ref={modelMenuPanelRef}
                       role="menu"
-                      className={`absolute right-0 z-50 w-72 overflow-hidden rounded-xl border border-[var(--browd-border)] bg-[var(--browd-panel)] py-2 text-sm text-[var(--browd-text)] shadow-[var(--browd-shadow-menu)] ${
+                      className={`browd-model-menu absolute right-0 z-50 w-72 overflow-hidden rounded-xl border border-[var(--browd-border)] bg-[var(--browd-panel)] py-2 text-sm text-[var(--browd-text)] shadow-[var(--browd-shadow-menu)] ${
                         modelMenuDirection === 'up' ? 'bottom-full mb-2' : 'top-full mt-2'
-                      }`}
+                      } ${modelMenuDirection === 'up' ? 'origin-bottom-right' : 'origin-top-right'}`}
                       style={{ width: `${menuWidth}px` }}>
                       <div className="px-4 pb-2 pt-1">
                         <div className="mb-2 text-sm text-[var(--browd-faint)]">Role</div>
@@ -476,7 +445,7 @@ export default function ChatInput({
                       <div className="max-h-72 overflow-y-auto">
                         {availableModels.map(({ provider, providerName, model }) => {
                           const value = `${provider}>${model}`;
-                          const isSelected = value === selectedModel;
+                          const isSelected = value === currentSelectedModel;
                           return (
                             <button
                               key={value}
@@ -512,11 +481,6 @@ export default function ChatInput({
                   )}
                 </div>
               )}
-            </div>
-          </div>
-
-          <div className={`flex ${layoutMode === 'tight' ? 'justify-end' : 'justify-end'}`}>
-            <div className="flex items-center gap-2">
               {onMicClick && !historicalSessionId && (
                 <button
                   type="button"

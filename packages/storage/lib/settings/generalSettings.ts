@@ -16,6 +16,8 @@ export interface GeneralSettingsConfig {
   displayHighlights: boolean;
   minWaitPageLoad: number;
   replayHistoricalTasks: boolean;
+  autoGroupOnLaunch: boolean;
+  launchShortcut: string;
 }
 
 export type GeneralSettingsStorage = BaseStorage<GeneralSettingsConfig> & {
@@ -36,6 +38,8 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettingsConfig = {
   displayHighlights: true,
   minWaitPageLoad: 250,
   replayHistoricalTasks: false,
+  autoGroupOnLaunch: false,
+  launchShortcut: 'Ctrl+E',
 };
 
 const storage = createStorage<GeneralSettingsConfig>('general-settings', DEFAULT_GENERAL_SETTINGS, {
@@ -50,6 +54,14 @@ const normalizeAppearanceTheme = (theme: unknown): AppearanceTheme => {
   return 'light';
 };
 
+const normalizeShortcut = (shortcut: unknown): string => {
+  if (typeof shortcut !== 'string') {
+    return DEFAULT_GENERAL_SETTINGS.launchShortcut;
+  }
+
+  return shortcut.trim();
+};
+
 export const generalSettingsStore: GeneralSettingsStorage = {
   ...storage,
   async updateSettings(settings: Partial<GeneralSettingsConfig>) {
@@ -60,6 +72,7 @@ export const generalSettingsStore: GeneralSettingsStorage = {
     };
 
     updatedSettings.appearanceTheme = normalizeAppearanceTheme(updatedSettings.appearanceTheme);
+    updatedSettings.launchShortcut = normalizeShortcut(updatedSettings.launchShortcut);
 
     // If useVision is true, displayHighlights must also be true
     if (updatedSettings.useVision && !updatedSettings.displayHighlights) {
@@ -74,6 +87,7 @@ export const generalSettingsStore: GeneralSettingsStorage = {
       ...DEFAULT_GENERAL_SETTINGS,
       ...settings,
       appearanceTheme: normalizeAppearanceTheme(settings?.appearanceTheme),
+      launchShortcut: normalizeShortcut(settings?.launchShortcut),
     };
   },
   async resetToDefaults() {

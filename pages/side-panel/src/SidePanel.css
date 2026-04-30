@@ -111,3 +111,53 @@ code {
 .browd-progress {
   background: linear-gradient(90deg, var(--browd-accent), var(--browd-blue));
 }
+
+@keyframes browd-model-menu-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.browd-model-trigger {
+  transition:
+    background-color 160ms ease,
+    transform 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.browd-model-trigger:hover:enabled,
+.browd-model-trigger[aria-expanded='true'] {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px hsl(var(--browd-shadow) / 0.16);
+}
+
+.browd-model-trigger:active:enabled {
+  transform: translateY(0);
+}
+
+.browd-model-menu {
+  transform-origin: top right;
+  animation: browd-model-menu-enter 160ms ease-out;
+}
+
+@keyframes browd-quick-start-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.browd-quick-start-enter {
+  animation: browd-quick-start-enter 180ms ease-out;
+}

@@ -11,6 +11,32 @@ import { t } from '@extension/i18n';
 const settingTitleClass = 'text-base font-medium text-[var(--browd-text)]';
 const settingDescriptionClass = 'text-sm font-normal text-[var(--browd-muted)]';
 const numberInputClass = 'browd-input w-20 px-3 py-2';
+const shortcutInputClass =
+  'browd-input min-w-[160px] rounded-full px-3 py-2 text-center text-sm text-[var(--browd-text)]';
+
+const modifierKeys = new Set(['Control', 'Meta', 'Alt', 'Shift']);
+
+function formatShortcutFromEvent(event: React.KeyboardEvent<HTMLInputElement>): string | null {
+  if (modifierKeys.has(event.key) || event.key === 'Tab' || event.key === 'Escape') {
+    return null;
+  }
+
+  if (!event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
+    return null;
+  }
+
+  const parts: string[] = [];
+
+  if (event.ctrlKey) parts.push('Ctrl');
+  if (event.metaKey) parts.push('Meta');
+  if (event.altKey) parts.push('Alt');
+  if (event.shiftKey) parts.push('Shift');
+
+  const normalizedKey = event.key.length === 1 ? event.key.toUpperCase() : event.key;
+  parts.push(normalizedKey);
+
+  return parts.join('+');
+}
 
 interface GeneralSettingsProps {
   onAppearanceThemeChange?: (theme: AppearanceTheme) => void;
@@ -195,6 +221,48 @@ export const GeneralSettings = ({ onAppearanceThemeChange }: GeneralSettingsProp
               checked={settings.replayHistoricalTasks}
               onChange={e => updateSetting('replayHistoricalTasks', e.target.checked)}
               label={t('options_general_replayHistoricalTasks')}
+            />
+          </div>
+
+          <div className="flex items-center justify-between gap-6">
+            <div>
+              <h3 className={settingTitleClass}>{t('options_general_autoGroupOnLaunch')}</h3>
+              <p className={settingDescriptionClass}>{t('options_general_autoGroupOnLaunch_desc')}</p>
+            </div>
+            <ToggleSwitch
+              id="autoGroupOnLaunch"
+              checked={settings.autoGroupOnLaunch}
+              onChange={e => updateSetting('autoGroupOnLaunch', e.target.checked)}
+              label={t('options_general_autoGroupOnLaunch')}
+            />
+          </div>
+
+          <div className="flex items-center justify-between gap-6">
+            <div>
+              <h3 className={settingTitleClass}>{t('options_general_launchShortcut')}</h3>
+              <p className={settingDescriptionClass}>{t('options_general_launchShortcut_desc')}</p>
+            </div>
+            <input
+              type="text"
+              value={settings.launchShortcut}
+              readOnly
+              aria-label={t('options_general_launchShortcut')}
+              onKeyDown={e => {
+                if (e.key === 'Backspace' || e.key === 'Delete') {
+                  e.preventDefault();
+                  void updateSetting('launchShortcut', '');
+                  return;
+                }
+
+                const shortcut = formatShortcutFromEvent(e);
+                if (!shortcut) {
+                  return;
+                }
+
+                e.preventDefault();
+                void updateSetting('launchShortcut', shortcut);
+              }}
+              className={shortcutInputClass}
             />
           </div>
         </div>

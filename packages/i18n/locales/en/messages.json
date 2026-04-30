@@ -286,6 +286,18 @@
   "options_general_replayHistoricalTasks_desc": {
     "message": "Enable storing and replaying of agent step history (experimental, may have issues)"
   },
+  "options_general_autoGroupOnLaunch": {
+    "message": "Auto-group on Launch"
+  },
+  "options_general_autoGroupOnLaunch_desc": {
+    "message": "Automatically group the current tab into a Browd group when opening the extension."
+  },
+  "options_general_launchShortcut": {
+    "message": "Launch Shortcut"
+  },
+  "options_general_launchShortcut_desc": {
+    "message": "Focus this field and press a shortcut to open Browd from the current page. Press Delete to clear it."
+  },
 
   "options_models_providers_header": {
     "message": "LLM Providers"

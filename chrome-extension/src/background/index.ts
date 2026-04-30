@@ -26,8 +26,36 @@ let currentExecutor: Executor | null = null;
 let currentPort: chrome.runtime.Port | null = null;
 const SIDE_PANEL_URL = chrome.runtime.getURL('side-panel/index.html');
 
-// Setup side panel behavior
-chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(error => console.error(error));
+async function maybeAutoGroupTab(tabId: number) {
+  const generalSettings = await generalSettingsStore.getSettings();
+  if (!generalSettings.autoGroupOnLaunch) {
+    return;
+  }
+
+  const tab = await chrome.tabs.get(tabId);
+  if (tab.groupId !== undefined && tab.groupId >= 0) {
+    return;
+  }
+
+  const groupId = await chrome.tabs.group({ tabIds: [tabId] });
+  await chrome.tabGroups.update(groupId, {
+    title: 'Browd',
+    color: 'grey',
+  });
+}
+
+async function openSidePanelForLaunch(tabId?: number) {
+  if (!tabId) {
+    return;
+  }
+
+  await chrome.sidePanel.open({ tabId });
+  await maybeAutoGroupTab(tabId);
+}
+
+chrome.action.onClicked.addListener(tab => {
+  void openSidePanelForLaunch(tab.id);
+});
 
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (tabId && changeInfo.status === 'complete' && tab.url?.startsWith('http')) {
@@ -66,11 +94,27 @@ analyticsSettingsStore.subscribe(() => {
   });
 });
 
-// Listen for simple messages (e.g., from options page)
-chrome.runtime.onMessage.addListener(() => {
-  // Handle other message types if needed in the future
-  // Return false if response is not sent asynchronously
-  // return false;
+// Listen for simple messages (e.g., from options page and content scripts)
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type === 'open-side-panel') {
+    void (async () => {
+      try {
+        const senderTabId = sender.tab?.id;
+        await openSidePanelForLaunch(senderTabId);
+        sendResponse({ ok: true });
+      } catch (error) {
+        logger.error('Failed to open side panel:', error);
+        sendResponse({
+          ok: false,
+          error: error instanceof Error ? error.message : t('errors_unknown'),
+        });
+      }
+    })();
+
+    return true;
+  }
+
+  return false;
 });
 
 // Setup connection listener for long-lived connections (e.g., side panel)
