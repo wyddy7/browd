@@ -16,7 +16,6 @@ export interface GeneralSettingsConfig {
   displayHighlights: boolean;
   minWaitPageLoad: number;
   replayHistoricalTasks: boolean;
-  autoGroupOnLaunch: boolean;
   launchShortcut: string;
 }
 
@@ -38,7 +37,6 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettingsConfig = {
   displayHighlights: true,
   minWaitPageLoad: 250,
   replayHistoricalTasks: false,
-  autoGroupOnLaunch: false,
   launchShortcut: 'Ctrl+E',
 };
 

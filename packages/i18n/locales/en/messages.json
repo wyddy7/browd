@@ -286,12 +286,6 @@
   "options_general_replayHistoricalTasks_desc": {
     "message": "Enable storing and replaying of agent step history (experimental, may have issues)"
   },
-  "options_general_autoGroupOnLaunch": {
-    "message": "Auto-group on Launch"
-  },
-  "options_general_autoGroupOnLaunch_desc": {
-    "message": "Automatically group the current tab into a Browd group when opening the extension."
-  },
   "options_general_launchShortcut": {
     "message": "Browser Shortcut"
   },

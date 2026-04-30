@@ -201,19 +201,6 @@ export const GeneralSettings = ({ onAppearanceThemeChange }: GeneralSettingsProp
 
           <div className="flex items-center justify-between gap-6">
             <div>
-              <h3 className={settingTitleClass}>{t('options_general_autoGroupOnLaunch')}</h3>
-              <p className={settingDescriptionClass}>{t('options_general_autoGroupOnLaunch_desc')}</p>
-            </div>
-            <ToggleSwitch
-              id="autoGroupOnLaunch"
-              checked={settings.autoGroupOnLaunch}
-              onChange={e => updateSetting('autoGroupOnLaunch', e.target.checked)}
-              label={t('options_general_autoGroupOnLaunch')}
-            />
-          </div>
-
-          <div className="flex items-center justify-between gap-6">
-            <div>
               <h3 className={settingTitleClass}>{t('options_general_launchShortcut')}</h3>
               <p className={settingDescriptionClass}>{t('options_general_launchShortcut_desc')}</p>
             </div>

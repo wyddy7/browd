@@ -30,24 +30,6 @@ chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(error 
   logger.error('Failed to configure side panel behavior:', error);
 });
 
-async function maybeAutoGroupTab(tabId: number) {
-  const generalSettings = await generalSettingsStore.getSettings();
-  if (!generalSettings.autoGroupOnLaunch) {
-    return;
-  }
-
-  const tab = await chrome.tabs.get(tabId);
-  if (tab.groupId !== undefined && tab.groupId >= 0) {
-    return;
-  }
-
-  const groupId = await chrome.tabs.group({ tabIds: [tabId] });
-  await chrome.tabGroups.update(groupId, {
-    title: 'Browd',
-    color: 'grey',
-  });
-}
-
 async function openSidePanelForLaunch(tabId?: number) {
   let resolvedTabId = tabId;
 
@@ -61,14 +43,7 @@ async function openSidePanelForLaunch(tabId?: number) {
   }
 
   await chrome.sidePanel.open({ tabId: resolvedTabId });
-  await maybeAutoGroupTab(resolvedTabId);
 }
-
-chrome.action.onClicked.addListener(tab => {
-  if (tab.id) {
-    void maybeAutoGroupTab(tab.id);
-  }
-});
 
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (tabId && changeInfo.status === 'complete' && tab.url?.startsWith('http')) {

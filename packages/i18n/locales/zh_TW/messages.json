@@ -286,12 +286,6 @@
   "options_general_replayHistoricalTasks_desc": {
     "message": "啟用儲存與重播代理程式的步驟歷史紀錄 (此為實驗性功能，可能存在問題)"
   },
-  "options_general_autoGroupOnLaunch": {
-    "message": "啟動時自動分組"
-  },
-  "options_general_autoGroupOnLaunch_desc": {
-    "message": "開啟擴充功能時，自動將目前分頁加入 Browd 群組。"
-  },
   "options_general_launchShortcut": {
     "message": "瀏覽器快捷鍵"
   },

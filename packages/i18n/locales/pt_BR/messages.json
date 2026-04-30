@@ -286,12 +286,6 @@
   "options_general_replayHistoricalTasks_desc": {
     "message": "Ativar o armazenamento e a reprodução do histórico de passos do agente (experimental, pode ter problemas)"
   },
-  "options_general_autoGroupOnLaunch": {
-    "message": "Agrupar ao abrir"
-  },
-  "options_general_autoGroupOnLaunch_desc": {
-    "message": "Agrupa automaticamente a aba atual em um grupo Browd ao abrir a extensão."
-  },
   "options_general_launchShortcut": {
     "message": "Atalho do navegador"
   },
