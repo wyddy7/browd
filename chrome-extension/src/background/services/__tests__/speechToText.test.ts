@@ -10,12 +10,14 @@ import {
   normalizeProviderBaseUrl,
 } from '../../../../../packages/storage/lib/settings/llmProviders';
 import {
-  buildOpenRouterResponsesTranscriptionPayload,
+  buildOpenRouterResponsesAudioPayload,
+  buildOpenRouterResponsesFilePayload,
   buildOpenRouterTranscriptionPayload,
   buildXaiSpeechToTextFormData,
   extractOpenRouterResponsesTranscript,
   extractOpenRouterTranscript,
   parseAudioDataUrl,
+  shouldRetryOpenRouterResponsesWithAlternateContent,
   shouldRetryOpenRouterWithResponses,
 } from '../speechToTextUtils';
 
@@ -88,17 +90,40 @@ describe('speech-to-text payload helpers', () => {
     });
   });
 
-  it('builds OpenRouter responses payloads with input_file content', () => {
+  it('builds OpenRouter responses audio payloads with input_audio content', () => {
     const parsed = parseAudioDataUrl(webmAudioDataUrl);
-    const payload = buildOpenRouterResponsesTranscriptionPayload('openai/gpt-4o-transcribe', parsed);
+    const payload = buildOpenRouterResponsesAudioPayload('openai/gpt-4o-transcribe', parsed);
     const messageContent = payload.input[0].content;
 
     expect(payload.model).toBe('openai/gpt-4o-transcribe');
-    expect(payload.instructions).toContain('Transcribe this audio file');
     expect(Array.isArray(messageContent)).toBe(true);
     expect(messageContent[0]).toEqual({
+      type: 'input_text',
+      text: 'Please transcribe this audio file. Return only the transcribed text without any additional formatting or explanations.',
+    });
+    expect(messageContent[1]).toEqual({
+      type: 'input_audio',
+      input_audio: {
+        data: parsed.base64Data,
+        format: parsed.format,
+      },
+    });
+  });
+
+  it('builds OpenRouter responses file payloads with data URL content', () => {
+    const parsed = parseAudioDataUrl(webmAudioDataUrl);
+    const payload = buildOpenRouterResponsesFilePayload('openai/gpt-4o-transcribe', parsed);
+    const messageContent = payload.input[0].content;
+
+    expect(payload.model).toBe('openai/gpt-4o-transcribe');
+    expect(Array.isArray(messageContent)).toBe(true);
+    expect(messageContent[0]).toEqual({
+      type: 'input_text',
+      text: 'Please transcribe this audio file. Return only the transcribed text without any additional formatting or explanations.',
+    });
+    expect(messageContent[1]).toEqual({
       type: 'input_file',
-      file_data: parsed.base64Data,
+      file_data: parsed.dataUrl,
       filename: parsed.fileName,
     });
   });
@@ -156,6 +181,12 @@ describe('speech-to-text payload helpers', () => {
         `{"error":{"message":"Invalid value: 'input_audio'. Supported values are: 'input_text', 'input_image', 'output_text', 'refusal', 'input_file'"}}`,
       ),
     ).toBe(true);
+  });
+
+  it('retries OpenRouter responses with alternate content when content validation fails', () => {
+    expect(shouldRetryOpenRouterResponsesWithAlternateContent(400, '{"error":{"message":"Invalid content"}}')).toBe(
+      true,
+    );
   });
 });
 

@@ -3,6 +3,7 @@ import { GROK_SPEECH_TO_TEXT_MODEL } from '@extension/storage';
 export interface ParsedAudioData {
   mimeType: string;
   base64Data: string;
+  dataUrl: string;
   format: string;
   byteLength: number;
   fileName: string;
@@ -67,6 +68,7 @@ export function parseAudioDataUrl(audioDataUrl: string): ParsedAudioData {
   return {
     mimeType,
     base64Data,
+    dataUrl: audioDataUrl,
     format,
     byteLength: bytes.byteLength,
     fileName: `speech-input.${extension}`,
@@ -99,19 +101,47 @@ export function buildOpenRouterTranscriptionPayload(modelName: string, audio: Pa
   };
 }
 
-export function buildOpenRouterResponsesTranscriptionPayload(modelName: string, audio: ParsedAudioData) {
+export function buildOpenRouterResponsesAudioPayload(modelName: string, audio: ParsedAudioData) {
   return {
     model: modelName,
-    instructions:
-      'Transcribe this audio file. Return only the transcribed text without any additional formatting or explanations.',
     input: [
       {
         type: 'message',
         role: 'user',
         content: [
           {
+            type: 'input_text',
+            text: 'Please transcribe this audio file. Return only the transcribed text without any additional formatting or explanations.',
+          },
+          {
+            type: 'input_audio',
+            input_audio: {
+              data: audio.base64Data,
+              format: audio.format,
+            },
+          },
+        ],
+      },
+    ],
+    stream: false,
+  };
+}
+
+export function buildOpenRouterResponsesFilePayload(modelName: string, audio: ParsedAudioData) {
+  return {
+    model: modelName,
+    input: [
+      {
+        type: 'message',
+        role: 'user',
+        content: [
+          {
+            type: 'input_text',
+            text: 'Please transcribe this audio file. Return only the transcribed text without any additional formatting or explanations.',
+          },
+          {
             type: 'input_file',
-            file_data: audio.base64Data,
+            file_data: audio.dataUrl,
             filename: audio.fileName,
           },
         ],
@@ -201,6 +231,14 @@ export function shouldRetryOpenRouterWithResponses(status: number, errorText: st
       errorText.includes("'input_file'") &&
       !errorText.includes("'input_audio'"))
   );
+}
+
+export function shouldRetryOpenRouterResponsesWithAlternateContent(status: number, errorText: string): boolean {
+  if (status !== 400) {
+    return false;
+  }
+
+  return errorText.includes('Invalid content');
 }
 
 export function isGrokSpeechToTextModel(modelName: string): boolean {
