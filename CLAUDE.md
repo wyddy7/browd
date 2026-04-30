@@ -41,7 +41,7 @@ pnpm -F packages/storage type-check
 Production build output is `dist/`.
 
 1. Run `pnpm build`.
-2. Open `brave://extensions/` or `chrome://extensions/`.
+2. Open the browser extensions page (`chrome://extensions/` in Chrome/Edge, `brave://extensions/` in Brave).
 3. Enable Developer mode.
 4. Load unpacked extension from `dist/`.
 5. After rebuilding, reload the extension card and reopen the side panel.

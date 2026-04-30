@@ -18,7 +18,7 @@ Current focus:
 - simplify the extension UI;
 - decouple Speech-to-Text from Gemini-only logic;
 - add experimental OpenRouter STT support;
-- keep local extension development easy to run in Brave/Chrome.
+- keep local extension development easy to run in Chromium-based browsers.
 
 ## Local Setup
 
@@ -36,7 +36,7 @@ The built extension is emitted to `dist/`.
 
 ## Load Locally
 
-1. Open `brave://extensions/` or `chrome://extensions/`.
+1. Open your browser's extensions page (`chrome://extensions/` in Chrome/Edge, `brave://extensions/` in Brave).
 2. Enable Developer mode.
 3. Click Load unpacked.
 4. Select this repository's `dist/` directory.
