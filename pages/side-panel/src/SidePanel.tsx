@@ -13,9 +13,11 @@ import {
   generalSettingsStore,
   llmProviderStore,
   llmProviderModelNames,
+  getSpeechToTextOptions,
   getDefaultAgentModelParams,
   AgentNameEnum,
   ProviderTypeEnum,
+  speechToTextModelStore,
 } from '@extension/storage';
 import favoritesStorage, { type FavoritePrompt } from '@extension/storage/lib/prompt/favorites';
 import { t } from '@extension/i18n';
@@ -156,10 +158,12 @@ const SidePanel = () => {
   const [favoritePrompts, setFavoritePrompts] = useState<FavoritePrompt[]>([]);
   const [hasConfiguredModels, setHasConfiguredModels] = useState<boolean | null>(null); // null = loading, false = no models, true = has models
   const [availableModels, setAvailableModels] = useState<ModelOption[]>([]);
+  const [availableSpeechToTextModels, setAvailableSpeechToTextModels] = useState<ModelOption[]>([]);
   const [selectedAgentModels, setSelectedAgentModels] = useState<Record<QuickAgent, string>>({
     planner: '',
     navigator: '',
   });
+  const [selectedSpeechToTextModel, setSelectedSpeechToTextModel] = useState('');
   const [activeQuickAgent, setActiveQuickAgent] = useState<QuickAgent>('navigator');
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessingSpeech, setIsProcessingSpeech] = useState(false);
@@ -233,9 +237,69 @@ const SidePanel = () => {
       }
 
       setAvailableModels(models);
+
+      const speechToTextOptions = getSpeechToTextOptions(providers).map(option => ({
+        provider: option.provider,
+        providerName: option.providerName,
+        model: option.modelName,
+      }));
+
+      const openRouterProviders = Object.entries(providers).filter(
+        ([, config]) => config.type === ProviderTypeEnum.OpenRouter,
+      );
+
+      if (openRouterProviders.length > 0) {
+        try {
+          const response = await fetch('https://openrouter.ai/api/v1/models');
+          if (!response.ok) {
+            throw new Error(`OpenRouter models request failed: ${response.status}`);
+          }
+
+          const payload = (await response.json()) as {
+            data?: Array<{ id?: string; architecture?: { input_modalities?: string[] } }>;
+          };
+
+          const remoteAudioModels = (payload.data || [])
+            .filter(model => (model.architecture?.input_modalities || []).includes('audio'))
+            .map(model => model.id)
+            .filter((modelId): modelId is string => Boolean(modelId))
+            .filter(modelId => {
+              const normalizedModelId = modelId.toLowerCase();
+              return !normalizedModelId.includes('whisper') && !normalizedModelId.includes('transcribe');
+            })
+            .sort((left, right) => left.localeCompare(right));
+
+          const mergedOptions = new Map(
+            speechToTextOptions.map(option => [`${option.provider}>${option.model}`, option] as const),
+          );
+
+          for (const [providerId, config] of openRouterProviders) {
+            const providerName = config.name || providerId;
+            for (const model of remoteAudioModels) {
+              mergedOptions.set(`${providerId}>${model}`, {
+                provider: providerId,
+                providerName,
+                model,
+              });
+            }
+          }
+
+          setAvailableSpeechToTextModels(
+            Array.from(mergedOptions.values()).sort((left, right) =>
+              `${left.providerName}>${left.model}`.localeCompare(`${right.providerName}>${right.model}`),
+            ),
+          );
+          return;
+        } catch (openRouterError) {
+          console.error('Error loading OpenRouter speech-to-text models:', openRouterError);
+        }
+      }
+
+      setAvailableSpeechToTextModels(speechToTextOptions);
     } catch (error) {
       console.error('Error loading available models:', error);
       setAvailableModels([]);
+      setAvailableSpeechToTextModels([]);
     }
   }, []);
 
@@ -243,13 +307,18 @@ const SidePanel = () => {
     try {
       const plannerConfig = await agentModelStore.getAgentModel(AgentNameEnum.Planner);
       const navigatorConfig = await agentModelStore.getAgentModel(AgentNameEnum.Navigator);
+      const speechToTextConfig = await speechToTextModelStore.getSpeechToTextModel();
       setSelectedAgentModels({
         planner: plannerConfig ? `${plannerConfig.provider}>${plannerConfig.modelName}` : '',
         navigator: navigatorConfig ? `${navigatorConfig.provider}>${navigatorConfig.modelName}` : '',
       });
+      setSelectedSpeechToTextModel(
+        speechToTextConfig ? `${speechToTextConfig.provider}>${speechToTextConfig.modelName}` : '',
+      );
     } catch (error) {
       console.error('Error loading agent models:', error);
       setSelectedAgentModels({ planner: '', navigator: '' });
+      setSelectedSpeechToTextModel('');
     }
   }, []);
 
@@ -329,6 +398,29 @@ const SidePanel = () => {
     },
     [checkModelConfiguration],
   );
+
+  const handleSpeechToTextModelChange = useCallback(async (modelValue: string) => {
+    setSelectedSpeechToTextModel(modelValue);
+
+    try {
+      if (!modelValue) {
+        await speechToTextModelStore.resetSpeechToTextModel();
+        return;
+      }
+
+      const [provider, modelName] = modelValue.split('>');
+      if (!provider || !modelName) {
+        return;
+      }
+
+      await speechToTextModelStore.setSpeechToTextModel({
+        provider,
+        modelName,
+      });
+    } catch (error) {
+      console.error('Error saving speech-to-text model:', error);
+    }
+  }, []);
 
   useEffect(() => {
     sessionIdRef.current = currentSessionId;
@@ -1346,10 +1438,13 @@ const SidePanel = () => {
                         onStopTask={handleStopTask}
                         onMicClick={handleMicClick}
                         availableModels={availableModels}
+                        availableSpeechToTextModels={availableSpeechToTextModels}
                         selectedModels={selectedAgentModels}
+                        selectedSpeechToTextModel={selectedSpeechToTextModel}
                         activeAgent={activeQuickAgent}
                         onActiveAgentChange={setActiveQuickAgent}
                         onModelChange={handleAgentModelChange}
+                        onSpeechToTextModelChange={handleSpeechToTextModelChange}
                         preferredModelMenuDirection="down"
                         isRecording={isRecording}
                         isProcessingSpeech={isProcessingSpeech}
@@ -1390,10 +1485,13 @@ const SidePanel = () => {
                       onStopTask={handleStopTask}
                       onMicClick={handleMicClick}
                       availableModels={availableModels}
+                      availableSpeechToTextModels={availableSpeechToTextModels}
                       selectedModels={selectedAgentModels}
+                      selectedSpeechToTextModel={selectedSpeechToTextModel}
                       activeAgent={activeQuickAgent}
                       onActiveAgentChange={setActiveQuickAgent}
                       onModelChange={handleAgentModelChange}
+                      onSpeechToTextModelChange={handleSpeechToTextModelChange}
                       preferredModelMenuDirection="up"
                       isRecording={isRecording}
                       isProcessingSpeech={isProcessingSpeech}

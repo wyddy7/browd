@@ -6,6 +6,7 @@ import { t } from '@extension/i18n';
 import { chatInputDraftStorage } from '@extension/storage';
 
 type QuickAgent = 'planner' | 'navigator';
+type QuickModelRole = QuickAgent | 'stt';
 
 interface ModelOption {
   provider: string;
@@ -23,10 +24,13 @@ interface ChatInputProps {
   onStopTask: () => void;
   onMicClick?: () => void;
   availableModels?: ModelOption[];
+  availableSpeechToTextModels?: ModelOption[];
   selectedModels?: Record<QuickAgent, string>;
+  selectedSpeechToTextModel?: string;
   activeAgent?: QuickAgent;
   onActiveAgentChange?: (agent: QuickAgent) => void;
   onModelChange?: (agent: QuickAgent, modelValue: string) => void;
+  onSpeechToTextModelChange?: (modelValue: string) => void;
   preferredModelMenuDirection?: 'up' | 'down';
   isRecording?: boolean;
   isProcessingSpeech?: boolean;
@@ -51,10 +55,13 @@ export default function ChatInput({
   onStopTask,
   onMicClick,
   availableModels = [],
+  availableSpeechToTextModels = [],
   selectedModels = { planner: '', navigator: '' },
+  selectedSpeechToTextModel = '',
   activeAgent = 'navigator',
   onActiveAgentChange,
   onModelChange,
+  onSpeechToTextModelChange,
   preferredModelMenuDirection = 'up',
   isRecording = false,
   isProcessingSpeech = false,
@@ -70,6 +77,7 @@ export default function ChatInput({
   const [composerWidth, setComposerWidth] = useState(0);
   const [modelMenuDirection, setModelMenuDirection] = useState<'up' | 'down'>(preferredModelMenuDirection);
   const [isDraftHydrated, setIsDraftHydrated] = useState(false);
+  const [activeModelRole, setActiveModelRole] = useState<QuickModelRole>(activeAgent);
   const isSendButtonDisabled = useMemo(
     () => disabled || (text.trim() === '' && attachedFiles.length === 0),
     [disabled, text, attachedFiles],
@@ -79,7 +87,9 @@ export default function ChatInput({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const modelMenuRef = useRef<HTMLDivElement>(null);
   const modelMenuPanelRef = useRef<HTMLDivElement>(null);
-  const currentSelectedModel = selectedModels[activeAgent] || '';
+  const currentSelectedModel =
+    activeModelRole === 'stt' ? selectedSpeechToTextModel : selectedModels[activeModelRole] || '';
+  const visibleModels = activeModelRole === 'stt' ? availableSpeechToTextModels : availableModels;
   const layoutMode = useMemo(() => {
     if (composerWidth > 0 && composerWidth < 320) return 'tight';
     if (composerWidth > 0 && composerWidth < 430) return 'compact';
@@ -92,8 +102,8 @@ export default function ChatInput({
     return 288;
   }, [composerWidth, layoutMode]);
   const modelButtonHint =
-    availableModels.length > 0
-      ? `${availableModels.length} model${availableModels.length === 1 ? '' : 's'}`
+    visibleModels.length > 0
+      ? `${visibleModels.length} model${visibleModels.length === 1 ? '' : 's'}`
       : t('options_models_chooseModel');
 
   useEffect(() => {
@@ -145,6 +155,10 @@ export default function ChatInput({
       setModelMenuDirection(preferredModelMenuDirection);
     }
   }, [isModelMenuOpen, preferredModelMenuDirection]);
+
+  useEffect(() => {
+    setActiveModelRole(currentRole => (currentRole === 'stt' ? currentRole : activeAgent));
+  }, [activeAgent]);
 
   useEffect(() => {
     if (!isModelMenuOpen) return;
@@ -459,7 +473,7 @@ export default function ChatInput({
                   <button
                     type="button"
                     onClick={() => setIsModelMenuOpen(open => !open)}
-                    disabled={disabled || availableModels.length === 0}
+                    disabled={disabled || (availableModels.length === 0 && availableSpeechToTextModels.length === 0)}
                     aria-haspopup="menu"
                     aria-expanded={isModelMenuOpen}
                     className={`browd-model-trigger inline-flex items-center gap-2 rounded-full bg-[var(--browd-panel-strong)] px-3 py-1.5 text-sm text-[var(--browd-text)] transition-colors hover:bg-[var(--browd-control-hover)] disabled:cursor-not-allowed disabled:opacity-50 ${
@@ -490,14 +504,19 @@ export default function ChatInput({
                       <div className="px-4 pb-2 pt-1">
                         <div className="mb-2 text-sm text-[var(--browd-faint)]">Role</div>
                         <div className="flex gap-4">
-                          {(['planner', 'navigator'] as QuickAgent[]).map(agent => {
-                            const isSelected = agent === activeAgent;
-                            const label = agent === 'planner' ? 'Planner' : 'Navigator';
+                          {(['planner', 'navigator', 'stt'] as QuickModelRole[]).map(role => {
+                            const isSelected = role === activeModelRole;
+                            const label = role === 'planner' ? 'Planner' : role === 'navigator' ? 'Navigator' : 'STT';
                             return (
                               <button
-                                key={agent}
+                                key={role}
                                 type="button"
-                                onClick={() => onActiveAgentChange?.(agent)}
+                                onClick={() => {
+                                  setActiveModelRole(role);
+                                  if (role !== 'stt') {
+                                    onActiveAgentChange?.(role);
+                                  }
+                                }}
                                 className={`text-sm transition-colors ${
                                   isSelected
                                     ? 'font-medium text-[var(--browd-text)]'
@@ -513,7 +532,7 @@ export default function ChatInput({
                         Model
                       </div>
                       <div className="max-h-72 overflow-y-auto">
-                        {availableModels.map(({ provider, providerName, model }) => {
+                        {visibleModels.map(({ provider, providerName, model }) => {
                           const value = `${provider}>${model}`;
                           const isSelected = value === currentSelectedModel;
                           return (
@@ -523,7 +542,12 @@ export default function ChatInput({
                               role="menuitemradio"
                               aria-checked={isSelected}
                               onClick={() => {
-                                onModelChange(activeAgent, value);
+                                if (activeModelRole === 'stt') {
+                                  onSpeechToTextModelChange?.(value);
+                                  return;
+                                }
+
+                                onModelChange(activeModelRole, value);
                               }}
                               className={`flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left transition-colors ${
                                 isSelected
