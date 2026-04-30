@@ -5,6 +5,7 @@ import {
   firewallStore,
   generalSettingsStore,
   llmProviderStore,
+  type InterfaceLanguage,
 } from '@extension/storage';
 import { t } from '@extension/i18n';
 import BrowserContext from './browser/context';
@@ -23,6 +24,31 @@ const browserContext = new BrowserContext({});
 let currentExecutor: Executor | null = null;
 let currentPort: chrome.runtime.Port | null = null;
 const SIDE_PANEL_URL = chrome.runtime.getURL('side-panel/index.html');
+
+function getInterfaceLanguageInstruction(language: InterfaceLanguage): string | undefined {
+  const languageNames: Partial<Record<InterfaceLanguage, string>> = {
+    en: 'English',
+    ru: 'Russian',
+    es: 'Spanish',
+    fr: 'French',
+    de: 'German',
+    pt_BR: 'Portuguese (Brazil)',
+  };
+
+  const languageName = languageNames[language];
+  if (!languageName) {
+    return undefined;
+  }
+
+  return `Browd interface language is ${languageName}. Prefer ${languageName} for user-facing replies unless the current user task explicitly asks for another language.`;
+}
+
+function mergeSystemInstructions(...instructions: Array<string | undefined>) {
+  return instructions
+    .map(instruction => instruction?.trim())
+    .filter((instruction): instruction is string => Boolean(instruction))
+    .join('\n\n');
+}
 
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(error => {
   logger.error('Failed to configure side panel behavior:', error);
@@ -326,6 +352,7 @@ async function setupExecutor(taskId: string, task: string, browserContext: Brows
   }
 
   const generalSettings = await generalSettingsStore.getSettings();
+  const interfaceLanguageInstruction = getInterfaceLanguageInstruction(generalSettings.interfaceLanguage);
   browserContext.updateConfig({
     minimumWaitPageLoadTime: generalSettings.minWaitPageLoad / 1000.0,
     displayHighlights: generalSettings.displayHighlights,
@@ -334,8 +361,8 @@ async function setupExecutor(taskId: string, task: string, browserContext: Brows
   const executor = new Executor(task, taskId, browserContext, navigatorLLM, {
     plannerLLM: plannerLLM ?? navigatorLLM,
     agentSystemPrompts: {
-      planner: plannerModel?.systemPrompt,
-      navigator: navigatorModel.systemPrompt,
+      planner: mergeSystemInstructions(interfaceLanguageInstruction, plannerModel?.systemPrompt),
+      navigator: mergeSystemInstructions(interfaceLanguageInstruction, navigatorModel.systemPrompt),
     },
     agentOptions: {
       maxSteps: generalSettings.maxSteps,

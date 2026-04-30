@@ -334,7 +334,6 @@
   "options_models_providers_custom_name_placeholder": {
     "message": "Nome do provedor"
   },
-
   "options_models_providers_apiKey": {
     "message": "Chave de API"
   },
@@ -353,21 +352,18 @@
   "options_models_providers_apiKey_show": {
     "message": "Mostrar chave de API"
   },
-
   "options_models_selection_header": {
     "message": "Seleção de Modelo"
   },
   "options_models_speechToText_header": {
     "message": "Modelo de Fala para Texto"
   },
-
   "options_models_agents_navigator": {
     "message": "Navega em sites e executa ações"
   },
   "options_models_agents_planner": {
     "message": "Desenvolve e refina estratégias para completar tarefas"
   },
-
   "options_models_labels_model": {
     "message": "Modelo"
   },
@@ -384,10 +380,10 @@
     "message": "Prompt do Sistema"
   },
   "options_models_systemPrompt_placeholder": {
-    "message": "Exemplo: Sempre responda em russo. Seja conciso. Atue como um assistente de pesquisa cuidadoso."
+    "message": "Exemplo: Responda no mesmo idioma da interface do Browd. Seja conciso. Atue como um assistente de pesquisa cuidadoso."
   },
   "options_models_systemPrompt_desc": {
-    "message": "Instruções persistentes opcionais para função, estilo ou idioma de resposta deste agente."
+    "message": "Instruções persistentes opcionais para função, estilo ou idioma de resposta deste agente. O idioma selecionado da interface também é enviado ao agente."
   },
   "options_models_stt_desc": {
     "message": "Configure o provedor/modelo usado para fala em texto no microfone. Gemini funciona diretamente, OpenRouter requer um modelo de chat com entrada de áudio e Grok usa a API dedicada de STT da xAI."
@@ -464,7 +460,6 @@
       }
     }
   },
-
   "options_firewall_header": {
     "message": "Firewall"
   },
@@ -501,7 +496,6 @@
   "options_firewall_howItWorks": {
     "message": "O firewall contém uma lista de negações e uma lista de permissões.\nSe ambas as listas estiverem vazias, todos os URLs são permitidos\nA lista de negações tem prioridade - se um URL corresponder a qualquer entrada da lista de negações, ele será bloqueado\nQuando a lista de permissões está vazia, todos os URLs não negados são permitidos\nQuando a lista de permissões não está vazia, apenas os URLs correspondentes são permitidos\nCuringas ainda NÃO são suportados\nA lista de permissões é preferível à lista de negações"
   },
-
   "bg_errors_noTabId": {
     "message": "Nenhum ID de aba fornecido"
   },
@@ -601,7 +595,6 @@
   "exec_replay_historyEmpty": {
     "message": "O histórico está vazio"
   },
-
   "act_searchGoogle_start": {
     "message": "Procurando por \"$QUERY$\" no Google",
     "placeholders": {
@@ -1020,5 +1013,17 @@
         "example": "Opção não encontrada"
       }
     }
+  },
+  "options_general_language_es": {
+    "message": "Espanhol"
+  },
+  "options_general_language_fr": {
+    "message": "Francês"
+  },
+  "options_general_language_de": {
+    "message": "Alemão"
+  },
+  "options_general_language_ptBR": {
+    "message": "Português (Brasil)"
   }
 }

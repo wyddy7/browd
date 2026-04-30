@@ -1,20 +1,20 @@
 {
   "app_metadata_description": {
     "description": "Extension description",
-    "message": "使用 AI 自動化網頁任務！Browd 是一款開放原始碼的瀏覽器代理擴充功能，能協助您擷取資料、填寫表單等。"
+    "message": "Automate web tasks with AI. Browd is an open-source browser extension for local browser agents, data extraction, form filling, and more."
   },
   "app_metadata_name": {
     "description": "Extension name",
-    "message": "Browd：AI 瀏覽器代理程式"
+    "message": "Browd: AI Browser Agent"
   },
   "errors_unknown": {
-    "message": "發生未知錯誤"
+    "message": "Unknown error occurred"
   },
   "errors_conn_serviceWorker": {
-    "message": "連線至 Service Worker 失敗"
+    "message": "Failed to connect to service worker"
   },
   "errors_cmd_unknown": {
-    "message": "不支援的指令：$COMMAND$。\n\n可用指令：/state、/nohighlight、/replay <historySessionId>",
+    "message": "Unsupported command: $COMMAND$.\n\nAvailable commands: /state, /nohighlight, /replay <historySessionId>",
     "placeholders": {
       "command": {
         "content": "$1",
@@ -23,97 +23,97 @@
     }
   },
   "nav_newChat_a11y": {
-    "message": "新對話"
+    "message": "New Chat"
   },
   "nav_loadHistory_a11y": {
-    "message": "載入歷史紀錄"
+    "message": "Load History"
   },
   "nav_settings_a11y": {
-    "message": "設定"
+    "message": "Settings"
   },
   "nav_back": {
-    "message": "← 返回"
+    "message": "← Back"
   },
   "nav_back_a11y": {
-    "message": "回到對話"
+    "message": "Back to chat"
   },
   "welcome_title": {
-    "message": "歡迎使用 Browd！"
+    "message": "Welcome to Browd!"
   },
   "welcome_instruction": {
-    "message": "開始使用前，請先完成 API 金鑰的設定。"
+    "message": "To get started, please configure your API keys in the settings page."
   },
   "welcome_openSettings": {
-    "message": "開啟設定"
+    "message": "Open Settings"
   },
   "welcome_quickStart": {
-    "message": "快速入門指南"
+    "message": "Quick Start Guide"
   },
   "welcome_joinCommunity": {
-    "message": "查看 GitHub"
+    "message": "View GitHub"
   },
   "status_checkingConfig": {
-    "message": "正在檢查設定..."
+    "message": "Checking configuration..."
   },
   "chat_buttons_stop": {
-    "message": "停止"
+    "message": "Stop"
   },
   "chat_buttons_replay": {
-    "message": "重播"
+    "message": "Replay"
   },
   "chat_buttons_send": {
-    "message": "傳送"
+    "message": "Send"
   },
   "chat_input_placeholder": {
-    "message": "有什麼需要協助的嗎？"
+    "message": "What can I help you with?"
   },
   "chat_input_form": {
-    "message": "對話輸入表單"
+    "message": "Chat input form"
   },
   "chat_input_editor": {
-    "message": "訊息輸入"
+    "message": "Message input"
   },
   "chat_history_title": {
-    "message": "對話歷史紀錄"
+    "message": "Chat History"
   },
   "chat_history_empty": {
-    "message": "沒有可用的對話歷史紀錄"
+    "message": "No chat history available"
   },
   "chat_history_bookmark": {
-    "message": "將工作階段加入書籤"
+    "message": "Bookmark session"
   },
   "chat_history_delete": {
-    "message": "刪除工作階段"
+    "message": "Delete session"
   },
   "chat_bookmarks_header": {
-    "message": "快速入門"
+    "message": "Quick Start"
   },
   "chat_bookmarks_description": {
-    "message": "使用已儲存的提示，或建立你自己的起始提示。"
+    "message": "Use a saved prompt or create your own starter."
   },
   "chat_bookmarks_new": {
-    "message": "新增"
+    "message": "New"
   },
   "chat_bookmarks_saveEdit": {
-    "message": "儲存變更"
+    "message": "Save changes"
   },
   "chat_bookmarks_cancelEdit": {
-    "message": "取消變更"
+    "message": "Cancel changes"
   },
   "chat_bookmarks_edit": {
-    "message": "編輯書籤標題"
+    "message": "Edit bookmark title"
   },
   "chat_bookmarks_delete": {
-    "message": "刪除書籤"
+    "message": "Delete bookmark"
   },
   "chat_bookmarks_titlePlaceholder": {
-    "message": "標題"
+    "message": "Title"
   },
   "chat_bookmarks_contentPlaceholder": {
-    "message": "描述你想重複使用的任務。"
+    "message": "Describe the task you want to reuse."
   },
   "chat_replay_starting": {
-    "message": "開始重播任務：\n\n\"$TASK$\"",
+    "message": "Starting replay of task:\n\n\"$TASK$\"",
     "placeholders": {
       "task": {
         "content": "$1",
@@ -122,7 +122,7 @@
     }
   },
   "chat_replay_failed": {
-    "message": "重播失敗：$ERROR_MESSAGE$",
+    "message": "Replay failed: $ERROR_MESSAGE$",
     "placeholders": {
       "error_message": {
         "content": "$1",
@@ -131,13 +131,13 @@
     }
   },
   "chat_replay_invalidArgs": {
-    "message": "參數無效。請使用此格式：/replay <historySessionId>"
+    "message": "Invalid arguments. Please use the format: /replay <historySessionId>"
   },
   "chat_replay_disabled": {
-    "message": "重播功能已在一般設定中停用。請在擴充功能的設定中啟用 \"重播歷史任務\" 以使用此功能。"
+    "message": "Replay is disabled in general settings. Please enable \"Replay Historical Tasks\" in the extension settings to use this feature."
   },
   "chat_replay_noHistory": {
-    "message": "找不到工作階段 \"$SESSION_ID$...\" 的操作歷史紀錄。此工作階段可能未包含可重播的操作。\n\n這可能是因為它本身就是一個重播工作階段 (重播工作階段無法再次重播)，或是在此功能推出之前所建立的。",
+    "message": "No action history found for session \"$SESSION_ID$...\". This session may not contain replayable actions.\n\nIt's a replay session itself (replay sessions cannot be replayed again), or it was created before the replay feature was available.",
     "placeholders": {
       "session_id": {
         "content": "$1",
@@ -146,313 +146,313 @@
     }
   },
   "chat_stt_processing": {
-    "message": "正在處理語音..."
+    "message": "Processing speech..."
   },
   "chat_stt_recording_stop": {
-    "message": "停止錄音"
+    "message": "Stop recording"
   },
   "chat_stt_input_start": {
-    "message": "開始語音輸入"
+    "message": "Start voice input"
   },
   "chat_stt_processingFailed": {
-    "message": "處理語音輸入失敗"
+    "message": "Failed to process speech recording"
   },
   "chat_stt_model_notFound": {
-    "message": "尚未設定受支援的語音轉文字供應商或模型。請在設定中選擇 Gemini、OpenRouter 或 Grok。"
+    "message": "No supported speech-to-text provider/model configured. Choose a Gemini, OpenRouter, or Grok option in settings."
   },
   "chat_stt_recognitionFailed": {
-    "message": "語音辨識失敗"
+    "message": "Speech recognition failed"
   },
   "chat_stt_microphone_permissionDenied": {
-    "message": "麥克風存取遭拒。請在瀏覽器設定中啟用麥克風權限。"
+    "message": "Microphone access denied. Please enable microphone permissions in browser settings."
   },
   "chat_stt_microphone_accessFailed": {
-    "message": "無法存取麥克風。"
+    "message": "Failed to access microphone. "
   },
   "chat_stt_microphone_grantPermission": {
-    "message": "請授予麥克風權限。"
+    "message": "Please grant microphone permission."
   },
   "chat_stt_microphone_notFound": {
-    "message": "找不到麥克風。"
+    "message": "No microphone found."
   },
   "permissions_microphone_title": {
-    "message": "啟用語音輸入"
+    "message": "Enable Voice Input"
   },
   "permissions_microphone_description": {
-    "message": "Browd 需要麥克風存取權限，才能將語音轉換為文字。"
+    "message": "Browd needs microphone access to convert your speech to text."
   },
   "permissions_microphone_grantButton": {
-    "message": "授予麥克風權限"
+    "message": "Grant Microphone Permission"
   },
   "permissions_microphone_requesting": {
-    "message": "正在請求麥克風權限..."
+    "message": "Requesting microphone permission..."
   },
   "permissions_microphone_grantedSuccess": {
-    "message": "✅ 已授予麥克風權限！您現在可以使用語音輸入了。"
+    "message": "✅ Microphone permission granted! You can now use voice input."
   },
   "permissions_microphone_grantedButton": {
-    "message": "已授予權限"
+    "message": "Permission Granted"
   },
   "permissions_microphone_denied": {
-    "message": "權限遭拒。"
+    "message": "Permission denied. "
   },
   "permissions_microphone_allowHelp": {
-    "message": "當系統提示授予麥克風存取權限時，請點選 \"允許\" 。"
+    "message": "Please click \"Allow\" when prompted for microphone access."
   },
   "permissions_microphone_notFound": {
-    "message": "找不到麥克風。請檢查您的音訊裝置。"
+    "message": "No microphone found. Please check your audio devices."
   },
   "permissions_microphone_alreadyGranted": {
-    "message": "✅ 已授予麥克風權限！"
+    "message": "✅ Microphone permission already granted!"
   },
   "permissions_microphone_alreadyGrantedButton": {
-    "message": "已授予權限"
+    "message": "Permission Already Granted"
   },
   "options_nav_header": {
-    "message": "設定"
+    "message": "Paramètres"
   },
   "options_tabs_general": {
-    "message": "一般"
+    "message": "Général"
   },
   "options_tabs_models": {
-    "message": "模型"
+    "message": "Modèles"
   },
   "options_tabs_firewall": {
-    "message": "防火牆"
+    "message": "Pare-feu"
   },
   "options_tabs_help": {
-    "message": "說明"
+    "message": "Aide"
   },
   "options_general_header": {
-    "message": "一般"
+    "message": "Général"
   },
   "options_general_theme": {
-    "message": "外觀主題"
+    "message": "Thème d’apparence"
   },
   "options_general_theme_desc": {
-    "message": "選擇 Browd 面板使用的視覺風格"
+    "message": "Choisissez le style visuel utilisé dans les panneaux Browd"
   },
   "options_general_theme_light": {
-    "message": "淺色"
+    "message": "Clair"
   },
   "options_general_theme_dark": {
-    "message": "深色"
+    "message": "Sombre"
   },
   "options_general_language": {
-    "message": "介面語言"
+    "message": "Langue de l’interface"
   },
   "options_general_language_desc": {
-    "message": "選擇 Browd 設定與面板使用的語言"
+    "message": "Choisissez la langue utilisée dans les paramètres et panneaux Browd"
   },
   "options_general_language_system": {
-    "message": "系統"
+    "message": "Système"
   },
   "options_general_language_en": {
-    "message": "英文"
+    "message": "Anglais"
   },
   "options_general_language_ru": {
-    "message": "俄文"
+    "message": "Russe"
   },
   "options_general_maxSteps": {
-    "message": "單一任務的步驟上限"
+    "message": "Max Steps per Task"
   },
   "options_general_maxSteps_desc": {
-    "message": "限制單一任務的步驟數量"
+    "message": "Step limit per task"
   },
   "options_general_maxActions": {
-    "message": "單一步驟的動作上限"
+    "message": "Max Actions per Step"
   },
   "options_general_maxActions_desc": {
-    "message": "限制單一步驟的動作數量"
+    "message": "Action limit per step"
   },
   "options_general_maxFailures": {
-    "message": "連續失敗容許次數"
+    "message": "Failure Tolerance"
   },
   "options_general_maxFailures_desc": {
-    "message": "在停止執行前，可容許的連續失敗次數"
+    "message": "How many consecutive failures before stopping"
   },
   "options_general_enableVision": {
-    "message": "啟用視覺能力"
+    "message": "Enable Vision"
   },
   "options_general_enableVision_desc": {
-    "message": "使用大型語言模型的視覺能力 (將會消耗更多的 token 以取得更好的結果)"
+    "message": "Use vision capability of LLMs (consumes more tokens for better results)"
   },
   "options_general_displayHighlights": {
-    "message": "顯示醒目標示"
+    "message": "Display Highlights"
   },
   "options_general_displayHighlights_desc": {
-    "message": "在可互動的元素 (如按鈕、連結等) 上顯示視覺化醒目標示"
+    "message": "Show visual highlights on interactive elements (e.g. buttons, links, etc.)"
   },
   "options_general_planningInterval": {
-    "message": "重新規劃頻率"
+    "message": "Replanning Frequency"
   },
   "options_general_planningInterval_desc": {
-    "message": "每隔 [Number] 個步驟重新評估並更新計畫"
+    "message": "Reconsider and update the plan every [Number] steps"
   },
   "options_general_minWaitPageLoad": {
-    "message": "頁面載入等候時間"
+    "message": "Page Load Wait Time"
   },
   "options_general_minWaitPageLoad_desc": {
-    "message": "頁面載入後的最短等候時間 (250-5000 毫秒)"
+    "message": "Minimum wait time after page loads (250-5000ms)"
   },
   "options_general_replayHistoricalTasks": {
-    "message": "重播歷史任務（實驗性功能）"
+    "message": "Replay Historical Tasks( experimental )"
   },
   "options_general_replayHistoricalTasks_desc": {
-    "message": "啟用儲存與重播代理程式的步驟歷史紀錄 (此為實驗性功能，可能存在問題)"
+    "message": "Enable storing and replaying of agent step history (experimental, may have issues)"
   },
   "options_general_launchShortcut": {
-    "message": "瀏覽器快捷鍵"
+    "message": "Browser Shortcut"
   },
   "options_general_launchShortcut_desc": {
-    "message": "可靠的啟動快捷鍵由瀏覽器管理。預設為 Ctrl+E，而在 macOS 上是 Command+E。請到瀏覽器快捷鍵設定中修改。"
+    "message": "Reliable launch shortcuts are managed by the browser. Default is Ctrl+E, and Command+E on macOS. Change it in browser shortcut settings."
   },
   "options_models_providers_header": {
-    "message": "LLM 提供者"
+    "message": "LLM Providers"
   },
   "options_models_providers_notConfigured": {
-    "message": "尚未設定任何提供者。請新增一個提供者以開始使用。"
+    "message": "No providers configured yet. Add a provider to get started."
   },
   "options_models_providers_btnCancel": {
-    "message": "取消"
+    "message": "Cancel"
   },
   "options_models_providers_btnSave": {
-    "message": "儲存"
+    "message": "Save"
   },
   "options_models_providers_btnDelete": {
-    "message": "刪除"
+    "message": "Delete"
   },
   "options_models_providers_setupInstructions": {
-    "message": "請輸入您的 API 金鑰，然後點選 [儲存] 進行設定。"
+    "message": "Enter your API key and click Save to set it up."
   },
   "options_models_providers_custom_name": {
-    "message": "名稱"
+    "message": "Name"
   },
   "options_models_providers_custom_name_desc": {
-    "message": "提供者名稱 (儲存時不允許使用空格)"
+    "message": "Provider name (spaces are not allowed when saving)"
   },
   "options_models_providers_custom_name_placeholder": {
-    "message": "提供者名稱"
+    "message": "Provider name"
   },
   "options_models_providers_apiKey": {
-    "message": "API 金鑰"
+    "message": "API Key"
   },
   "options_models_providers_apiKey_placeholder_optional": {
-    "message": "API 金鑰 (選填)"
+    "message": "API Key (optional)"
   },
   "options_models_providers_apiKey_placeholder_required": {
-    "message": "API 金鑰 (必填)"
+    "message": "API Key (required)"
   },
   "options_models_providers_apiKey_placeholder_ollama": {
-    "message": "API 金鑰 (Ollama 可留空)"
+    "message": "API Key (leave empty for Ollama)"
   },
   "options_models_providers_apiKey_hide": {
-    "message": "隱藏 API 金鑰"
+    "message": "Hide API key"
   },
   "options_models_providers_apiKey_show": {
-    "message": "顯示 API 金鑰"
+    "message": "Show API key"
   },
   "options_models_selection_header": {
-    "message": "模型選擇"
+    "message": "Sélection du modèle"
   },
   "options_models_speechToText_header": {
-    "message": "語音轉文字模型"
+    "message": "Modèle parole-texte"
   },
   "options_models_agents_navigator": {
-    "message": "瀏覽網站並執行操作"
+    "message": "Navigue sur les sites et effectue des actions"
   },
   "options_models_agents_planner": {
-    "message": "制定並調整策略以完成任務"
+    "message": "Développe et affine des stratégies pour terminer les tâches"
   },
   "options_models_labels_model": {
-    "message": "模型"
+    "message": "Modèle"
   },
   "options_models_labels_temperature": {
-    "message": "溫度"
+    "message": "Température"
   },
   "options_models_labels_topP": {
     "message": "Top P"
   },
   "options_models_labels_reasoning": {
-    "message": "推理"
+    "message": "Raisonnement"
   },
   "options_models_labels_systemPrompt": {
-    "message": "系統提示"
+    "message": "Prompt système"
   },
   "options_models_systemPrompt_placeholder": {
-    "message": "範例：使用與 Browd 介面相同的語言回答。保持精簡。扮演謹慎的研究助理。"
+    "message": "Exemple : Réponds dans la même langue que l’interface Browd. Sois concis. Agis comme un assistant de recherche attentif."
   },
   "options_models_systemPrompt_desc": {
-    "message": "此代理的角色、風格或回覆語言的選填持久指令。選取的介面語言也會傳給代理。"
+    "message": "Instructions persistantes facultatives pour le rôle, le style ou la langue de réponse de cet agent. La langue d’interface sélectionnée est aussi transmise à l’agent."
   },
   "options_models_stt_desc": {
-    "message": "設定麥克風語音轉文字所使用的供應商與模型。Gemini 可直接使用，OpenRouter 需要支援音訊輸入的聊天模型，Grok 則使用 xAI 專用 STT API。"
+    "message": "Configure the provider/model used for microphone speech-to-text. Gemini works directly, OpenRouter requires an audio-input chat model, and Grok uses xAI's dedicated STT API."
   },
   "options_models_chooseModel": {
-    "message": "選擇模型"
+    "message": "Choisir un modèle"
   },
   "options_models_addNewProvider": {
-    "message": "新增提供者"
+    "message": "Ajouter un fournisseur"
   },
   "options_models_providers_openaiCompatible": {
-    "message": "與 OpenAI 相容的 API 提供者"
+    "message": "OpenAI-compatible API Provider"
   },
   "options_models_providers_baseUrl": {
-    "message": "基礎 URL"
+    "message": "Base URL"
   },
   "options_models_providers_endpoint": {
-    "message": "端點"
+    "message": "Endpoint"
   },
   "options_models_providers_deployment": {
-    "message": "部署"
+    "message": "Deployment"
   },
   "options_models_providers_apiVersion": {
-    "message": "API 版本"
+    "message": "API Version"
   },
   "options_models_providers_models": {
-    "message": "模型"
+    "message": "Models"
   },
   "options_models_providers_placeholders_baseUrl_custom": {
-    "message": "必須提供與 OpenAI 相容的 API 端點"
+    "message": "Required OpenAI-compatible API endpoint"
   },
   "options_models_providers_placeholders_baseUrl_azure": {
     "message": "https://YOUR_RESOURCE_NAME.openai.azure.com/"
   },
   "options_models_providers_placeholders_baseUrl_openrouter": {
-    "message": "OpenRouter 基礎 URL (選填，預設為 https://openrouter.ai/api/v1)"
+    "message": "OpenRouter Base URL (optional, defaults to https://openrouter.ai/api/v1)"
   },
   "options_models_providers_placeholders_baseUrl_llama": {
-    "message": "Llama API 基礎 URL (預設為 https://api.llama.com/v1)"
+    "message": "Llama API Base URL (defaults to https://api.llama.com/v1)"
   },
   "options_models_providers_placeholders_baseUrl_ollama": {
-    "message": "Ollama 基礎 URL"
+    "message": "Ollama base URL"
   },
   "options_models_providers_placeholders_azureDeployment": {
-    "message": "請輸入 Azure 模型的部署名稱 (例如 gpt-4o, gpt-4o-mini)"
+    "message": "Enter Azure model name (e.g. gpt-4o, gpt-4o-mini)"
   },
   "options_models_providers_placeholders_azureApiVersion": {
-    "message": "例如：2025-04-01-preview"
+    "message": "e.g., 2025-04-01-preview"
   },
   "options_models_providers_deployment_desc": {
-    "message": "輸入模型名稱後，按下 Enter 或空格鍵以完成設定。為獲得最佳的相容性，部署名稱建議與 OpenAI 的模型名稱 (例如 gpt-4o) 保持一致。"
+    "message": "Type model name and press Enter or Space to set. Deployment name should match OpenAI model name (e.g., gpt-4o) for best compatibility."
   },
   "options_models_providers_models_instructions": {
-    "message": "輸入後按下 Enter 或空格鍵以新增。"
+    "message": "Type and Press Enter or Space to add."
   },
   "options_models_providers_models_openrouter_empty": {
-    "message": "未選擇任何模型。如有需要，請手動新增模型名稱。"
+    "message": "No models selected. Add model names manually if needed."
   },
   "options_models_providers_ollama_reminder": {
-    "message": "請務必為 Ollama 伺服器設定環境變數。"
+    "message": "environment variable MUST be set for the Ollama server."
   },
   "options_models_providers_ollama_learnMore": {
-    "message": "深入瞭解"
+    "message": "Learn more"
   },
   "options_models_providers_errors_spacesNotAllowed": {
-    "message": "提供者名稱不允許使用空格。請改用底線或其他字元。"
+    "message": "Spaces are not allowed in provider names. Please use underscores or other characters instead."
   },
   "options_models_providers_errors_baseUrlRequired": {
-    "message": "必須為 $PROVIDER$ 提供基礎 URL，請手動輸入。",
+    "message": "Base URL is required for $PROVIDER$. Please enter it.",
     "placeholders": {
       "provider": {
         "content": "$1",
@@ -461,88 +461,88 @@
     }
   },
   "options_firewall_header": {
-    "message": "防火牆"
+    "message": "Firewall"
   },
   "options_firewall_enableToggle": {
-    "message": "啟用防火牆"
+    "message": "Enable Firewall"
   },
   "options_firewall_toggleFirewall_a11y": {
-    "message": "切換防火牆"
+    "message": "Toggle Firewall"
   },
   "options_firewall_allowList_header": {
-    "message": "允許清單"
+    "message": "Allow List"
   },
   "options_firewall_allowList_empty": {
-    "message": "允許清單中沒有網域。若允許清單為空，則表示所有未在拒絕清單中的網域都將被允許。"
+    "message": "No domains in allow list. Empty allow list means all non-denied domains are allowed."
   },
   "options_firewall_denyList_header": {
-    "message": "拒絕清單"
+    "message": "Deny List"
   },
   "options_firewall_denyList_empty": {
-    "message": "拒絕清單中沒有網域"
+    "message": "No domains in deny list"
   },
   "options_firewall_placeholders_domainUrl": {
-    "message": "請輸入網域或 URL (例如 example.com, localhost, 127.0.0.1)"
+    "message": "Enter domain or URL (e.g. example.com, localhost, 127.0.0.1)"
   },
   "options_firewall_btnAdd": {
-    "message": "新增"
+    "message": "Add"
   },
   "options_firewall_btnRemove": {
-    "message": "移除"
+    "message": "Remove"
   },
   "options_firewall_howItWorks_header": {
-    "message": "防火牆運作原理"
+    "message": "How the Firewall Works"
   },
   "options_firewall_howItWorks": {
-    "message": "防火牆包含一個拒絕清單和一個允許清單。\n- 如果兩個清單都為空，則允許所有 URL。\n- 拒絕清單具有較高優先順序。如果一個 URL 符合任何拒絕清單中的項目，它將被封鎖。\n- 當允許清單為空時，所有未被拒絕的 URL 都會被允許。\n- 當允許清單不為空時，只有符合清單中項目的 URL 才被允許。\n- 目前尚不支援萬用字元。\n- 建議優先使用允許清單，而非拒絕清單。"
+    "message": "The firewall contains a deny list and an allow list.\nIf both lists are empty, all URLs are allowed\nDeny list takes priority - if a URL matches any deny list entry, it's blocked\nWhen allow list is empty, all non-denied URLs are allowed\nWhen allow list is not empty, only matching URLs are allowed\nWildcards are NOT supported yet\nAllow list is preferred over deny list"
   },
   "bg_errors_noTabId": {
-    "message": "未提供分頁 ID"
+    "message": "No tab ID provided"
   },
   "bg_errors_noTaskId": {
-    "message": "未提供任務 ID"
+    "message": "No task ID provided"
   },
   "bg_errors_noRunningTask": {
-    "message": "沒有執行中的任務"
+    "message": "No running task"
   },
   "bg_cmd_newTask_noTask": {
-    "message": "未提供任務"
+    "message": "No task provided"
   },
   "bg_cmd_followUpTask_noTask": {
-    "message": "未提供後續任務"
+    "message": "No follow up task provided"
   },
   "bg_cmd_followUpTask_cleaned": {
-    "message": "執行器已被清理，無法新增後續任務。"
+    "message": "Executor was cleaned up, can not add follow-up task"
   },
   "bg_cmd_resumeTask_noTask": {
-    "message": "沒有可接續的任務。"
+    "message": "No task to resume"
   },
   "bg_cmd_state_printed": {
-    "message": "狀態已輸出至控制台。"
+    "message": "State printed to console"
   },
   "bg_cmd_state_failed": {
-    "message": "無法取得狀態"
+    "message": "Failed to get state"
   },
   "bg_cmd_nohighlight_ok": {
-    "message": "醒目標示已移除。"
+    "message": "highlight removed"
   },
   "bg_cmd_stt_noAudioData": {
-    "message": "未提供音訊資料"
+    "message": "No audio data provided"
   },
   "bg_cmd_stt_failed": {
-    "message": "語音辨識失敗"
+    "message": "Speech recognition failed"
   },
   "bg_cmd_replay_noHistory": {
-    "message": "未提供歷史工作階段 ID。"
+    "message": "No history session ID provided"
   },
   "bg_cmd_replay_failed": {
-    "message": "重播失敗"
+    "message": "Replay failed"
   },
   "bg_setup_noApiKeys": {
-    "message": "請先在設定頁面中完成 API 金鑰的設定。"
+    "message": "Please configure API keys in the settings first"
   },
   "bg_setup_noProvider": {
-    "message": "在設定中找不到提供者 $PROVIDER$。",
+    "message": "Provider $PROVIDER$ not found in the settings",
     "placeholders": {
       "provider": {
         "content": "$1",
@@ -551,22 +551,22 @@
     }
   },
   "bg_setup_noNavigatorModel": {
-    "message": "請先在設定中為導覽代理程式選擇一個模型。"
+    "message": "Please choose a model for the navigator in the settings first"
   },
   "exec_errors_maxStepsReached": {
-    "message": "已達步驟上限"
+    "message": "Max steps reached"
   },
   "exec_errors_maxFailuresReached": {
-    "message": "已達失敗次數上限。"
+    "message": "Max failures reached"
   },
   "exec_task_cancel": {
-    "message": "任務已取消"
+    "message": "Task cancelled"
   },
   "exec_task_pause": {
-    "message": "任務已暫停"
+    "message": "Task paused"
   },
   "exec_task_fail": {
-    "message": "任務失敗：\n\n$ERROR_MESSAGE$",
+    "message": "Task failed: \n\n$ERROR_MESSAGE$",
     "placeholders": {
       "error_message": {
         "content": "$1",
@@ -575,13 +575,13 @@
     }
   },
   "exec_replay_cancel": {
-    "message": "重播已取消"
+    "message": "Replay cancelled"
   },
   "exec_replay_ok": {
-    "message": "重播已完成"
+    "message": "Replay completed"
   },
   "exec_replay_fail": {
-    "message": "重播失敗：\n\n$ERROR_MESSAGE$",
+    "message": "Replay failed: \n\n$ERROR_MESSAGE$",
     "placeholders": {
       "error_message": {
         "content": "$1",
@@ -590,13 +590,13 @@
     }
   },
   "exec_replay_historyNotFound": {
-    "message": "找不到歷史紀錄"
+    "message": "History not found"
   },
   "exec_replay_historyEmpty": {
-    "message": "歷史紀錄為空"
+    "message": "History is empty"
   },
   "act_searchGoogle_start": {
-    "message": "正在 Google 上搜尋 \"$QUERY$\"",
+    "message": "Searching for \"$QUERY$\" in Google",
     "placeholders": {
       "query": {
         "content": "$1",
@@ -605,7 +605,7 @@
     }
   },
   "act_searchGoogle_ok": {
-    "message": "已在 Google 上搜尋 \"$QUERY$\"",
+    "message": "Searched for \"$QUERY$\" in Google",
     "placeholders": {
       "query": {
         "content": "$1",
@@ -614,7 +614,7 @@
     }
   },
   "act_goToUrl_start": {
-    "message": "正在前往 $URL$",
+    "message": "Navigating to $URL$",
     "placeholders": {
       "url": {
         "content": "$1",
@@ -623,7 +623,7 @@
     }
   },
   "act_goToUrl_ok": {
-    "message": "已前往 $URL$",
+    "message": "Navigated to $URL$",
     "placeholders": {
       "url": {
         "content": "$1",
@@ -632,13 +632,13 @@
     }
   },
   "act_goBack_start": {
-    "message": "正在回到上一頁"
+    "message": "Navigating back"
   },
   "act_goBack_ok": {
-    "message": "已回到上一頁"
+    "message": "Navigated back"
   },
   "act_wait_start": {
-    "message": "等待 $SECONDS$ 秒",
+    "message": "Waiting for $SECONDS$ seconds",
     "placeholders": {
       "seconds": {
         "content": "$1",
@@ -647,7 +647,7 @@
     }
   },
   "act_wait_ok": {
-    "message": "已等候 $SECONDS$ 秒",
+    "message": "$SECONDS$ seconds elapsed",
     "placeholders": {
       "seconds": {
         "content": "$1",
@@ -656,7 +656,7 @@
     }
   },
   "act_click_start": {
-    "message": "正在點選索引為 $INDEX$ 的元素",
+    "message": "Click element with index $INDEX$",
     "placeholders": {
       "index": {
         "content": "$1",
@@ -665,7 +665,7 @@
     }
   },
   "act_errors_elementNotExist": {
-    "message": "索引為 $INDEX$ 的元素不存在，請重試或改用其他操作",
+    "message": "Element with index $INDEX$ does not exist - retry or use alternative actions",
     "placeholders": {
       "index": {
         "content": "$1",
@@ -674,7 +674,7 @@
     }
   },
   "act_errors_elementNoLongerAvailable": {
-    "message": "索引為 $INDEX$ 的元素已無法使用，頁面可能已變更",
+    "message": "Element no longer available with index $INDEX$ - most likely the page changed",
     "placeholders": {
       "index": {
         "content": "$1",
@@ -683,7 +683,7 @@
     }
   },
   "act_click_fileUploader": {
-    "message": "索引 $INDEX$ 的元素會開啟檔案上傳對話方塊。如需上傳檔案，請使用指定的檔案上傳功能。",
+    "message": "Index $INDEX$ - has an element which opens file upload dialog. To upload files please use a specific function to upload files",
     "placeholders": {
       "index": {
         "content": "$1",
@@ -692,7 +692,7 @@
     }
   },
   "act_click_ok": {
-    "message": "已點選索引為 $INDEX$ 的按鈕：$TEXT$",
+    "message": "Clicked button with index $INDEX$: $TEXT$",
     "placeholders": {
       "index": {
         "content": "$1",
@@ -705,10 +705,10 @@
     }
   },
   "act_click_newTabOpened": {
-    "message": "已開啟新分頁，正在切換至該分頁"
+    "message": "New tab opened - switching to it"
   },
   "act_inputText_start": {
-    "message": "正在於索引為 $INDEX$ 的欄位中輸入文字",
+    "message": "Input text into index $INDEX$",
     "placeholders": {
       "index": {
         "content": "$1",
@@ -717,7 +717,7 @@
     }
   },
   "act_inputText_ok": {
-    "message": "已將 \"$TEXT$\" 輸入至索引為 $INDEX$ 的欄位",
+    "message": "Input $TEXT$ into index $INDEX$",
     "placeholders": {
       "text": {
         "content": "$1",
@@ -730,7 +730,7 @@
     }
   },
   "act_switchTab_start": {
-    "message": "正在切換至分頁 $TAB_ID$",
+    "message": "Switching to tab $TAB_ID$",
     "placeholders": {
       "tab_id": {
         "content": "$1",
@@ -739,7 +739,7 @@
     }
   },
   "act_switchTab_ok": {
-    "message": "已切換至分頁 $TAB_ID$",
+    "message": "Switched to tab $TAB_ID$",
     "placeholders": {
       "tab_id": {
         "content": "$1",
@@ -748,7 +748,7 @@
     }
   },
   "act_openTab_start": {
-    "message": "在新分頁開啟 $URL$",
+    "message": "Opening $URL$ in new tab",
     "placeholders": {
       "url": {
         "content": "$1",
@@ -757,7 +757,7 @@
     }
   },
   "act_openTab_ok": {
-    "message": "已在新分頁開啟 $URL$",
+    "message": "Opened $URL$ in new tab",
     "placeholders": {
       "url": {
         "content": "$1",
@@ -766,7 +766,7 @@
     }
   },
   "act_closeTab_start": {
-    "message": "正在關閉分頁 $TAB_ID$",
+    "message": "Closing tab $TAB_ID$",
     "placeholders": {
       "tab_id": {
         "content": "$1",
@@ -775,7 +775,7 @@
     }
   },
   "act_closeTab_ok": {
-    "message": "已關閉分頁 $TAB_ID$",
+    "message": "Closed tab $TAB_ID$",
     "placeholders": {
       "tab_id": {
         "content": "$1",
@@ -784,7 +784,7 @@
     }
   },
   "act_cache_start": {
-    "message": "正在快取結果：$CONTENT$",
+    "message": "Caching findings: $CONTENT$",
     "placeholders": {
       "content": {
         "content": "$1",
@@ -793,7 +793,7 @@
     }
   },
   "act_cache_ok": {
-    "message": "已快取結果：$CONTENT$",
+    "message": "Cached findings: $CONTENT$",
     "placeholders": {
       "content": {
         "content": "$1",
@@ -802,7 +802,7 @@
     }
   },
   "act_scrollToPercent_start": {
-    "message": "正在捲動至 $PERCENT$ 百分比位置",
+    "message": "Scroll to percent: $PERCENT$",
     "placeholders": {
       "percent": {
         "content": "$1",
@@ -811,7 +811,7 @@
     }
   },
   "act_scrollToPercent_ok": {
-    "message": "已捲動至 $PERCENT$ 百分比位置",
+    "message": "Scrolled to percent: $PERCENT$",
     "placeholders": {
       "percent": {
         "content": "$1",
@@ -820,31 +820,31 @@
     }
   },
   "act_scrollToTop_start": {
-    "message": "捲動至頂端"
+    "message": "Scroll to top"
   },
   "act_scrollToTop_ok": {
-    "message": "已捲動至頂端"
+    "message": "Scrolled to top"
   },
   "act_scrollToBottom_start": {
-    "message": "捲動至底部"
+    "message": "Scroll to bottom"
   },
   "act_scrollToBottom_ok": {
-    "message": "已捲動至底部"
+    "message": "Scrolled to bottom"
   },
   "act_previousPage_start": {
-    "message": "捲動至上一頁"
+    "message": "Scroll to previous page"
   },
   "act_previousPage_ok": {
-    "message": "已捲動至上一頁"
+    "message": "Scrolled to previous page"
   },
   "act_nextPage_start": {
-    "message": "捲動至下一頁"
+    "message": "Scroll to next page"
   },
   "act_nextPage_ok": {
-    "message": "已捲動至下一頁"
+    "message": "Scrolled to next page"
   },
   "act_errors_alreadyAtTop": {
-    "message": "索引為 $INDEX$ 的元素已在頂端，無法捲動至上一頁",
+    "message": "Element with index $INDEX$ is already at top, cannot scroll to previous page",
     "placeholders": {
       "index": {
         "content": "$1",
@@ -853,10 +853,10 @@
     }
   },
   "act_errors_pageAlreadyAtTop": {
-    "message": "頁面已在頂端，無法捲動至上一頁"
+    "message": "Already at top of page, cannot scroll to previous page"
   },
   "act_errors_alreadyAtBottom": {
-    "message": "索引為 $INDEX$ 的元素已在底部，無法捲動至下一頁",
+    "message": "Element with index $INDEX$ is already at bottom, cannot scroll to next page",
     "placeholders": {
       "index": {
         "content": "$1",
@@ -865,10 +865,10 @@
     }
   },
   "act_errors_pageAlreadyAtBottom": {
-    "message": "頁面已在底部，無法捲動至下一頁"
+    "message": "Already at bottom of page, cannot scroll to next page"
   },
   "act_scrollToText_start": {
-    "message": "正在捲動至文字： \"$TEXT$\" ，第 $OCCURRENCE$ 次出現的位置",
+    "message": "Scroll to text: $TEXT$, occurrence $OCCURRENCE$",
     "placeholders": {
       "text": {
         "content": "$1",
@@ -881,7 +881,7 @@
     }
   },
   "act_scrollToText_ok": {
-    "message": "已捲動至文字： \"$TEXT$\" ，第 $OCCURRENCE$ 次出現的位置",
+    "message": "Scrolled to text: $TEXT$, occurrence $OCCURRENCE$",
     "placeholders": {
       "text": {
         "content": "$1",
@@ -894,7 +894,7 @@
     }
   },
   "act_scrollToText_notFound": {
-    "message": "找不到或看不見文字 \"$TEXT$\" (第 $OCCURRENCE$ 次出現)",
+    "message": "Text '$TEXT$' (occurrence $OCCURRENCE$) not found or not visible",
     "placeholders": {
       "text": {
         "content": "$1",
@@ -907,7 +907,7 @@
     }
   },
   "act_scrollToText_failed": {
-    "message": "捲動至文字失敗：$ERROR$",
+    "message": "Failed to scroll to text: $ERROR$",
     "placeholders": {
       "error": {
         "content": "$1",
@@ -916,7 +916,7 @@
     }
   },
   "act_sendKeys_start": {
-    "message": "傳送按鍵：$KEYS$",
+    "message": "Send keys: $KEYS$",
     "placeholders": {
       "keys": {
         "content": "$1",
@@ -925,7 +925,7 @@
     }
   },
   "act_sendKeys_ok": {
-    "message": "已傳送按鍵：$KEYS$",
+    "message": "Sent keys: $KEYS$",
     "placeholders": {
       "keys": {
         "content": "$1",
@@ -934,7 +934,7 @@
     }
   },
   "act_getDropdownOptions_start": {
-    "message": "正在從索引為 $INDEX$ 的下拉式選單中取得選項",
+    "message": "Getting options from dropdown with index $INDEX$",
     "placeholders": {
       "index": {
         "content": "$1",
@@ -943,10 +943,10 @@
     }
   },
   "act_getDropdownOptions_useExactText": {
-    "message": "請在 select_dropdown_option 中使用完全相符的文字字串"
+    "message": "Use the exact text string in select_dropdown_option"
   },
   "act_getDropdownOptions_ok": {
-    "message": "已從下拉式選單取得 $COUNT$ 個選項",
+    "message": "Got $COUNT$ options from dropdown",
     "placeholders": {
       "count": {
         "content": "$1",
@@ -955,10 +955,10 @@
     }
   },
   "act_getDropdownOptions_noOptions": {
-    "message": "在下拉式選單中找不到任何選項"
+    "message": "No options found in dropdown"
   },
   "act_getDropdownOptions_failed": {
-    "message": "無法取得下拉式選單選項：$ERROR$",
+    "message": "Failed to get dropdown options: $ERROR$",
     "placeholders": {
       "error": {
         "content": "$1",
@@ -967,7 +967,7 @@
     }
   },
   "act_selectDropdownOption_start": {
-    "message": "正在從索引為 $INDEX$ 的下拉式選單中選取 \"$TEXT$\" 選項",
+    "message": "Select option \"$TEXT$\" from dropdown with index $INDEX$",
     "placeholders": {
       "text": {
         "content": "$1",
@@ -980,7 +980,7 @@
     }
   },
   "act_selectDropdownOption_ok": {
-    "message": "已從索引為 $INDEX$ 的下拉式選單中選取 \"$TEXT$\" 選項",
+    "message": "Selected option \"$TEXT$\" from dropdown with index $INDEX$",
     "placeholders": {
       "text": {
         "content": "$1",
@@ -993,7 +993,7 @@
     }
   },
   "act_selectDropdownOption_notSelect": {
-    "message": "無法選取選項：索引為 $INDEX$ 的元素是 $TAG_NAME$ 而非 SELECT 元素",
+    "message": "Cannot select option: Element with index $INDEX$ is a $TAG_NAME$, not a SELECT",
     "placeholders": {
       "index": {
         "content": "$1",
@@ -1006,7 +1006,7 @@
     }
   },
   "act_selectDropdownOption_failed": {
-    "message": "無法選取選項：$ERROR$",
+    "message": "Failed to select option: $ERROR$",
     "placeholders": {
       "error": {
         "content": "$1",
@@ -1015,15 +1015,15 @@
     }
   },
   "options_general_language_es": {
-    "message": "西班牙文"
+    "message": "Espagnol"
   },
   "options_general_language_fr": {
-    "message": "法文"
+    "message": "Français"
   },
   "options_general_language_de": {
-    "message": "德文"
+    "message": "Allemand"
   },
   "options_general_language_ptBR": {
-    "message": "葡萄牙文（巴西）"
+    "message": "Portugais (Brésil)"
   }
 }

@@ -66,7 +66,11 @@ import path from 'node:path';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const locales = fs.readdirSync(path.join(__dirname, 'locales'));
+const locales = fs.readdirSync(path.join(__dirname, 'locales')).sort((left, right) => {
+  if (left === 'en') return -1;
+  if (right === 'en') return 1;
+  return left.localeCompare(right);
+});
 
 locales.forEach(locale => {
   if (!(locale in SUPPORTED_LANGUAGES)) {
@@ -94,7 +98,7 @@ export type DevLocale = ${locales.map(locale => `'${locale}'`).join(' | ')};
 
 function makeGetMessageFromLocaleFile(locales) {
   const defaultLocaleCode = `(() => {
-  const locales = ${JSON.stringify(locales).replace(/"/g, "'" ).replace(/,/g, ', ' )};
+  const locales = ${JSON.stringify(locales).replace(/"/g, "'").replace(/,/g, ', ')};
   const firstLocale = locales[0];
   const defaultLocale = Intl.DateTimeFormat().resolvedOptions().locale.replace('-', '_');
   if (locales.includes(defaultLocale)) {

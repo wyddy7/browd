@@ -307,7 +307,6 @@
   "options_general_launchShortcut_desc": {
     "message": "Reliable launch shortcuts are managed by the browser. Default is Ctrl+E, and Command+E on macOS. Change it in browser shortcut settings."
   },
-
   "options_models_providers_header": {
     "message": "LLM Providers"
   },
@@ -335,7 +334,6 @@
   "options_models_providers_custom_name_placeholder": {
     "message": "Provider name"
   },
-
   "options_models_providers_apiKey": {
     "message": "API Key"
   },
@@ -354,21 +352,18 @@
   "options_models_providers_apiKey_show": {
     "message": "Show API key"
   },
-
   "options_models_selection_header": {
     "message": "Model Selection"
   },
   "options_models_speechToText_header": {
     "message": "Speech-to-Text Model"
   },
-
   "options_models_agents_navigator": {
     "message": "Navigates websites and performs actions"
   },
   "options_models_agents_planner": {
     "message": "Develops and refines strategies to complete tasks"
   },
-
   "options_models_labels_model": {
     "message": "Model"
   },
@@ -385,10 +380,10 @@
     "message": "System Prompt"
   },
   "options_models_systemPrompt_placeholder": {
-    "message": "Example: Always answer in Russian. Be concise. Act as a careful research assistant."
+    "message": "Example: Reply in the same language as the Browd interface. Be concise. Act as a careful research assistant."
   },
   "options_models_systemPrompt_desc": {
-    "message": "Optional persistent instructions for this agent's role, style, or response language."
+    "message": "Optional persistent instructions for this agent's role, style, or response language. The selected interface language is also passed to the agent."
   },
   "options_models_stt_desc": {
     "message": "Configure the provider/model used for microphone speech-to-text. Gemini works directly, OpenRouter requires an audio-input chat model, and Grok uses xAI's dedicated STT API."
@@ -465,7 +460,6 @@
       }
     }
   },
-
   "options_firewall_header": {
     "message": "Firewall"
   },
@@ -502,7 +496,6 @@
   "options_firewall_howItWorks": {
     "message": "The firewall contains a deny list and an allow list.\nIf both lists are empty, all URLs are allowed\nDeny list takes priority - if a URL matches any deny list entry, it's blocked\nWhen allow list is empty, all non-denied URLs are allowed\nWhen allow list is not empty, only matching URLs are allowed\nWildcards are NOT supported yet\nAllow list is preferred over deny list"
   },
-
   "bg_errors_noTabId": {
     "message": "No tab ID provided"
   },
@@ -602,7 +595,6 @@
   "exec_replay_historyEmpty": {
     "message": "History is empty"
   },
-
   "act_searchGoogle_start": {
     "message": "Searching for \"$QUERY$\" in Google",
     "placeholders": {
@@ -1021,5 +1013,17 @@
         "example": "Option not found"
       }
     }
+  },
+  "options_general_language_es": {
+    "message": "Spanish"
+  },
+  "options_general_language_fr": {
+    "message": "French"
+  },
+  "options_general_language_de": {
+    "message": "German"
+  },
+  "options_general_language_ptBR": {
+    "message": "Portuguese (Brazil)"
   }
 }

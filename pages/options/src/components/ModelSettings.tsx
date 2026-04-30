@@ -63,12 +63,12 @@ interface ModelSettingsProps {
 type ModelSelectionTab = AgentNameEnum | 'stt';
 
 const cardClass = 'browd-card p-6 text-left';
-const innerCardClass = 'rounded-lg border border-[var(--browd-border)] bg-[var(--browd-panel-strong)] p-4';
+const innerCardClass = 'rounded-lg border border-[var(--browd-border)] bg-transparent p-4';
 const titleClass = 'mb-4 text-xl font-semibold text-[var(--browd-text)]';
-const fieldLabelClass = 'w-24 text-sm font-medium text-[var(--browd-text)]';
+const fieldLabelClass = 'w-32 shrink-0 text-sm font-medium text-[var(--browd-text)]';
 const narrowFieldLabelClass = 'w-20 text-sm font-medium text-[var(--browd-text)]';
 const fieldInputClass = 'browd-input flex-1 px-3 py-2 text-sm';
-const textareaInputClass = 'browd-input min-h-28 flex-1 resize-y px-3 py-2 text-sm leading-relaxed';
+const textareaInputClass = 'browd-input min-h-28 w-full resize-y px-3 py-2 text-sm leading-relaxed';
 const smallFieldInputClass = 'browd-input w-20 px-2 py-1 text-sm';
 const invalidFieldInputClass =
   'flex-1 rounded-md border border-[var(--browd-danger)] bg-[var(--browd-danger-soft)] p-2 text-sm text-[var(--browd-text)] outline-none focus:border-[var(--browd-danger-hover)] focus:ring-2 focus:ring-[var(--browd-danger-soft)]';
@@ -903,7 +903,7 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
           <label htmlFor={`${agentName}-system-prompt`} className={`${fieldLabelClass} pt-2`}>
             {t('options_models_labels_systemPrompt')}
           </label>
-          <div className="flex-1">
+          <div className="min-w-0 flex-1">
             <textarea
               id={`${agentName}-system-prompt`}
               className={textareaInputClass}
@@ -1769,9 +1769,7 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
               type="button"
               onClick={() => setActiveModelSelectionTab(tab.id)}
               className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-                activeModelSelectionTab === tab.id
-                  ? 'bg-[var(--browd-accent)] text-white'
-                  : 'border border-[var(--browd-border)] bg-[var(--browd-panel-strong)] text-[var(--browd-muted)] hover:text-[var(--browd-text)]'
+                activeModelSelectionTab === tab.id ? 'browd-model-tab-active' : 'browd-model-tab-inactive'
               }`}>
               {tab.label}
             </button>

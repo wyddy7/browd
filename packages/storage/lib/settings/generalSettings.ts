@@ -4,7 +4,7 @@ import type { BaseStorage } from '../base/types';
 
 // Interface for general settings configuration
 export type AppearanceTheme = 'light' | 'dark';
-export type InterfaceLanguage = 'system' | 'en' | 'ru';
+export type InterfaceLanguage = 'system' | 'en' | 'ru' | 'es' | 'fr' | 'de' | 'pt_BR';
 
 export interface GeneralSettingsConfig {
   appearanceTheme: AppearanceTheme;
@@ -64,7 +64,14 @@ const normalizeShortcut = (shortcut: unknown): string => {
 };
 
 const normalizeInterfaceLanguage = (language: unknown): InterfaceLanguage => {
-  if (language === 'en' || language === 'ru') {
+  if (
+    language === 'en' ||
+    language === 'ru' ||
+    language === 'es' ||
+    language === 'fr' ||
+    language === 'de' ||
+    language === 'pt_BR'
+  ) {
     return language;
   }
   return 'system';

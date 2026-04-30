@@ -380,10 +380,10 @@
     "message": "Системный промпт"
   },
   "options_models_systemPrompt_placeholder": {
-    "message": "Например: Всегда отвечай на русском. Будь кратким. Действуй как внимательный research assistant."
+    "message": "Например: Отвечай на том же языке, что выбран в интерфейсе Browd. Будь кратким. Действуй как внимательный research assistant."
   },
   "options_models_systemPrompt_desc": {
-    "message": "Необязательные постоянные инструкции для роли, стиля или языка ответов этого агента."
+    "message": "Необязательные постоянные инструкции для роли, стиля или языка ответов этого агента. Выбранный язык интерфейса тоже передается агенту."
   },
   "options_models_stt_desc": {
     "message": "Настройте провайдера/модель для speech-to-text с микрофона. Gemini работает напрямую, OpenRouter требует chat-модель с audio input, а Grok использует отдельный STT API xAI."
@@ -1013,5 +1013,17 @@
         "example": "Option not found"
       }
     }
+  },
+  "options_general_language_es": {
+    "message": "Испанский"
+  },
+  "options_general_language_fr": {
+    "message": "Французский"
+  },
+  "options_general_language_de": {
+    "message": "Немецкий"
+  },
+  "options_general_language_ptBR": {
+    "message": "Португальский (Бразилия)"
   }
 }

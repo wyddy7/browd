@@ -26,3 +26,25 @@ code {
   padding: 0.2rem 0.5rem;
   color: var(--browd-text);
 }
+
+.browd-model-tab-active {
+  background: var(--browd-accent);
+  border: 1px solid var(--browd-accent);
+  color: var(--browd-accent-text);
+}
+
+.browd-model-tab-inactive {
+  background: var(--browd-panel-strong);
+  border: 1px solid var(--browd-border);
+  color: var(--browd-muted);
+}
+
+.browd-model-tab-inactive:hover {
+  color: var(--browd-text);
+}
+
+[data-browd-theme='dark'] .browd-model-tab-active {
+  background: var(--browd-surface);
+  border-color: var(--browd-border-strong);
+  color: var(--browd-text);
+}
