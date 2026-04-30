@@ -57,6 +57,83 @@ function getProviderModels(providerId: string, config: ProviderConfig): string[]
   return config.modelNames || llmProviderModelNames[providerId as keyof typeof llmProviderModelNames] || [];
 }
 
+function writeAsciiString(view: DataView, offset: number, value: string) {
+  for (let index = 0; index < value.length; index += 1) {
+    view.setUint8(offset + index, value.charCodeAt(index));
+  }
+}
+
+function encodeAudioBufferAsWav(audioBuffer: AudioBuffer): ArrayBuffer {
+  const numChannels = audioBuffer.numberOfChannels;
+  const sampleRate = audioBuffer.sampleRate;
+  const bytesPerSample = 2;
+  const blockAlign = numChannels * bytesPerSample;
+  const dataLength = audioBuffer.length * blockAlign;
+  const buffer = new ArrayBuffer(44 + dataLength);
+  const view = new DataView(buffer);
+  let offset = 0;
+
+  writeAsciiString(view, offset, 'RIFF');
+  offset += 4;
+  view.setUint32(offset, 36 + dataLength, true);
+  offset += 4;
+  writeAsciiString(view, offset, 'WAVE');
+  offset += 4;
+  writeAsciiString(view, offset, 'fmt ');
+  offset += 4;
+  view.setUint32(offset, 16, true);
+  offset += 4;
+  view.setUint16(offset, 1, true);
+  offset += 2;
+  view.setUint16(offset, numChannels, true);
+  offset += 2;
+  view.setUint32(offset, sampleRate, true);
+  offset += 4;
+  view.setUint32(offset, sampleRate * blockAlign, true);
+  offset += 4;
+  view.setUint16(offset, blockAlign, true);
+  offset += 2;
+  view.setUint16(offset, bytesPerSample * 8, true);
+  offset += 2;
+  writeAsciiString(view, offset, 'data');
+  offset += 4;
+  view.setUint32(offset, dataLength, true);
+  offset += 4;
+
+  const channels = Array.from({ length: numChannels }, (_, channelIndex) => audioBuffer.getChannelData(channelIndex));
+
+  for (let sampleIndex = 0; sampleIndex < audioBuffer.length; sampleIndex += 1) {
+    for (let channelIndex = 0; channelIndex < numChannels; channelIndex += 1) {
+      const sample = Math.max(-1, Math.min(1, channels[channelIndex][sampleIndex]));
+      view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+      offset += bytesPerSample;
+    }
+  }
+
+  return buffer;
+}
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error || new Error('Failed to read audio blob'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function convertRecordedAudioToWavDataUrl(audioBlob: Blob): Promise<string> {
+  const audioContext = new AudioContext();
+
+  try {
+    const audioBuffer = await audioContext.decodeAudioData(await audioBlob.arrayBuffer());
+    const wavBlob = new Blob([encodeAudioBufferAsWav(audioBuffer)], { type: 'audio/wav' });
+    return await blobToDataUrl(wavBlob);
+  } finally {
+    await audioContext.close();
+  }
+}
+
 // Declare chrome API types
 declare global {
   interface Window {
@@ -1077,13 +1154,11 @@ const SidePanel = () => {
         stream.getTracks().forEach(track => track.stop());
 
         if (audioChunksRef.current.length > 0) {
-          // Create audio blob
-          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          const recordedMimeType = mediaRecorder.mimeType || audioChunksRef.current[0]?.type || 'audio/webm';
+          const audioBlob = new Blob(audioChunksRef.current, { type: recordedMimeType });
 
-          // Convert blob to base64
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            const base64Audio = reader.result as string;
+          try {
+            const wavAudio = await convertRecordedAudioToWavDataUrl(audioBlob);
 
             // Setup connection if not exists
             if (!portRef.current) {
@@ -1091,24 +1166,21 @@ const SidePanel = () => {
             }
 
             // Send audio to backend for speech-to-text conversion
-            try {
-              setIsProcessingSpeech(true);
-              portRef.current?.postMessage({
-                type: 'speech_to_text',
-                audio: base64Audio,
-              });
-            } catch (error) {
-              console.error('Failed to send audio for speech-to-text:', error);
-              appendMessage({
-                actor: Actors.SYSTEM,
-                content: t('chat_stt_processingFailed'),
-                timestamp: Date.now(),
-              });
-              setIsRecording(false);
-              setIsProcessingSpeech(false);
-            }
-          };
-          reader.readAsDataURL(audioBlob);
+            setIsProcessingSpeech(true);
+            portRef.current?.postMessage({
+              type: 'speech_to_text',
+              audio: wavAudio,
+            });
+          } catch (error) {
+            console.error('Failed to prepare audio for speech-to-text:', error);
+            appendMessage({
+              actor: Actors.SYSTEM,
+              content: t('chat_stt_processingFailed'),
+              timestamp: Date.now(),
+            });
+            setIsRecording(false);
+            setIsProcessingSpeech(false);
+          }
         }
       };
 
