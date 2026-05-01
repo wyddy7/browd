@@ -35,11 +35,19 @@ export enum ExecutionState {
   TASK_RESUME = 'task.resume',
   TASK_CANCEL = 'task.cancel',
 
+  // Human-in-the-loop states
+  /** Agent needs a yes/no/edit/cancel decision from the user before a sensitive action. */
+  TASK_HITL_APPROVE = 'task.hitl.approve',
+  /** Agent needs a text answer from the user to resolve ambiguity. */
+  TASK_HITL_ASK = 'task.hitl.ask',
+
   // Step level states
   STEP_START = 'step.start',
   STEP_OK = 'step.ok',
   STEP_FAIL = 'step.fail',
   STEP_CANCEL = 'step.cancel',
+  /** Emitted after each verified action with human-readable description for the Trace UI. */
+  STEP_TRACE = 'step.trace',
 
   // Action/Tool level states
   ACT_START = 'act.start',

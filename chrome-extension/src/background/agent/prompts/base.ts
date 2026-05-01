@@ -2,6 +2,7 @@ import { HumanMessage, type SystemMessage } from '@langchain/core/messages';
 import type { AgentContext } from '@src/background/agent/types';
 import { wrapUntrustedContent } from '../messages/utils';
 import { createLogger } from '@src/background/log';
+import { extractForms, formatFormsForPrompt } from '@src/background/browser/dom/forms';
 
 const logger = createLogger('BasePrompt');
 /**
@@ -63,6 +64,9 @@ abstract class BasePrompt {
       }
     }
 
+    const forms = extractForms(browserState);
+    const formsSection = formatFormsForPrompt(forms);
+
     const currentTab = `{id: ${browserState.tabId}, url: ${browserState.url}, title: ${browserState.title}}`;
     const otherTabs = browserState.tabs
       .filter(tab => tab.id !== browserState.tabId)
@@ -76,7 +80,7 @@ Other available tabs:
   ${otherTabs.join('\n')}
 Interactive elements from top layer of the current page inside the viewport:
 ${formattedElementsText}
-${stepInfoDescription}
+${formsSection ? `${formsSection}\n` : ''}${stepInfoDescription}
 ${actionResultsDescription}
 `;
 

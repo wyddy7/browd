@@ -18,11 +18,15 @@ export interface AgentOptions {
   useVisionForPlanner: boolean;
   includeAttributes: string[];
   planningInterval: number;
+  /** Max times the same (action, arg) can repeat before LoopDetector fires. Default 3. */
+  maxRepeatedAction: number;
+  /** Sliding window size for loop detection. Default 6. */
+  loopWindowSize: number;
 }
 
 export const DEFAULT_AGENT_OPTIONS: AgentOptions = {
   maxSteps: 100,
-  maxActionsPerStep: 10,
+  maxActionsPerStep: 1,
   maxFailures: 3,
   retryDelay: 10,
   maxInputTokens: 128000,
@@ -31,6 +35,8 @@ export const DEFAULT_AGENT_OPTIONS: AgentOptions = {
   useVisionForPlanner: true,
   includeAttributes: DEFAULT_INCLUDE_ATTRIBUTES,
   planningInterval: 3,
+  maxRepeatedAction: 3,
+  loopWindowSize: 6,
 };
 
 export class AgentContext {

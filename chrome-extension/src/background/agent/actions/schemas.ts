@@ -213,3 +213,46 @@ export const waitActionSchema: ActionSchema = {
     seconds: z.number().int().default(3).describe('amount of seconds'),
   }),
 };
+
+/**
+ * Semantic form field fill — preferred over input_text when a form is detected.
+ * Finds the field by its human-readable label, not by DOM index.
+ */
+export const fillFieldByLabelActionSchema: ActionSchema = {
+  name: 'fill_field_by_label',
+  description:
+    'Fill a form field identified by its label text (not DOM index). Use this whenever a "## Forms detected" section is visible in the page state. Preferred over input_text for form fields to avoid index confusion when multiple similar fields exist.',
+  schema: z.object({
+    intent: z.string().default('').describe('purpose of this action'),
+    label: z.string().describe('the exact or partial label text of the field (e.g. "Email", "Английский язык")'),
+    value: z.string().describe('value to type into the field'),
+    nth: z
+      .number()
+      .int()
+      .min(1)
+      .default(1)
+      .optional()
+      .describe('which occurrence to use if multiple fields match the label (1-indexed, default 1)'),
+    xpath: z
+      .string()
+      .nullable()
+      .optional()
+      .describe('xpath override — filled in by the executor after label resolution; do not set manually'),
+  }),
+};
+
+/**
+ * Ask the user a clarifying question and wait for their answer before continuing.
+ * Use when a form field is ambiguous, goal is unclear, or confidence is low.
+ * The user's answer is injected into agent memory and the task resumes.
+ */
+export const askUserActionSchema: ActionSchema = {
+  name: 'ask_user',
+  description:
+    'Pause execution and ask the user a question. Use when: (1) a form field purpose is unclear, (2) you need a value only the user knows, (3) confidence in the next action is low. Do NOT use for routine steps — only for genuine ambiguity.',
+  schema: z.object({
+    question: z.string().describe('clear, specific question to ask the user'),
+    reasoning: z.string().describe('why you need this information to proceed'),
+    options: z.array(z.string()).optional().describe('optional suggested answers to show as quick-pick buttons'),
+  }),
+};

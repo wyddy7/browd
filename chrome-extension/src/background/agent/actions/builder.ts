@@ -1,4 +1,5 @@
 import { ActionResult, type AgentContext } from '@src/background/agent/types';
+import { DOMHistoryElement } from '@src/background/browser/dom/history/view';
 import { t } from '@extension/i18n';
 import {
   clickElementActionSchema,
@@ -22,7 +23,11 @@ import {
   nextPageActionSchema,
   scrollToTopActionSchema,
   scrollToBottomActionSchema,
+  fillFieldByLabelActionSchema,
+  askUserActionSchema,
 } from './schemas';
+import { findFieldByLabel } from '@src/background/browser/dom/fieldFinder';
+import { makeActionError } from '../agentErrors';
 import { z } from 'zod';
 import { createLogger } from '@src/background/log';
 import { ExecutionState, Actors } from '../event/types';
@@ -701,6 +706,67 @@ export class ActionBuilder {
       true,
     );
     actions.push(selectDropdownOption);
+
+    // Semantic form fill — finds field by label, not DOM index
+    const fillFieldByLabel = new Action(async (input: z.infer<typeof fillFieldByLabelActionSchema.schema>) => {
+      const intent = input.intent || `Fill "${input.label}" = "${input.value}"`;
+      this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_START, intent);
+
+      const page = await this.context.browserContext.getCurrentPage();
+      const pageState = await page.getState();
+
+      const elementNode = findFieldByLabel(pageState, input.label, input.nth ?? 1);
+      if (!elementNode) {
+        const msg = `Field not found for label: "${input.label}"`;
+        this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_FAIL, msg);
+        // Returns structured error so FailureClassifier routes to hitl_ask
+        return new ActionResult({
+          error: msg,
+          includeInMemory: true,
+        });
+      }
+
+      await page.inputTextElementNode(this.context.options.useVision, elementNode, input.value);
+      const msg = `Filled "${input.label}" = "${input.value}"`;
+      this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_OK, msg);
+      return new ActionResult({
+        extractedContent: msg,
+        includeInMemory: true,
+        interactedElement: elementNode.xpath
+          ? new DOMHistoryElement(
+              elementNode.tagName ?? 'input',
+              elementNode.xpath,
+              elementNode.highlightIndex,
+              [input.label],
+              elementNode.attributes,
+              false,
+              null,
+            )
+          : null,
+      });
+    }, fillFieldByLabelActionSchema);
+    actions.push(fillFieldByLabel);
+
+    // Human-in-the-loop question — pauses execution, waits for user answer
+    const askUser = new Action(async (input: z.infer<typeof askUserActionSchema.schema>) => {
+      const intent = `Asking user: "${input.question}"`;
+      this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_START, intent);
+      // Emit TASK_PAUSE with the question payload so side-panel can render the HITL prompt.
+      // The HITLController (wired externally) will resolve this via a pending Promise.
+      // For now we emit the event and return a placeholder — the HITLController intercepts.
+      this.context.emitEvent(
+        Actors.SYSTEM,
+        ExecutionState.TASK_HITL_ASK,
+        JSON.stringify({ question: input.question, reasoning: input.reasoning, options: input.options }),
+      );
+      // Actual pause/resume is handled by HITLController in executor.ts
+      // This result is overwritten when the controller resolves.
+      return new ActionResult({
+        extractedContent: `[Waiting for user answer to: "${input.question}"]`,
+        includeInMemory: true,
+      });
+    }, askUserActionSchema);
+    actions.push(askUser);
 
     return actions;
   }
