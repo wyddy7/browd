@@ -1151,31 +1151,43 @@ export default class Page {
       });
 
       // Choose appropriate input method based on element properties
-      if ((isContentEditable || tagName === 'input') && !isReadOnly && !isDisabled) {
-        // Clear content and set value directly
+      if ((isContentEditable || tagName === 'input' || tagName === 'textarea') && !isReadOnly && !isDisabled) {
+        // React-aware clear: use native value setter so React's fiber state syncs.
+        // Plain `el.value = ''` bypasses React's internal tracking and is ignored on React SPAs.
         await element.evaluate(el => {
-          if (el instanceof HTMLElement) {
+          if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+            const proto =
+              el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+            const nativeSetter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+            if (nativeSetter) {
+              nativeSetter.call(el, '');
+            } else {
+              el.value = '';
+            }
+          } else if (el instanceof HTMLElement) {
             el.textContent = '';
           }
-          if ('value' in el) {
-            (el as HTMLInputElement).value = '';
-          }
-          // Dispatch events
           el.dispatchEvent(new Event('input', { bubbles: true }));
           el.dispatchEvent(new Event('change', { bubbles: true }));
         });
 
-        // Type the text with a small delay between keypresses
-        await element.type(text, { delay: 50 });
+        // Simulate real keystrokes — React's synthetic event system intercepts these correctly
+        await element.type(text, { delay: 30 });
       } else {
-        // Use direct value setting for other types of elements
+        // Fallback for custom/non-standard elements: React-aware direct value set
         await element.evaluate((el, value) => {
           if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
-            el.value = value;
+            const proto =
+              el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+            const nativeSetter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+            if (nativeSetter) {
+              nativeSetter.call(el, value);
+            } else {
+              el.value = value;
+            }
           } else if (el instanceof HTMLElement && el.isContentEditable) {
             el.textContent = value;
           }
-          // Dispatch events
           el.dispatchEvent(new Event('input', { bubbles: true }));
           el.dispatchEvent(new Event('change', { bubbles: true }));
         }, text);

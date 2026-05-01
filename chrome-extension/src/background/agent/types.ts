@@ -36,8 +36,8 @@ export const DEFAULT_AGENT_OPTIONS: AgentOptions = {
   useVisionForPlanner: true,
   includeAttributes: DEFAULT_INCLUDE_ATTRIBUTES,
   planningInterval: 3,
-  maxRepeatedAction: 3,
-  loopWindowSize: 6,
+  maxRepeatedAction: 2,
+  loopWindowSize: 4,
 };
 
 export class AgentContext {

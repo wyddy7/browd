@@ -83,6 +83,8 @@ export class NavigatorAgent extends BaseAgent<z.ZodType, NavigatorResult> {
   private jsonSchema: Record<string, unknown>;
   private _stateHistory: BrowserStateHistory | null = null;
   private readonly loopDetector: LoopDetector;
+  /** Tracks consecutive verification failures across steps. Reset on any success. */
+  private consecutiveVerifFails = 0;
 
   constructor(
     actionRegistry: NavigatorActionRegistry,
@@ -497,16 +499,26 @@ export class NavigatorAgent extends BaseAgent<z.ZodType, NavigatorResult> {
           : `✗ ${resolvedActionName}: ${verifyResult.reason}`;
         this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.STEP_TRACE, traceMsg);
 
-        // High-confidence verification failure → surface as action error
-        if (!verifyResult.ok && verifyResult.confidence >= 0.8) {
-          logger.warning(`Verification failed: ${verifyResult.reason}`);
-          results.push(
-            new ActionResult({
-              error: `Verification failed: ${verifyResult.reason}`,
-              includeInMemory: true,
-            }),
-          );
-          break;
+        if (verifyResult.ok) {
+          this.consecutiveVerifFails = 0;
+        } else {
+          this.consecutiveVerifFails++;
+          logger.warning(`Verification failed (${this.consecutiveVerifFails} consecutive): ${verifyResult.reason}`);
+
+          // Any failure with confidence ≥ 0.6 → surface immediately so LLM can replan
+          if (verifyResult.confidence >= 0.6) {
+            results.push(
+              new ActionResult({ error: `Verification failed: ${verifyResult.reason}`, includeInMemory: true }),
+            );
+            break;
+          }
+
+          // After 3 consecutive failures of any kind → throw reasoning_failure so FailureClassifier
+          // routes to HITL instead of silently retrying forever
+          if (this.consecutiveVerifFails >= 3) {
+            this.consecutiveVerifFails = 0;
+            throw new Error(`reasoning_failure: 3 consecutive verification failures — last: ${verifyResult.reason}`);
+          }
         }
       } catch (error) {
         if (error instanceof URLNotAllowedError) throw error;
