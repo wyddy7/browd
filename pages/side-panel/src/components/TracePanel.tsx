@@ -1,26 +1,93 @@
-export interface TraceEntry {
+/**
+ * Trace panel — shows the live tool-call stream from the agent.
+ *
+ * Two entry shapes are supported:
+ *   - Legacy: `{ icon, label }` — used by string-only events.
+ *   - Structured: `{ tool, ok, durationMs, args, resultSummary, kind }` —
+ *     written by the background tracer (auto-docs/browd-agent-evolution.md
+ *     T0). Renders one row per tool call with timing and a truncated
+ *     args/result preview.
+ */
+
+export interface LegacyTraceEntry {
   icon: '✓' | '✗' | '→';
   label: string;
 }
 
-interface TracePanelProps {
-  entries: TraceEntry[];
+export interface StructuredTraceEntry {
+  tool: string;
+  ok: boolean;
+  durationMs: number;
+  args: string;
+  resultSummary: string;
+  kind?: 'browser' | 'web' | 'meta';
+  stepNumber?: number;
 }
 
-export function TracePanel({ entries }: TracePanelProps) {
+export type TraceEntry = LegacyTraceEntry | StructuredTraceEntry;
+
+interface TracePanelProps {
+  entries: TraceEntry[];
+  /** Called when the user clicks the export button. */
+  onExport?: () => void;
+}
+
+function isStructured(entry: TraceEntry): entry is StructuredTraceEntry {
+  return (entry as StructuredTraceEntry).tool !== undefined;
+}
+
+const KIND_BADGE: Record<NonNullable<StructuredTraceEntry['kind']>, string> = {
+  browser: 'text-sky-400',
+  web: 'text-violet-400',
+  meta: 'text-amber-400',
+};
+
+export function TracePanel({ entries, onExport }: TracePanelProps) {
   if (entries.length === 0) return null;
 
   return (
-    <div className="px-3 py-1.5 border-b border-[var(--browd-border)] text-xs font-mono text-[var(--browd-muted)] max-h-24 overflow-y-auto">
-      {entries.map((entry, i) => (
-        <div
-          key={i}
-          className={`leading-snug ${
-            entry.icon === '✓' ? 'text-emerald-400' : entry.icon === '✗' ? 'text-red-400' : 'text-[var(--browd-muted)]'
-          }`}>
-          {entry.icon} {entry.label}
+    <div className="border-b border-[var(--browd-border)] text-xs font-mono text-[var(--browd-muted)]">
+      {onExport ? (
+        <div className="flex items-center justify-between px-3 pt-1.5">
+          <span className="text-[10px] uppercase tracking-wider text-[var(--browd-muted)]/60">trace</span>
+          <button
+            type="button"
+            onClick={onExport}
+            className="text-[10px] uppercase tracking-wider text-[var(--browd-muted)]/60 hover:text-[var(--browd-text)] transition-colors">
+            copy json
+          </button>
         </div>
-      ))}
+      ) : null}
+      <div className="px-3 py-1.5 max-h-32 overflow-y-auto">
+        {entries.map((entry, i) => {
+          if (!isStructured(entry)) {
+            return (
+              <div
+                key={i}
+                className={`leading-snug ${
+                  entry.icon === '✓'
+                    ? 'text-emerald-400'
+                    : entry.icon === '✗'
+                      ? 'text-red-400'
+                      : 'text-[var(--browd-muted)]'
+                }`}>
+                {entry.icon} {entry.label}
+              </div>
+            );
+          }
+          const okIcon = entry.ok ? '✓' : '✗';
+          const okColor = entry.ok ? 'text-emerald-400' : 'text-red-400';
+          const kindColor = entry.kind ? KIND_BADGE[entry.kind] : 'text-[var(--browd-muted)]';
+          return (
+            <div key={i} className="leading-snug flex gap-2 items-baseline">
+              <span className={okColor}>{okIcon}</span>
+              <span className={`${kindColor} font-semibold`}>{entry.tool}</span>
+              <span className="text-[var(--browd-muted)]/60 truncate">{entry.args}</span>
+              <span className="text-[var(--browd-muted)]/60 ml-auto whitespace-nowrap">{entry.durationMs}ms</span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

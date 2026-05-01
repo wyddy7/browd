@@ -26,6 +26,7 @@ import type { AgentStepHistory } from './history';
 import type { GeneralSettingsConfig } from '@extension/storage';
 import { FailureClassifier } from './guardrails/failureClassifier';
 import { classifyError } from './agentErrors';
+import { globalTracer } from './tracing';
 import { HITLController, type SendMessage } from './hitl/controller';
 
 const logger = createLogger('Executor');
@@ -150,6 +151,16 @@ export class Executor {
     context.nSteps = 0;
     const allowedMaxSteps = this.context.options.maxSteps;
 
+    // T0: bind the tracer to this task so every Action.call writes a record
+    // attributed to the right taskId.
+    globalTracer.setContext({ taskId: context.taskId, stepNumber: 0 });
+    // Forward structured trace entries to side-panel via STEP_TRACE events.
+    // The payload is JSON-encoded inside `details` so existing string-based
+    // consumers keep working; the side panel tries JSON.parse first.
+    const traceUnsubscribe = globalTracer.subscribe(entry => {
+      void this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.STEP_TRACE, JSON.stringify({ structured: entry }));
+    });
+
     try {
       this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_START, this.context.taskId);
 
@@ -162,6 +173,7 @@ export class Executor {
           stepNumber: context.nSteps,
           maxSteps: context.options.maxSteps,
         };
+        globalTracer.setStep(context.nSteps);
 
         logger.info(`🔄 Step ${step + 1} / ${allowedMaxSteps}`);
         if (await this.shouldStop()) {
@@ -226,6 +238,17 @@ export class Executor {
         await chatHistoryStore.storeAgentStepHistory(this.context.taskId, this.tasks[0], historyString);
       } else {
         logger.info('Replay historical tasks is disabled, skipping history storage');
+      }
+      // T0: stop forwarding trace events and persist remaining entries.
+      try {
+        traceUnsubscribe();
+      } catch {
+        // ignore
+      }
+      try {
+        await globalTracer.flush();
+      } catch (err) {
+        logger.warning('tracer flush failed', err);
       }
     }
   }

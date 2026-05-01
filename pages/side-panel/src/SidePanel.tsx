@@ -555,6 +555,19 @@ const SidePanel = () => {
               break;
             case ExecutionState.STEP_TRACE: {
               const raw = content ?? '';
+              // Try structured payload first (new T0 path). Falls back to
+              // the legacy "✓ tool: reason" string format if not JSON.
+              if (raw.startsWith('{')) {
+                try {
+                  const parsed = JSON.parse(raw) as { structured?: unknown };
+                  if (parsed.structured && typeof parsed.structured === 'object') {
+                    setTraceEntries(prev => [...prev.slice(-19), parsed.structured as TraceEntry]);
+                    return;
+                  }
+                } catch {
+                  // fall through to legacy parse
+                }
+              }
               const icon = raw.startsWith('✓') ? ('✓' as const) : raw.startsWith('✗') ? ('✗' as const) : ('→' as const);
               const label = raw.replace(/^[✓✗→]\s*/, '');
               setTraceEntries(prev => [...prev.slice(-19), { icon, label }]);
@@ -1512,7 +1525,15 @@ const SidePanel = () => {
                 )}
                 {messages.length > 0 && (
                   <div className="border-t border-[var(--browd-border)] bg-[var(--browd-surface)]/80 p-2 backdrop-blur">
-                    <TracePanel entries={traceEntries} />
+                    <TracePanel
+                      entries={traceEntries}
+                      onExport={() => {
+                        const dump = JSON.stringify(traceEntries, null, 2);
+                        navigator.clipboard.writeText(dump).catch(() => {
+                          /* clipboard may be unavailable; silently ignore */
+                        });
+                      }}
+                    />
                     {hitlRequest && <HITLPrompt request={hitlRequest} onDecision={submitHITLDecision} />}
                     <ChatInput
                       onSendMessage={handleSendMessage}

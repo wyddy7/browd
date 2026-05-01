@@ -34,8 +34,18 @@ import { createLogger } from '@src/background/log';
 import { ExecutionState, Actors } from '../event/types';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { wrapUntrustedContent } from '../messages/utils';
+import { globalTracer } from '../tracing';
 
 const logger = createLogger('Action');
+
+/** Categorise tools for the trace UI. Browser-DOM tools dominate today;
+ * web_* and meta-tools land in T1/T2. Names that don't match default to
+ * 'browser' since the existing registry is browser-only. */
+function classifyTool(name: string): 'browser' | 'web' | 'meta' {
+  if (name.startsWith('web_') || name === 'extract_page_as_markdown') return 'web';
+  if (name === 'replan' || name === 'remember' || name === 'ask_user' || name === 'done') return 'meta';
+  return 'browser';
+}
 
 export class InvalidInputError extends Error {
   constructor(message: string) {
@@ -65,16 +75,64 @@ export class Action {
       schema instanceof z.ZodObject &&
       Object.keys((schema as z.ZodObject<Record<string, z.ZodTypeAny>>).shape || {}).length === 0;
 
-    if (isEmptySchema) {
-      return await this.handler({});
-    }
+    const toolName = this.schema.name;
+    const kind = classifyTool(toolName);
+    const start = Date.now();
+    let resolvedInput: unknown = input;
 
-    const parsedArgs = this.schema.schema.safeParse(input);
-    if (!parsedArgs.success) {
-      const errorMessage = parsedArgs.error.message;
-      throw new InvalidInputError(errorMessage);
+    try {
+      if (isEmptySchema) {
+        const result = await this.handler({});
+        globalTracer.record({
+          tool: toolName,
+          args: {},
+          result: result.error ?? result.extractedContent ?? 'ok',
+          ok: !result.error,
+          durationMs: Date.now() - start,
+          kind,
+        });
+        return result;
+      }
+
+      const parsedArgs = this.schema.schema.safeParse(input);
+      if (!parsedArgs.success) {
+        const errorMessage = parsedArgs.error.message;
+        globalTracer.record({
+          tool: toolName,
+          args: input,
+          result: `InvalidInputError: ${errorMessage}`,
+          ok: false,
+          durationMs: Date.now() - start,
+          kind,
+        });
+        throw new InvalidInputError(errorMessage);
+      }
+      resolvedInput = parsedArgs.data;
+      const result = await this.handler(parsedArgs.data);
+      globalTracer.record({
+        tool: toolName,
+        args: parsedArgs.data,
+        result: result.error ?? result.extractedContent ?? 'ok',
+        ok: !result.error,
+        durationMs: Date.now() - start,
+        kind,
+      });
+      return result;
+    } catch (error) {
+      // Re-throw — Action callers (navigator) handle errors. Tracer must
+      // still see the failure so the trace is complete.
+      if (!(error instanceof InvalidInputError)) {
+        globalTracer.record({
+          tool: toolName,
+          args: resolvedInput,
+          result: error instanceof Error ? error.message : String(error),
+          ok: false,
+          durationMs: Date.now() - start,
+          kind,
+        });
+      }
+      throw error;
     }
-    return await this.handler(parsedArgs.data);
   }
 
   name() {
