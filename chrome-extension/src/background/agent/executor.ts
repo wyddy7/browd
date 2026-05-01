@@ -9,7 +9,8 @@ import { PlannerPrompt } from './prompts/planner';
 import { createLogger } from '@src/background/log';
 import MessageManager from './messages/service';
 import type BrowserContext from '../browser/context';
-import { ActionBuilder } from './actions/builder';
+import { ActionBuilder, type Action } from './actions/builder';
+import { runReactAgent } from './agents/runReactAgent';
 import { EventManager } from './event/manager';
 import { Actors, type EventCallback, EventType, ExecutionState } from './event/types';
 import {
@@ -53,6 +54,10 @@ export class Executor {
   private readonly _hitlController?: HITLController;
   private tasks: string[] = [];
   private readonly unifiedMode: boolean = false;
+  /** T2d: navigator LLM kept for runReactAgent (unified mode entry point). */
+  private readonly navigatorLLM: BaseChatModel;
+  /** T2d: full action set, classic uses via NavigatorAgent, unified passes to runReactAgent. */
+  private readonly unifiedActions: Action[];
   constructor(
     task: string,
     taskId: string,
@@ -99,9 +104,9 @@ export class Executor {
     this.plannerPrompt = new PlannerPrompt(extraArgs?.agentSystemPrompts?.planner);
 
     const actionBuilder = new ActionBuilder(context, extractorLLM);
-    const navigatorActionRegistry = new NavigatorActionRegistry(
-      this.unifiedMode ? actionBuilder.buildUnifiedActions() : actionBuilder.buildDefaultActions(),
-    );
+    this.unifiedActions = this.unifiedMode ? actionBuilder.buildUnifiedActions() : actionBuilder.buildDefaultActions();
+    this.navigatorLLM = navigatorLLM;
+    const navigatorActionRegistry = new NavigatorActionRegistry(this.unifiedActions);
 
     // Initialize agents with their respective prompts
     this.navigator = new NavigatorAgent(navigatorActionRegistry, {
@@ -268,63 +273,43 @@ export class Executor {
   }
 
   /**
-   * UnifiedAgent ReAct loop — single agent, no Planner.
+   * UnifiedAgent loop — T2d: delegates to LangGraph.js createReactAgent.
    *
-   * Owns its own termination contract: a navigator-emitted `done` (after
-   * passing handleUnifiedDone evidence validation) IS the terminal signal.
-   * No legacy plumbing — `done` here means done, no Planner re-validation.
+   * The bespoke runUnifiedLoop body (~50 lines of for-loop with manual
+   * termination detection, isDone paranoia checks, and event emit
+   * branches) is replaced by a single call into runReactAgent. The
+   * framework owns:
+   *   - Tool dispatch (one tool call per LLM step)
+   *   - Termination (LLM emits AIMessage without tool_calls)
+   *   - Checkpointing per taskId via MemorySaver
+   *   - Cancellation via AbortController signal
    *
-   * The Navigator class is reused as the LLM driver because it already
-   * knows how to invoke a model with the {current_state, action[]} schema
-   * over the message history. The unified action set (built via
-   * buildUnifiedActions) replaces the lenient `done` with the
-   * evidence-aware one and adds replan/remember meta-tools.
+   * Browd-side responsibilities preserved:
+   *   - globalTracer records every tool call (Action.call hook stays)
+   *   - Side panel sees PLANNER+STEP_OK with the final answer, then
+   *     SYSTEM+TASK_OK / TASK_FAIL / TASK_CANCEL — same events as
+   *     classic so MessageList renders identically
+   *   - context.controller.signal aborts the agent on stop button
+   *
+   * Why the rewrite was necessary — the bespoke loop produced six
+   * iterations of bug fixes without convergence (T2b → T2c critical).
+   * See auto-docs/browd-agent-evolution.md for the full postmortem.
    */
   private async runUnifiedLoop(): Promise<void> {
     const context = this.context;
-    const allowedMaxSteps = context.options.maxSteps;
-    let step = 0;
-    let terminated = false;
+    globalTracer.setStep(0);
+    logger.info('🔄 [unified] starting LangGraph.js ReAct agent');
 
-    for (step = 0; step < allowedMaxSteps; step++) {
-      context.stepInfo = { stepNumber: context.nSteps, maxSteps: allowedMaxSteps };
-      globalTracer.setStep(context.nSteps);
-      logger.info(`🔄 [unified] Step ${step + 1} / ${allowedMaxSteps}`);
-
-      if (await this.shouldStop()) break;
-      if (context.messageManager.length() > 30) {
-        context.messageManager.compactOldStateMessages();
-      }
-
-      const navigatorDone = await this.navigate();
-      // T2c safety: paranoidly check that any action in this step set
-      // isDone, not just the last one. With maxActionsPerStep=1 navigate()
-      // already returns true on done, but if a future change re-enables
-      // batching this catches the "done in middle of batch" case.
-      const someDone = (context.actionResults ?? []).some(r => r.isDone);
-      if (navigatorDone || someDone) {
-        terminated = true;
-        break;
-      }
-    }
-
-    if (terminated) {
-      const finalMessage = context.finalAnswer || 'Task completed.';
-      // In classic mode the Planner emits STEP_OK with the final_answer,
-      // which the side panel renders as a chat message (Actors.PLANNER +
-      // STEP_OK has skip=false). Unified has no Planner, so we emit the
-      // same event ourselves to surface the answer in the chat. Without
-      // this, only TASK_OK fires (skip=true) and finalAnswer never shows.
-      context.emitEvent(Actors.PLANNER, ExecutionState.STEP_OK, finalMessage);
-      context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_OK, finalMessage);
-    } else if (step >= allowedMaxSteps) {
-      logger.error('❌ Task failed: Max steps reached');
-      context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_FAIL, t('exec_errors_maxStepsReached'));
-    } else if (context.stopped) {
-      context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_CANCEL, t('exec_task_cancel'));
-    } else {
-      context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_PAUSE, t('exec_task_pause'));
-    }
+    const task = this.tasks[this.tasks.length - 1] ?? '';
+    await runReactAgent({
+      context,
+      llm: this.navigatorLLM,
+      actions: this.unifiedActions,
+      task,
+    });
+    // runReactAgent emits PLANNER/SYSTEM events itself; nothing further
+    // to do here. Recursion-limit / abort / error mapping all happen
+    // inside.
   }
 
   /**
