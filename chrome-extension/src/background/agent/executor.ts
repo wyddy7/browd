@@ -332,6 +332,57 @@ export class Executor {
       const failAction = this.failureClassifier.next(classified);
       logger.warning(`FailureClassifier → ${failAction} (${classified.type}): ${classified.message}`);
       context.consecutiveFailures = this.failureClassifier.getTotalFailures();
+
+      // T2a: route on the classifier verdict instead of just counting.
+      // - fail_fast / auth_or_config: abort immediately, do not retry.
+      // - hitl_handoff: pause the loop and ask the user how to proceed.
+      // - retry_backoff: wait before continuing the loop.
+      // - retry / repair / hitl_ask / hitl_approve: fall through (existing
+      //   action handlers already manage hitl_ask / hitl_approve via
+      //   ApprovalPolicy).
+      if (failAction === 'fail_fast') {
+        logger.error(`fail_fast: ${classified.type}: ${classified.message}`);
+        throw new MaxFailuresReachedError(t('exec_errors_maxFailuresReached'));
+      }
+      if (failAction === 'hitl_handoff' && this._hitlController) {
+        try {
+          const decision = await this._hitlController.requestDecision({
+            id: `hitl-handoff-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            reason: 'repeated_failure',
+            pendingAction: { handoff: { reason: classified.type, message: classified.message } },
+            context: {
+              summary: `Agent stuck after repeated ${classified.type} failures. Last error: ${classified.message}`,
+              risk: 'medium',
+              confidence: 0.4,
+            },
+          });
+          context.messageManager.addHITLDecision(decision, {
+            id: `hitl-handoff-${Date.now()}`,
+            reason: 'repeated_failure',
+            pendingAction: { handoff: {} },
+            context: { summary: 'handoff', risk: 'medium', confidence: 0.4 },
+          });
+          if (decision.type === 'reject') {
+            throw new MaxFailuresReachedError(t('exec_errors_maxFailuresReached'));
+          }
+          // approve / edit / answer → continue the loop, classifier reset
+          this.failureClassifier.recordSuccess();
+          context.consecutiveFailures = 0;
+          return false;
+        } catch (handoffErr) {
+          if (handoffErr instanceof MaxFailuresReachedError) throw handoffErr;
+          logger.warning('HITL handoff failed, falling back to maxFailures gate', handoffErr);
+        }
+      }
+      if (failAction === 'retry_backoff') {
+        const backoffMs = Math.min(
+          5_000,
+          (context.options.retryDelay ?? 1) * 1000 * Math.pow(2, this.failureClassifier.getCounts().transient - 1),
+        );
+        logger.info(`retry_backoff: sleeping ${backoffMs}ms before next iteration`);
+        await new Promise(r => setTimeout(r, backoffMs));
+      }
+
       if (context.consecutiveFailures >= context.options.maxFailures) {
         throw new MaxFailuresReachedError(t('exec_errors_maxFailuresReached'));
       }
