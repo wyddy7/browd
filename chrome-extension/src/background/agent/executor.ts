@@ -4,7 +4,6 @@ import { t } from '@extension/i18n';
 import { NavigatorAgent, NavigatorActionRegistry } from './agents/navigator';
 import { PlannerAgent, type PlannerOutput } from './agents/planner';
 import { NavigatorPrompt } from './prompts/navigator';
-import { UnifiedPrompt } from './prompts/unified';
 import { PlannerPrompt } from './prompts/planner';
 import { createLogger } from '@src/background/log';
 import MessageManager from './messages/service';
@@ -48,7 +47,7 @@ export class Executor {
   private readonly planner: PlannerAgent;
   private readonly context: AgentContext;
   private readonly plannerPrompt: PlannerPrompt;
-  private readonly navigatorPrompt: NavigatorPrompt | UnifiedPrompt;
+  private readonly navigatorPrompt: NavigatorPrompt;
   private readonly generalSettings: GeneralSettingsConfig | undefined;
   private readonly failureClassifier = new FailureClassifier();
   private readonly _hitlController?: HITLController;
@@ -84,27 +83,23 @@ export class Executor {
       context.hitlController = this._hitlController;
     }
     this.tasks.push(task);
-    // T2b: agentMode='unified' uses one ReAct loop (no Planner) with the
-    // UnifiedPrompt and the unified action set (evidence-required `done`,
-    // `replan`, `remember`). agentMode='classic' is the inherited
-    // Planner+Navigator pipeline. Default is 'classic' until T3 evals
-    // promote 'unified' to default.
+    // agentMode='unified' uses LangGraph.js createReactAgent (T2d).
+    // agentMode='classic' is the inherited Planner+Navigator pipeline.
+    // Default 'classic' until T3 evals promote 'unified' to default.
     this.unifiedMode = extraArgs?.generalSettings?.agentMode === 'unified';
-    // T2c hotfix: in unified mode FORCE maxActionsPerStep=1. ReAct semantics
-    // require one observation per thought; batching multiple actions in a
-    // single LLM turn defeats the verifier-then-replan loop and produces
-    // confusing traces (e.g. multiple `done` calls in one step retrying
-    // different evidence ids). Classic keeps user-configured value.
-    if (this.unifiedMode) {
-      context.options.maxActionsPerStep = 1;
-    }
-    this.navigatorPrompt = this.unifiedMode
-      ? new UnifiedPrompt(1, extraArgs?.agentSystemPrompts?.navigator)
-      : new NavigatorPrompt(context.options.maxActionsPerStep, extraArgs?.agentSystemPrompts?.navigator);
+    this.navigatorPrompt = new NavigatorPrompt(
+      context.options.maxActionsPerStep,
+      extraArgs?.agentSystemPrompts?.navigator,
+    );
     this.plannerPrompt = new PlannerPrompt(extraArgs?.agentSystemPrompts?.planner);
 
     const actionBuilder = new ActionBuilder(context, extractorLLM);
-    this.unifiedActions = this.unifiedMode ? actionBuilder.buildUnifiedActions() : actionBuilder.buildDefaultActions();
+    // Both modes share the same action set. Classic dispatches via
+    // NavigatorAgent.doMultiAction; unified passes the same array to
+    // runReactAgent which wraps each Action as a LangGraph tool. The
+    // `done` action is filtered out for unified inside actionsToTools
+    // because LangGraph terminates natively on no-tool-calls.
+    this.unifiedActions = actionBuilder.buildDefaultActions();
     this.navigatorLLM = navigatorLLM;
     const navigatorActionRegistry = new NavigatorActionRegistry(this.unifiedActions);
 
