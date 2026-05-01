@@ -48,6 +48,48 @@ Production build output is `dist/`.
 
 `pnpm dev` can be used for watch builds, but background/content-script changes may still require extension reload.
 
+## Agent Runtime — read before touching `chrome-extension/src/background/agent/**`
+
+Browd has two agent topologies behind a `agentMode` settings flag:
+
+- `'classic'` (default, safety net) — inherited Planner+Navigator
+  pipeline. `runClassicLoop` in `executor.ts`. Do not refactor.
+- `'unified'` (experimental) — LangGraph.js `createReactAgent`.
+  `runReactAgent` in `agents/runReactAgent.ts`. Tools wrapped via
+  `tools/langGraphAdapter.ts`.
+
+**Live tier state and pending roadmap:**
+
+- `../auto-docs/browd-agent-evolution.md` — current shipped state +
+  next blocker. Read on every resume.
+- `../auto-docs/browd-tier-pending.md` — full plans for unshipped
+  tiers (T2g, T3, T2f).
+- `../docs/browd-lessons-learned.md` — postmortems and workflow
+  rules. Read once for context, then on demand.
+
+## MV3 Service Worker Gotchas
+
+These fail at runtime even when build passes. happy-dom in tests
+provides them; the actual SW does not.
+
+- **No `DOMParser` / `document` / `window`.** Use `linkedom`
+  (`parseHTML(html).document`) for HTML-to-DOM in the SW. For URL →
+  markdown prefer Jina Reader (`https://r.jina.ai/<url>`) — server
+  renders + extracts, no DOM in SW. Local fallback in
+  `chrome-extension/src/background/agent/tools/webTools.ts`.
+- **No `node:async_hooks`.** `@langchain/langgraph` calls
+  `new AsyncLocalStorage()` at module load. Vite alias redirects
+  `node:async_hooks` → `chrome-extension/src/background/shims/asyncLocalStorage.ts`
+  (synchronous in-memory stub). Acceptable trade-off because the SW
+  agent loop is single-flight per Executor.
+- **Test environments mask SW-only failures.** Any HTML-touching or
+  Node-API-touching code must have a manual smoke test under the
+  actual extension before claiming shipped. Acceptance for those
+  files is "tests + manual reload + actual invocation".
+
+Reusable form of these notes (for any Chrome extension project) is
+in `../docs/lessons-learned.md`.
+
 ## Repository Shape
 
 - `chrome-extension/` — manifest, background service worker, agent runtime, browser automation.
