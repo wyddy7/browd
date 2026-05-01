@@ -130,15 +130,25 @@ function resolveLabel(node: DOMElementNode, root: DOMElementNode): { label: stri
     if (text) return { label: text, source: 'ancestor_label' };
   }
 
-  // 4. Preceding sibling text — walk parent's children before this node
+  // 4. Preceding sibling / uncle text:
+  //    - Level 1: direct preceding siblings of the field
+  //    - Level 2: preceding siblings of the field's parent container (uncle pattern)
+  //      e.g. <div.row><div.title><label/></div><div.content><textarea/></div></div>
   if (node.parent) {
     const siblings = node.parent.children;
     const idx = siblings.indexOf(node);
     for (let i = idx - 1; i >= 0; i--) {
-      const sib = siblings[i];
-      const text = collectText(sib).trim();
-      if (text && text.length < 120) {
-        return { label: text, source: 'sibling_text' };
+      const text = collectText(siblings[i]).trim();
+      if (text && text.length < 120) return { label: text, source: 'sibling_text' };
+    }
+
+    const parent = node.parent;
+    if (parent.parent) {
+      const grandSiblings = parent.parent.children;
+      const parentIdx = grandSiblings.indexOf(parent);
+      for (let i = parentIdx - 1; i >= 0; i--) {
+        const text = collectText(grandSiblings[i]).trim();
+        if (text && text.length < 120) return { label: text, source: 'sibling_text' };
       }
     }
   }

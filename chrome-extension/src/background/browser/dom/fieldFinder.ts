@@ -64,12 +64,26 @@ function findAncestorLabelText(node: DOMElementNode): string {
 }
 
 function findPrecedingSiblingText(node: DOMElementNode): string {
-  if (!node.parent) return '';
-  const siblings = node.parent.children;
-  const idx = siblings.indexOf(node);
-  for (let i = idx - 1; i >= 0; i--) {
-    const text = collectText(siblings[i]).trim();
-    if (text && text.length < 150) return text;
+  // Level 1: direct preceding siblings of the field itself
+  if (node.parent) {
+    const siblings = node.parent.children;
+    const idx = siblings.indexOf(node);
+    for (let i = idx - 1; i >= 0; i--) {
+      const text = collectText(siblings[i]).trim();
+      if (text && text.length < 150) return text;
+    }
+
+    // Level 2: label is a sibling of the field's parent container (uncle pattern).
+    // e.g.: <div.row><div.title><label>…</label></div><div.content><textarea/></div></div>
+    const parent = node.parent;
+    if (parent.parent) {
+      const grandSiblings = parent.parent.children;
+      const parentIdx = grandSiblings.indexOf(parent);
+      for (let i = parentIdx - 1; i >= 0; i--) {
+        const text = collectText(grandSiblings[i]).trim();
+        if (text && text.length < 150) return text;
+      }
+    }
   }
   return '';
 }
