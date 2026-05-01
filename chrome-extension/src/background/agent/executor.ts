@@ -215,11 +215,21 @@ export class Executor {
         // If navigator indicates completion, the next periodic planner run will validate it
         if (navigatorDone) {
           logger.info('🔄 Navigator indicates completion - will be validated by next planner run');
+          // T2b: in unified mode there is no Planner to validate completion,
+          // so a navigator-emitted `done` IS the terminal signal. Without
+          // this, the loop kept iterating after an accepted `done` and the
+          // agent re-emitted the same answer 5+ times (observed in the
+          // 2026-05-01 unified-mode lmarena test).
+          if (this.unifiedMode) {
+            break;
+          }
         }
       }
 
-      // Determine task completion status
-      const isCompleted = latestPlanOutput?.result?.done === true;
+      // Determine task completion status. In unified mode, a navigator-emitted
+      // `done` (no planner validation) is sufficient — finalAnswer was set by
+      // handleUnifiedDone.
+      const isCompleted = latestPlanOutput?.result?.done === true || (this.unifiedMode && navigatorDone);
 
       if (isCompleted) {
         // Emit final answer if available, otherwise use task ID
