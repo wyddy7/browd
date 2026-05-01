@@ -67,6 +67,8 @@ abstract class BasePrompt {
     const forms = extractForms(browserState);
     const formsSection = formatFormsForPrompt(forms);
 
+    const pageTextSection = browserState.pageText ? `## Page readable text\n${browserState.pageText}\n` : '';
+
     const currentTab = `{id: ${browserState.tabId}, url: ${browserState.url}, title: ${browserState.title}}`;
     const otherTabs = browserState.tabs
       .filter(tab => tab.id !== browserState.tabId)
@@ -78,7 +80,7 @@ The following is one-time information - if you need to remember it write it to m
 Current tab: ${currentTab}
 Other available tabs:
   ${otherTabs.join('\n')}
-Interactive elements from top layer of the current page inside the viewport:
+${pageTextSection}Interactive elements from top layer of the current page inside the viewport:
 ${formattedElementsText}
 ${formsSection ? `${formsSection}\n` : ''}${stepInfoDescription}
 ${actionResultsDescription}

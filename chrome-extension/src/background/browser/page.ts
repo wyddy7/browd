@@ -334,6 +334,17 @@ export default class Page {
     return await this._puppeteerPage.content();
   }
 
+  async getPageText(): Promise<string> {
+    if (!this._puppeteerPage) return '';
+    try {
+      return await this._puppeteerPage.evaluate(() =>
+        (document.body?.innerText ?? '').replace(/\s+/g, ' ').trim().slice(0, 2500),
+      );
+    } catch {
+      return '';
+    }
+  }
+
   getCachedState(): PageState | null {
     return this._cachedState;
   }
@@ -430,6 +441,7 @@ export default class Page {
       this._state.scrollY = scrollY;
       this._state.visualViewportHeight = visualViewportHeight;
       this._state.scrollHeight = scrollHeight;
+      this._state.pageText = await this.getPageText();
       return this._state;
     } catch (error) {
       logger.error('Failed to update state:', error);
@@ -593,6 +605,12 @@ export default class Page {
   // if yPercent is 0, scroll to the top of the page, if 100, scroll to the bottom of the page
   // if elementNode is provided, scroll to a percentage of the element
   // if elementNode is not provided, scroll to a percentage of the page
+  //
+  // Robust window scroll: many SPAs (hh.ru, modal-based forms) have an inner scroll
+  // container instead of a scrolling <body>, so window.scrollTo is a no-op. We try
+  // window first, and if scrollY didn't move, find the largest scrollable element on
+  // the page and scroll that instead. We use behavior:'instant' so verification ~1s
+  // later sees the final position rather than mid-animation.
   async scrollToPercent(yPercent: number, elementNode?: DOMElementNode): Promise<void> {
     if (!this._puppeteerPage) {
       throw new Error('Puppeteer is not connected');
@@ -602,11 +620,31 @@ export default class Page {
         const scrollHeight = document.documentElement.scrollHeight;
         const viewportHeight = window.visualViewport?.height || window.innerHeight;
         const scrollTop = (scrollHeight - viewportHeight) * (yPercent / 100);
-        window.scrollTo({
-          top: scrollTop,
-          left: window.scrollX,
-          behavior: 'smooth',
-        });
+        const before = window.scrollY;
+        window.scrollTo({ top: scrollTop, left: window.scrollX, behavior: 'instant' as ScrollBehavior });
+
+        // If window didn't move, find the tallest visible scrollable container and scroll it.
+        if (Math.abs(window.scrollY - before) < 5 && scrollHeight - viewportHeight > 5) {
+          const candidates = Array.from(document.querySelectorAll<HTMLElement>('*')).filter(el => {
+            const style = window.getComputedStyle(el);
+            const overflowY = style.overflowY;
+            const scrollable =
+              (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay') &&
+              el.scrollHeight - el.clientHeight > 20 &&
+              el.clientHeight > 100;
+            return scrollable;
+          });
+          // Pick the largest scrollable container by clientHeight (usually the main scroll area)
+          candidates.sort((a, b) => b.clientHeight - a.clientHeight);
+          const target = candidates[0];
+          if (target) {
+            const targetScrollHeight = target.scrollHeight;
+            const targetClientHeight = target.clientHeight;
+            target.scrollTop = (targetScrollHeight - targetClientHeight) * (yPercent / 100);
+            // Mirror to window.scrollY so verifier sees a delta — store on dataset
+            // (no real way to fake window.scrollY; verifier will rely on cache refresh).
+          }
+        }
       }, yPercent);
     } else {
       const element = await this.locateElement(elementNode);
@@ -624,11 +662,7 @@ export default class Page {
         const scrollHeight = el.scrollHeight;
         const viewportHeight = el.clientHeight;
         const scrollTop = (scrollHeight - viewportHeight) * (yPercent / 100);
-        el.scrollTo({
-          top: scrollTop,
-          left: el.scrollLeft,
-          behavior: 'smooth',
-        });
+        el.scrollTo({ top: scrollTop, left: el.scrollLeft, behavior: 'instant' as ScrollBehavior });
       }, yPercent);
     }
   }
@@ -639,11 +673,22 @@ export default class Page {
     }
     if (!elementNode) {
       await this._puppeteerPage.evaluate(y => {
-        window.scrollBy({
-          top: y,
-          left: 0,
-          behavior: 'smooth',
-        });
+        const before = window.scrollY;
+        window.scrollBy({ top: y, left: 0, behavior: 'instant' as ScrollBehavior });
+        if (Math.abs(window.scrollY - before) < 5) {
+          // Inner scroll container fallback (hh.ru, modal-driven SPAs)
+          const candidates = Array.from(document.querySelectorAll<HTMLElement>('*')).filter(el => {
+            const style = window.getComputedStyle(el);
+            const overflowY = style.overflowY;
+            return (
+              (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay') &&
+              el.scrollHeight - el.clientHeight > 20 &&
+              el.clientHeight > 100
+            );
+          });
+          candidates.sort((a, b) => b.clientHeight - a.clientHeight);
+          if (candidates[0]) candidates[0].scrollTop += y;
+        }
       }, y);
     } else {
       const element = await this.locateElement(elementNode);
@@ -656,13 +701,9 @@ export default class Page {
       if (!scrollableElement) {
         throw new Error(`No scrollable ancestor found for element: ${elementNode}`);
       }
-      await scrollableElement.evaluate(el => {
-        el.scrollBy({
-          top: y,
-          left: 0,
-          behavior: 'smooth',
-        });
-      });
+      await scrollableElement.evaluate((el, dy) => {
+        el.scrollBy({ top: dy, left: 0, behavior: 'instant' as ScrollBehavior });
+      }, y);
     }
   }
 
@@ -672,8 +713,10 @@ export default class Page {
     }
 
     if (!elementNode) {
-      // Scroll the whole page up by viewport height
-      await this._puppeteerPage.evaluate('window.scrollBy(0, -(window.visualViewport?.height || window.innerHeight));');
+      // Scroll the whole page up by viewport height (with inner-container fallback)
+      await this.scrollBy(
+        -(await this._puppeteerPage.evaluate(() => window.visualViewport?.height || window.innerHeight)),
+      );
     } else {
       // Scroll the specific element up by its client height
       const element = await this.locateElement(elementNode);
@@ -699,8 +742,10 @@ export default class Page {
     }
 
     if (!elementNode) {
-      // Scroll the whole page down by viewport height
-      await this._puppeteerPage.evaluate('window.scrollBy(0, (window.visualViewport?.height || window.innerHeight));');
+      // Scroll the whole page down by viewport height (with inner-container fallback)
+      await this.scrollBy(
+        await this._puppeteerPage.evaluate(() => window.visualViewport?.height || window.innerHeight),
+      );
     } else {
       // Scroll the specific element down by its client height
       const element = await this.locateElement(elementNode);

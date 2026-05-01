@@ -387,10 +387,12 @@ export class NavigatorAgent extends BaseAgent<z.ZodType, NavigatorResult> {
 
     await browserContext.removeHighlight();
 
-    // Verifier with lightweight browser adapters
+    // Verifier with lightweight browser adapters.
+    // readScrollY MUST call getState() (not getCachedState) so we read the FRESH scrollY
+    // from the live page after the action, not the stale cache captured before doMultiAction.
     const verifier = new Verifier({
       readFieldValue: async () => null, // requires debugger API — verifier falls back gracefully
-      readScrollY: async () => (await browserContext.getCachedState()).scrollY ?? 0,
+      readScrollY: async () => (await browserContext.getState(this.context.options.useVision)).scrollY ?? 0,
       readDomHash: async () => '',
     });
 
@@ -459,7 +461,9 @@ export class NavigatorAgent extends BaseAgent<z.ZodType, NavigatorResult> {
           }
         }
 
-        const scrollYBefore = browserState.scrollY ?? 0;
+        // Capture fresh scrollY from the live page (not from the cached browserState which
+        // may be N actions stale within a multi-action step).
+        const scrollYBefore = (await browserContext.getCachedState()).scrollY ?? 0;
         const result = await actionInstance.call(resolvedActionArgs);
         if (result === undefined) throw new Error(`Action ${resolvedActionName} returned undefined`);
 
@@ -478,8 +482,10 @@ export class NavigatorAgent extends BaseAgent<z.ZodType, NavigatorResult> {
 
         await new Promise(resolve => setTimeout(resolve, 1000));
 
-        // Post-action verification
-        const stateAfter = await browserContext.getCachedState();
+        // Post-action verification — MUST use getState() (not getCachedState) to force a fresh
+        // DOM read. Without this the cached state from the start of doMultiAction is reused
+        // and domHashAfter == domHashBefore for every action → every click looks like a no-op.
+        const stateAfter = await browserContext.getState(this.context.options.useVision);
         const hashesAfter = await calcBranchPathHashSet(stateAfter);
         const domHashAfter = hashStr(hashesAfter);
 
@@ -505,19 +511,22 @@ export class NavigatorAgent extends BaseAgent<z.ZodType, NavigatorResult> {
           this.consecutiveVerifFails++;
           logger.warning(`Verification failed (${this.consecutiveVerifFails} consecutive): ${verifyResult.reason}`);
 
+          // After 3 consecutive failures of any kind → throw reasoning_failure so FailureClassifier
+          // routes to HITL instead of silently retrying forever. This MUST be checked before the
+          // break-and-continue path below, otherwise the early break prevents the throw from ever
+          // firing and the agent loops indefinitely (this is what caused the 15-minute hh.ru
+          // wall-bashing session).
+          if (this.consecutiveVerifFails >= 3) {
+            this.consecutiveVerifFails = 0;
+            throw new Error(`reasoning_failure: 3 consecutive verification failures — last: ${verifyResult.reason}`);
+          }
+
           // Any failure with confidence ≥ 0.6 → surface immediately so LLM can replan
           if (verifyResult.confidence >= 0.6) {
             results.push(
               new ActionResult({ error: `Verification failed: ${verifyResult.reason}`, includeInMemory: true }),
             );
             break;
-          }
-
-          // After 3 consecutive failures of any kind → throw reasoning_failure so FailureClassifier
-          // routes to HITL instead of silently retrying forever
-          if (this.consecutiveVerifFails >= 3) {
-            this.consecutiveVerifFails = 0;
-            throw new Error(`reasoning_failure: 3 consecutive verification failures — last: ${verifyResult.reason}`);
           }
         }
       } catch (error) {

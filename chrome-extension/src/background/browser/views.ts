@@ -100,6 +100,8 @@ export interface PageState extends DOMState {
   scrollY: number;
   scrollHeight: number;
   visualViewportHeight: number;
+  /** Truncated plain-text of the page body for LLM context. */
+  pageText?: string;
 }
 
 export interface TabInfo {
