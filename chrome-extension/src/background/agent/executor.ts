@@ -154,11 +154,11 @@ export class Executor {
    * @returns {Promise<void>}
    */
   async execute(): Promise<void> {
-    logger.info(`🚀 Executing task: ${this.tasks[this.tasks.length - 1]}`);
-    // reset the step counter
+    logger.info(
+      `🚀 Executing task (mode=${this.unifiedMode ? 'unified' : 'classic'}): ${this.tasks[this.tasks.length - 1]}`,
+    );
     const context = this.context;
     context.nSteps = 0;
-    const allowedMaxSteps = this.context.options.maxSteps;
 
     // T0: bind the tracer to this task so every Action.call writes a record
     // attributed to the right taskId.
@@ -172,77 +172,10 @@ export class Executor {
 
     try {
       this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_START, this.context.taskId);
-
-      let step = 0;
-      let latestPlanOutput: AgentOutput<PlannerOutput> | null = null;
-      let navigatorDone = false;
-
-      for (step = 0; step < allowedMaxSteps; step++) {
-        context.stepInfo = {
-          stepNumber: context.nSteps,
-          maxSteps: context.options.maxSteps,
-        };
-        globalTracer.setStep(context.nSteps);
-
-        logger.info(`🔄 Step ${step + 1} / ${allowedMaxSteps}`);
-        if (await this.shouldStop()) {
-          break;
-        }
-
-        if (context.messageManager.length() > 30) {
-          context.messageManager.compactOldStateMessages();
-        }
-
-        // T2b: skip the Planner entirely in unified mode — the unified
-        // agent owns its own planning inline via current_state.next_goal.
-        if (
-          !this.unifiedMode &&
-          this.planner &&
-          (context.nSteps % context.options.planningInterval === 0 || navigatorDone)
-        ) {
-          navigatorDone = false;
-          latestPlanOutput = await this.runPlanner();
-
-          // Check if task is complete after planner run
-          if (this.checkTaskCompletion(latestPlanOutput)) {
-            break;
-          }
-        }
-
-        // Execute navigator
-        navigatorDone = await this.navigate();
-
-        // If navigator indicates completion, the next periodic planner run will validate it
-        if (navigatorDone) {
-          logger.info('🔄 Navigator indicates completion - will be validated by next planner run');
-          // T2b: in unified mode there is no Planner to validate completion,
-          // so a navigator-emitted `done` IS the terminal signal. Without
-          // this, the loop kept iterating after an accepted `done` and the
-          // agent re-emitted the same answer 5+ times (observed in the
-          // 2026-05-01 unified-mode lmarena test).
-          if (this.unifiedMode) {
-            break;
-          }
-        }
-      }
-
-      // Determine task completion status. In unified mode, a navigator-emitted
-      // `done` (no planner validation) is sufficient — finalAnswer was set by
-      // handleUnifiedDone.
-      const isCompleted = latestPlanOutput?.result?.done === true || (this.unifiedMode && navigatorDone);
-
-      if (isCompleted) {
-        // Emit final answer if available, otherwise use task ID
-        const finalMessage = this.context.finalAnswer || this.context.taskId;
-        this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_OK, finalMessage);
-      } else if (step >= allowedMaxSteps) {
-        logger.error('❌ Task failed: Max steps reached');
-        this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_FAIL, t('exec_errors_maxStepsReached'));
-      } else if (this.context.stopped) {
-        this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_CANCEL, t('exec_task_cancel'));
+      if (this.unifiedMode) {
+        await this.runUnifiedLoop();
       } else {
-        this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_PAUSE, t('exec_task_pause'));
-        // Note: We don't track pause as it's not a final state
+        await this.runClassicLoop();
       }
     } catch (error) {
       if (error instanceof RequestCancelledError) {
@@ -274,6 +207,104 @@ export class Executor {
       } catch (err) {
         logger.warning('tracer flush failed', err);
       }
+    }
+  }
+
+  /**
+   * Classic Planner+Navigator loop — inherited from Nanobrowser.
+   * Runs the Planner periodically (every `planningInterval` steps or after
+   * the Navigator emits a tentative `done`) which validates / corrects the
+   * Navigator's direction. Terminal: Planner confirms `done` OR maxSteps.
+   */
+  private async runClassicLoop(): Promise<void> {
+    const context = this.context;
+    const allowedMaxSteps = context.options.maxSteps;
+    let step = 0;
+    let latestPlanOutput: AgentOutput<PlannerOutput> | null = null;
+    let navigatorDone = false;
+
+    for (step = 0; step < allowedMaxSteps; step++) {
+      context.stepInfo = { stepNumber: context.nSteps, maxSteps: allowedMaxSteps };
+      globalTracer.setStep(context.nSteps);
+      logger.info(`🔄 [classic] Step ${step + 1} / ${allowedMaxSteps}`);
+
+      if (await this.shouldStop()) break;
+      if (context.messageManager.length() > 30) {
+        context.messageManager.compactOldStateMessages();
+      }
+
+      if (this.planner && (context.nSteps % context.options.planningInterval === 0 || navigatorDone)) {
+        navigatorDone = false;
+        latestPlanOutput = await this.runPlanner();
+        if (this.checkTaskCompletion(latestPlanOutput)) break;
+      }
+
+      navigatorDone = await this.navigate();
+      if (navigatorDone) {
+        logger.info('🔄 Navigator indicates completion - will be validated by next planner run');
+      }
+    }
+
+    const isCompleted = latestPlanOutput?.result?.done === true;
+    if (isCompleted) {
+      const finalMessage = context.finalAnswer || context.taskId;
+      context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_OK, finalMessage);
+    } else if (step >= allowedMaxSteps) {
+      logger.error('❌ Task failed: Max steps reached');
+      context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_FAIL, t('exec_errors_maxStepsReached'));
+    } else if (context.stopped) {
+      context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_CANCEL, t('exec_task_cancel'));
+    } else {
+      context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_PAUSE, t('exec_task_pause'));
+    }
+  }
+
+  /**
+   * UnifiedAgent ReAct loop — single agent, no Planner.
+   *
+   * Owns its own termination contract: a navigator-emitted `done` (after
+   * passing handleUnifiedDone evidence validation) IS the terminal signal.
+   * No legacy plumbing — `done` here means done, no Planner re-validation.
+   *
+   * The Navigator class is reused as the LLM driver because it already
+   * knows how to invoke a model with the {current_state, action[]} schema
+   * over the message history. The unified action set (built via
+   * buildUnifiedActions) replaces the lenient `done` with the
+   * evidence-aware one and adds replan/remember meta-tools.
+   */
+  private async runUnifiedLoop(): Promise<void> {
+    const context = this.context;
+    const allowedMaxSteps = context.options.maxSteps;
+    let step = 0;
+    let terminated = false;
+
+    for (step = 0; step < allowedMaxSteps; step++) {
+      context.stepInfo = { stepNumber: context.nSteps, maxSteps: allowedMaxSteps };
+      globalTracer.setStep(context.nSteps);
+      logger.info(`🔄 [unified] Step ${step + 1} / ${allowedMaxSteps}`);
+
+      if (await this.shouldStop()) break;
+      if (context.messageManager.length() > 30) {
+        context.messageManager.compactOldStateMessages();
+      }
+
+      const navigatorDone = await this.navigate();
+      if (navigatorDone) {
+        terminated = true;
+        break;
+      }
+    }
+
+    if (terminated) {
+      const finalMessage = context.finalAnswer || 'Task completed.';
+      context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_OK, finalMessage);
+    } else if (step >= allowedMaxSteps) {
+      logger.error('❌ Task failed: Max steps reached');
+      context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_FAIL, t('exec_errors_maxStepsReached'));
+    } else if (context.stopped) {
+      context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_CANCEL, t('exec_task_cancel'));
+    } else {
+      context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_PAUSE, t('exec_task_pause'));
     }
   }
 
