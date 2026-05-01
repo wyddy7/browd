@@ -770,14 +770,6 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
       ...prev,
       [agentName]: value,
     }));
-
-    try {
-      await updateStoredAgentModel(agentName, {
-        systemPrompt: value.trim() || undefined,
-      });
-    } catch (error) {
-      console.error('Error saving agent system prompt:', error);
-    }
   };
 
   const handleReasoningEffortChange = async (
@@ -869,12 +861,54 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
     }
   };
 
+  const handleSaveModelConfig = async (agentName: AgentNameEnum) => {
+    const selectedModel = selectedModels[agentName];
+    if (!selectedModel) {
+      alert('Please select a model first');
+      return;
+    }
+    const [provider, modelName] = selectedModel.split('>');
+    if (!provider || !modelName) return;
+
+    try {
+      await agentModelStore.setAgentModel(agentName, {
+        provider,
+        modelName,
+        parameters: modelParameters[agentName],
+        reasoningEffort: reasoningEffort[agentName],
+        systemPrompt: systemPrompts[agentName]?.trim() || undefined,
+      });
+      const btn = document.getElementById(`save-btn-${agentName}`);
+      if (btn) {
+        const originalText = btn.innerText;
+        btn.innerText = '✓';
+        btn.classList.add('!bg-[var(--browd-accent)]', '!text-white');
+        setTimeout(() => {
+          btn.innerText = originalText;
+          btn.classList.remove('!bg-[var(--browd-accent)]', '!text-white');
+        }, 2000);
+      }
+    } catch (error) {
+      console.error('Error saving agent model:', error);
+      alert('Error saving: ' + error);
+    }
+  };
+
   const renderModelSelect = (agentName: AgentNameEnum) => (
     <div className={innerCardClass}>
-      <h3 className="mb-2 text-lg font-medium text-[var(--browd-text)]">
-        {agentName.charAt(0).toUpperCase() + agentName.slice(1)}
-      </h3>
-      <p className="mb-4 text-sm font-normal text-[var(--browd-muted)]">{getAgentDescription(agentName)}</p>
+      <div className="mb-4 flex items-start justify-between gap-4">
+        <div>
+          <h3 className="mb-2 text-lg font-medium text-[var(--browd-text)]">
+            {agentName === AgentNameEnum.Planner
+              ? t('options_models_agents_planner_name')
+              : t('options_models_agents_navigator_name')}
+          </h3>
+          <p className="text-sm font-normal text-[var(--browd-muted)]">{getAgentDescription(agentName)}</p>
+        </div>
+        <Button id={`save-btn-${agentName}`} variant="primary" onClick={() => handleSaveModelConfig(agentName)}>
+          {t('options_models_providers_btnSave')}
+        </Button>
+      </div>
 
       <div className="space-y-4">
         {/* Model Selection */}
@@ -1015,10 +1049,10 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
                   handleReasoningEffortChange(agentName, e.target.value as 'minimal' | 'low' | 'medium' | 'high')
                 }
                 className={fieldInputClass}>
-                <option value="minimal/none">Minimal</option>
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
+                <option value="minimal/none">{t('options_models_reasoning_minimal')}</option>
+                <option value="low">{t('options_models_reasoning_low')}</option>
+                <option value="medium">{t('options_models_reasoning_medium')}</option>
+                <option value="high">{t('options_models_reasoning_high')}</option>
               </select>
             </div>
           </div>
@@ -1027,10 +1061,47 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
     </div>
   );
 
+  const handleSaveSttConfig = async () => {
+    try {
+      if (selectedSpeechToTextModel) {
+        const [provider, modelName] = selectedSpeechToTextModel.split('>');
+        await speechToTextModelStore.setSpeechToTextModel({
+          provider,
+          modelName,
+        });
+      } else {
+        await speechToTextModelStore.resetSpeechToTextModel();
+      }
+
+      const btn = document.getElementById('save-btn-stt');
+      if (btn) {
+        const originalText = btn.innerText;
+        btn.innerText = '✓';
+        btn.classList.add('!bg-[var(--browd-accent)]', '!text-white');
+        setTimeout(() => {
+          btn.innerText = originalText;
+          btn.classList.remove('!bg-[var(--browd-accent)]', '!text-white');
+        }, 2000);
+      }
+    } catch (error) {
+      console.error('Error saving STT model:', error);
+      alert('Error saving: ' + error);
+    }
+  };
+
   const renderSpeechToTextSelect = () => (
     <div className={innerCardClass}>
-      <h3 className="mb-2 text-lg font-medium text-[var(--browd-text)]">{t('options_models_speechToText_header')}</h3>
-      <p className="mb-4 text-sm font-normal text-[var(--browd-muted)]">{t('options_models_stt_desc')}</p>
+      <div className="mb-4 flex items-start justify-between gap-4">
+        <div>
+          <h3 className="mb-2 text-lg font-medium text-[var(--browd-text)]">
+            {t('options_models_speechToText_header')}
+          </h3>
+          <p className="text-sm font-normal text-[var(--browd-muted)]">{t('options_models_stt_desc')}</p>
+        </div>
+        <Button id="save-btn-stt" variant="primary" onClick={handleSaveSttConfig}>
+          {t('options_models_providers_btnSave')}
+        </Button>
+      </div>
 
       <div className="flex items-center">
         <label htmlFor="speech-to-text-model" className={fieldLabelClass}>

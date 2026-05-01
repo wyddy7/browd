@@ -168,6 +168,10 @@ export class Executor {
           break;
         }
 
+        if (context.messageManager.length() > 30) {
+          context.messageManager.compactOldStateMessages();
+        }
+
         // Run planner periodically for guidance
         if (this.planner && (context.nSteps % context.options.planningInterval === 0 || navigatorDone)) {
           navigatorDone = false;

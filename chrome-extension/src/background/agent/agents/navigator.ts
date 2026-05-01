@@ -2,6 +2,11 @@ import { z } from 'zod';
 import { BaseAgent, type BaseAgentOptions, type ExtraAgentOptions } from './base';
 import { createLogger } from '@src/background/log';
 import { LoopDetector } from '../guardrails/loopDetector';
+import { Verifier } from '../verification/verifier';
+import { checkApproval } from '../guardrails/approvalPolicy';
+import { classifyState } from '../state/classifier';
+import { extractForms } from '@src/background/browser/dom/forms';
+import type { HITLRequest } from '../hitl/types';
 import { ActionResult, type AgentOutput } from '../types';
 import type { Action } from '../actions/builder';
 import { buildDynamicActionSchema } from '../actions/builder';
@@ -380,16 +385,30 @@ export class NavigatorAgent extends BaseAgent<z.ZodType, NavigatorResult> {
 
     await browserContext.removeHighlight();
 
-    for (const [i, action] of actions.entries()) {
-      const actionName = Object.keys(action)[0];
-      const actionArgs = action[actionName];
-      try {
-        // check if the task is paused or stopped
-        if (this.context.paused || this.context.stopped) {
-          return results;
-        }
+    // Verifier with lightweight browser adapters
+    const verifier = new Verifier({
+      readFieldValue: async () => null, // requires debugger API — verifier falls back gracefully
+      readScrollY: async () => (await browserContext.getCachedState()).scrollY ?? 0,
+      readDomHash: async () => '',
+    });
 
-        // Loop guard: abort before executing if the same action keeps repeating
+    // Pre-classify current page state for ApprovalPolicy
+    const pageForms = extractForms(browserState);
+    const pageVisibleText = [browserState.title ?? '', browserState.url ?? ''];
+    const taskState = classifyState(browserState.url ?? '', pageForms, pageVisibleText);
+
+    const hashStr = (s: Set<string>) => [...s].sort().join('|');
+    let domHashBefore = hashStr(cachedPathHashes);
+
+    for (const [i, action] of actions.entries()) {
+      let resolvedAction = action;
+      let resolvedActionName = Object.keys(action)[0];
+      let resolvedActionArgs = (action[resolvedActionName] ?? {}) as Record<string, unknown>;
+
+      try {
+        if (this.context.paused || this.context.stopped) return results;
+
+        // Loop guard
         if (this.loopDetector.isLooping()) {
           const loopErr = this.loopDetector.buildLoopError();
           logger.warning(loopErr.message);
@@ -398,79 +417,105 @@ export class NavigatorAgent extends BaseAgent<z.ZodType, NavigatorResult> {
           return results;
         }
 
-        const actionInstance = this.actionRegistry.getAction(actionName);
-        if (actionInstance === undefined) {
-          throw new Error(`Action ${actionName} not exists`);
+        // ApprovalPolicy: pause for HITL before sensitive actions
+        const approval = checkApproval(resolvedActionName, resolvedActionArgs, taskState);
+        if (approval.requiresApproval && this.context.hitlController) {
+          const req: HITLRequest = {
+            id: `hitl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            reason: approval.reason,
+            pendingAction: resolvedAction,
+            context: { summary: approval.summary, risk: approval.risk, confidence: 0.8 },
+          };
+          this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.TASK_HITL_APPROVE, approval.summary);
+          const decision = await this.context.hitlController.requestDecision(req);
+          this.context.messageManager.addHITLDecision(decision, req);
+
+          if (decision.type === 'reject') {
+            const msg = `User rejected "${resolvedActionName}": ${decision.message}`;
+            results.push(new ActionResult({ error: msg, includeInMemory: true }));
+            return results;
+          }
+          if (decision.type === 'edit') {
+            resolvedAction = decision.editedAction;
+            resolvedActionName = Object.keys(resolvedAction)[0] ?? resolvedActionName;
+            resolvedActionArgs = (resolvedAction[resolvedActionName] ?? {}) as Record<string, unknown>;
+          }
         }
 
-        const indexArg = actionInstance.getIndexArg(actionArgs);
+        const actionInstance = this.actionRegistry.getAction(resolvedActionName);
+        if (actionInstance === undefined) throw new Error(`Action ${resolvedActionName} not exists`);
+
+        const indexArg = actionInstance.getIndexArg(resolvedActionArgs);
         if (i > 0 && indexArg !== null) {
           const newState = await browserContext.getState(this.context.options.useVision);
           const newPathHashes = await calcBranchPathHashSet(newState);
-          // next action requires index but there are new elements on the page
           if (!newPathHashes.isSubsetOf(cachedPathHashes)) {
             const msg = `Something new appeared after action ${i} / ${actions.length}`;
             logger.info(msg);
-            results.push(
-              new ActionResult({
-                extractedContent: msg,
-                includeInMemory: true,
-              }),
-            );
+            results.push(new ActionResult({ extractedContent: msg, includeInMemory: true }));
             break;
           }
         }
 
-        const result = await actionInstance.call(actionArgs);
-        if (result === undefined) {
-          throw new Error(`Action ${actionName} returned undefined`);
-        }
+        const scrollYBefore = browserState.scrollY ?? 0;
+        const result = await actionInstance.call(resolvedActionArgs);
+        if (result === undefined) throw new Error(`Action ${resolvedActionName} returned undefined`);
 
-        // if the action has an index argument, record the interacted element to the result
         if (indexArg !== null) {
           const domElement = browserState.selectorMap.get(indexArg);
           if (domElement) {
             const interactedElement = HistoryTreeProcessor.convertDomElementToHistoryElement(domElement);
             result.interactedElement = interactedElement;
-            logger.info('Interacted element', interactedElement);
-            logger.info('Result', result);
           }
         }
         results.push(result);
 
-        // Record action signature for loop detection
-        this.loopDetector.record(LoopDetector.sigFromAction(action));
+        this.loopDetector.record(LoopDetector.sigFromAction(resolvedAction));
 
-        // check if the task is paused or stopped
-        if (this.context.paused || this.context.stopped) {
-          return results;
-        }
-        // TODO: wait for 1 second for now, need to optimize this to avoid unnecessary waiting
+        if (this.context.paused || this.context.stopped) return results;
+
         await new Promise(resolve => setTimeout(resolve, 1000));
-      } catch (error) {
-        if (error instanceof URLNotAllowedError) {
-          throw error;
+
+        // Post-action verification
+        const stateAfter = await browserContext.getCachedState();
+        const hashesAfter = await calcBranchPathHashSet(stateAfter);
+        const domHashAfter = hashStr(hashesAfter);
+
+        const verifyResult = await verifier.verify({
+          actionName: resolvedActionName,
+          actionArgs: resolvedActionArgs,
+          tabId: browserState.tabId,
+          domHashBefore,
+          domHashAfter,
+          scrollYBefore,
+        });
+        domHashBefore = domHashAfter;
+
+        // Emit STEP_TRACE for trace UI
+        const traceMsg = verifyResult.ok
+          ? `✓ ${resolvedActionName}: ${verifyResult.reason}`
+          : `✗ ${resolvedActionName}: ${verifyResult.reason}`;
+        this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.STEP_TRACE, traceMsg);
+
+        // High-confidence verification failure → surface as action error
+        if (!verifyResult.ok && verifyResult.confidence >= 0.8) {
+          logger.warning(`Verification failed: ${verifyResult.reason}`);
+          results.push(
+            new ActionResult({
+              error: `Verification failed: ${verifyResult.reason}`,
+              includeInMemory: true,
+            }),
+          );
+          break;
         }
+      } catch (error) {
+        if (error instanceof URLNotAllowedError) throw error;
         const errorMessage = error instanceof Error ? error.message : String(error);
-        logger.error(
-          'doAction error',
-          actionName,
-          JSON.stringify(actionArgs, null, 2),
-          JSON.stringify(errorMessage, null, 2),
-        );
-        // unexpected error, emit event
+        logger.error('doAction error', resolvedActionName, JSON.stringify(resolvedActionArgs, null, 2), errorMessage);
         this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_FAIL, errorMessage);
         errCount++;
-        if (errCount > 3) {
-          throw new Error('Too many errors in actions');
-        }
-        results.push(
-          new ActionResult({
-            error: errorMessage,
-            isDone: false,
-            includeInMemory: true,
-          }),
-        );
+        if (errCount > 3) throw new Error('Too many errors in actions');
+        results.push(new ActionResult({ error: errorMessage, isDone: false, includeInMemory: true }));
       }
     }
     return results;

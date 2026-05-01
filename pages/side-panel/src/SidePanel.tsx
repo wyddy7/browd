@@ -26,6 +26,7 @@ import ChatInput, { type ChatInputContentController } from './components/ChatInp
 import ChatHistoryList from './components/ChatHistoryList';
 import BookmarkList from './components/BookmarkList';
 import { HITLPrompt } from './components/HITLPrompt';
+import { TracePanel, type TraceEntry } from './components/TracePanel';
 import { EventType, type AgentEvent, ExecutionState } from './types/event';
 import type { HITLRequest, HITLDecision } from '../../../chrome-extension/src/background/agent/hitl/types';
 import { HITL_REQUEST_MESSAGE } from '../../../chrome-extension/src/background/agent/hitl/types';
@@ -174,6 +175,7 @@ const SidePanel = () => {
   const [isReplaying, setIsReplaying] = useState(false);
   const [replayEnabled, setReplayEnabled] = useState(false);
   const [hitlRequest, setHitlRequest] = useState<HITLRequest | null>(null);
+  const [traceEntries, setTraceEntries] = useState<TraceEntry[]>([]);
   const sessionIdRef = useRef<string | null>(null);
   const isReplayingRef = useRef<boolean>(false);
   const portRef = useRef<chrome.runtime.Port | null>(null);
@@ -471,8 +473,9 @@ const SidePanel = () => {
         case Actors.SYSTEM:
           switch (state) {
             case ExecutionState.TASK_START:
-              // Reset historical session flag when a new task starts
+              // Reset historical session flag and trace when a new task starts
               setIsHistoricalSession(false);
+              setTraceEntries([]);
               break;
             case ExecutionState.TASK_OK:
               setIsFollowUpMode(true);
@@ -550,6 +553,13 @@ const SidePanel = () => {
             case ExecutionState.ACT_FAIL:
               skip = false;
               break;
+            case ExecutionState.STEP_TRACE: {
+              const raw = content ?? '';
+              const icon = raw.startsWith('✓') ? ('✓' as const) : raw.startsWith('✗') ? ('✗' as const) : ('→' as const);
+              const label = raw.replace(/^[✓✗→]\s*/, '');
+              setTraceEntries(prev => [...prev.slice(-19), { icon, label }]);
+              return;
+            }
             default:
               console.error('Invalid action', state);
               return;
@@ -1502,6 +1512,7 @@ const SidePanel = () => {
                 )}
                 {messages.length > 0 && (
                   <div className="border-t border-[var(--browd-border)] bg-[var(--browd-surface)]/80 p-2 backdrop-blur">
+                    <TracePanel entries={traceEntries} />
                     {hitlRequest && <HITLPrompt request={hitlRequest} onDecision={submitHITLDecision} />}
                     <ChatInput
                       onSendMessage={handleSendMessage}

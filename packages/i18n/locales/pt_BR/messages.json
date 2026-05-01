@@ -59,7 +59,7 @@
     "message": "Parar"
   },
   "chat_buttons_replay": {
-    "message": "Reproduzir"
+    "message": "Repetir"
   },
   "chat_buttons_send": {
     "message": "Enviar"
@@ -107,10 +107,10 @@
     "message": "Excluir favorito"
   },
   "chat_bookmarks_titlePlaceholder": {
-    "message": "Título"
+    "message": "Título (máx 30 car.)"
   },
   "chat_bookmarks_contentPlaceholder": {
-    "message": "Descreva a tarefa que você quer reutilizar."
+    "message": "Descreva a tarefa..."
   },
   "chat_replay_starting": {
     "message": "Iniciando reprodução da tarefa:\n\n\"$TASK$\"",
@@ -254,64 +254,64 @@
     "message": "Russo"
   },
   "options_general_maxSteps": {
-    "message": "Máximo de Passos por Tarefa"
+    "message": "Passos máx por tarefa"
   },
   "options_general_maxSteps_desc": {
     "message": "Limite de passos por tarefa"
   },
   "options_general_maxActions": {
-    "message": "Máximo de Ações por Passo"
+    "message": "Ações máx por passo"
   },
   "options_general_maxActions_desc": {
     "message": "Limite de ações por passo"
   },
   "options_general_maxFailures": {
-    "message": "Tolerância a Falhas"
+    "message": "Tolerância a falhas"
   },
   "options_general_maxFailures_desc": {
-    "message": "Quantas falhas consecutivas antes de parar"
+    "message": "Falhas consecutivas antes de parar"
   },
   "options_general_enableVision": {
     "message": "Ativar Visão"
   },
   "options_general_enableVision_desc": {
-    "message": "Usar capacidade de visão dos modelos de linguagem (consome mais tokens para melhores resultados)"
+    "message": "Usar capacidade de visão dos LLMs (consome mais tokens)"
   },
   "options_general_displayHighlights": {
-    "message": "Mostrar Destaques"
+    "message": "Exibir destaques"
   },
   "options_general_displayHighlights_desc": {
-    "message": "Mostrar destaques visuais em elementos interativos (ex: botões, links, etc.)"
+    "message": "Mostrar destaques visuais em elementos interativos (botões, links, etc.)"
   },
   "options_general_planningInterval": {
-    "message": "Frequência de Replanejamento"
+    "message": "Frequência de replanejamento"
   },
   "options_general_planningInterval_desc": {
     "message": "Reconsiderar e atualizar o plano a cada [Número] passos"
   },
   "options_general_minWaitPageLoad": {
-    "message": "Tempo de Espera de Carregamento da Página"
+    "message": "Espera de carregamento"
   },
   "options_general_minWaitPageLoad_desc": {
-    "message": "Tempo mínimo de espera após o carregamento da página (250-5000ms)"
+    "message": "Tempo mínimo de espera após carregar a página (250-5000ms)"
   },
   "options_general_replayHistoricalTasks": {
-    "message": "Reproduzir Tarefas Históricas (experimental)"
+    "message": "Repetir tarefas históricas (experimental)"
   },
   "options_general_replayHistoricalTasks_desc": {
-    "message": "Ativar o armazenamento e a reprodução do histórico de passos do agente (experimental, pode ter problemas)"
+    "message": "Ativar armazenamento e repetição do histórico de passos (experimental, pode ter problemas)"
   },
   "options_general_launchShortcut": {
     "message": "Atalho do navegador"
   },
   "options_general_launchShortcut_desc": {
-    "message": "Atalhos confiáveis de abertura são gerenciados pelo navegador. O padrão é Ctrl+E e, no macOS, Command+E. Altere em atalhos da extensão."
+    "message": "Configurar atalho de teclado global para abrir o painel lateral do Browd"
   },
   "options_models_providers_header": {
-    "message": "Provedores de LLM"
+    "message": "Provedores LLM"
   },
   "options_models_providers_notConfigured": {
-    "message": "Nenhum provedor configurado ainda. Adicione um provedor para começar."
+    "message": "Nenhum provedor configurado ainda. Adicione um para começar."
   },
   "options_models_providers_btnCancel": {
     "message": "Cancelar"
@@ -323,7 +323,7 @@
     "message": "Excluir"
   },
   "options_models_providers_setupInstructions": {
-    "message": "Insira sua chave de API e clique em Salvar para configurá-la."
+    "message": "Insira sua chave API e clique em Salvar."
   },
   "options_models_providers_custom_name": {
     "message": "Nome"
@@ -353,10 +353,10 @@
     "message": "Mostrar chave de API"
   },
   "options_models_selection_header": {
-    "message": "Seleção de Modelo"
+    "message": "Seleção de modelo"
   },
   "options_models_speechToText_header": {
-    "message": "Modelo de Fala para Texto"
+    "message": "Modelo de fala para texto"
   },
   "options_models_agents_navigator": {
     "message": "Navega em sites e executa ações"
@@ -374,22 +374,22 @@
     "message": "Top P"
   },
   "options_models_labels_reasoning": {
-    "message": "Raciocínio"
+    "message": "Esforço de raciocínio"
   },
   "options_models_labels_systemPrompt": {
-    "message": "Prompt do Sistema"
+    "message": "Prompt do sistema"
   },
   "options_models_systemPrompt_placeholder": {
-    "message": "Exemplo: Responda no mesmo idioma da interface do Browd. Seja conciso. Atue como um assistente de pesquisa cuidadoso."
+    "message": "Exemplo: Responda em português. Seja conciso. Atue como um pesquisador cauteloso."
   },
   "options_models_systemPrompt_desc": {
-    "message": "Instruções persistentes opcionais para função, estilo ou idioma de resposta deste agente. O idioma selecionado da interface também é enviado ao agente."
+    "message": "Instruções persistentes opcionais para função, estilo ou idioma. O idioma da interface escolhido também é enviado ao agente."
   },
   "options_models_stt_desc": {
-    "message": "Configure o provedor/modelo usado para fala em texto no microfone. Gemini funciona diretamente, OpenRouter requer um modelo de chat com entrada de áudio e Grok usa a API dedicada de STT da xAI."
+    "message": "Configure o provedor/modelo para o microfone. Gemini funciona diretamente, OpenRouter precisa de modelo com áudio."
   },
   "options_models_chooseModel": {
-    "message": "Escolher Modelo"
+    "message": "Escolher modelo"
   },
   "options_models_addNewProvider": {
     "message": "Adicionar Novo Provedor"
@@ -1025,5 +1025,53 @@
   },
   "options_general_language_ptBR": {
     "message": "Português (Brasil)"
+  },
+  "chat_bookmarks_default1": {
+    "message": "Explorar Browd"
+  },
+  "chat_bookmarks_default2": {
+    "message": "Extrair dados"
+  },
+  "chat_bookmarks_default3": {
+    "message": "Criar processo"
+  },
+  "chat_bookmarks_done": {
+    "message": "Concluído"
+  },
+  "chat_bookmarks_edit_btn": {
+    "message": "Editar"
+  },
+  "chat_input_models_button": {
+    "message": "Modelos"
+  },
+  "chat_input_models_model": {
+    "message": "Modelo"
+  },
+  "chat_input_models_role": {
+    "message": "Função"
+  },
+  "chat_input_placeholder_with_files": {
+    "message": "Adicionar mensagem (opcional)..."
+  },
+  "options_general_launchShortcut_btnOpen": {
+    "message": "Abrir atalhos"
+  },
+  "options_models_agents_navigator_name": {
+    "message": "Navegador"
+  },
+  "options_models_agents_planner_name": {
+    "message": "Planejador"
+  },
+  "options_models_reasoning_high": {
+    "message": "Alto"
+  },
+  "options_models_reasoning_low": {
+    "message": "Baixo"
+  },
+  "options_models_reasoning_medium": {
+    "message": "Médio"
+  },
+  "options_models_reasoning_minimal": {
+    "message": "Mínimo"
   }
 }

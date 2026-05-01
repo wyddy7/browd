@@ -56,7 +56,7 @@
     "message": "Проверяем конфигурацию..."
   },
   "chat_buttons_stop": {
-    "message": "Стоп"
+    "message": "Остановить"
   },
   "chat_buttons_replay": {
     "message": "Повторить"
@@ -101,16 +101,16 @@
     "message": "Отменить изменения"
   },
   "chat_bookmarks_edit": {
-    "message": "Редактировать название"
+    "message": "Изменить название"
   },
   "chat_bookmarks_delete": {
-    "message": "Удалить быстрый старт"
+    "message": "Удалить"
   },
   "chat_bookmarks_titlePlaceholder": {
-    "message": "Название"
+    "message": "Название (макс 30 симв.)"
   },
   "chat_bookmarks_contentPlaceholder": {
-    "message": "Опишите задачу, которую хотите переиспользовать."
+    "message": "Опишите задачу..."
   },
   "chat_replay_starting": {
     "message": "Starting replay of task:\n\n\"$TASK$\"",
@@ -269,19 +269,19 @@
     "message": "Допуск ошибок"
   },
   "options_general_maxFailures_desc": {
-    "message": "Сколько подряд ошибок допускается перед остановкой"
+    "message": "Сколько подряд ошибок до остановки"
   },
   "options_general_enableVision": {
-    "message": "Включить vision"
+    "message": "Включить Vision"
   },
   "options_general_enableVision_desc": {
-    "message": "Использовать vision-возможности LLM (тратит больше токенов, но может улучшить результат)"
+    "message": "Использовать Vision-возможности LLM (тратит больше токенов)"
   },
   "options_general_displayHighlights": {
     "message": "Показывать подсветку"
   },
   "options_general_displayHighlights_desc": {
-    "message": "Показывать визуальную подсветку интерактивных элементов (кнопок, ссылок и т.д.)"
+    "message": "Визуальная подсветка интерактивных элементов (кнопок, ссылок и т.д.)"
   },
   "options_general_planningInterval": {
     "message": "Частота перепланирования"
@@ -293,25 +293,25 @@
     "message": "Ожидание загрузки страницы"
   },
   "options_general_minWaitPageLoad_desc": {
-    "message": "Минимальное ожидание после загрузки страницы (250-5000 мс)"
+    "message": "Минимальное ожидание после загрузки страницы (250-5000мс)"
   },
   "options_general_replayHistoricalTasks": {
-    "message": "Повторять исторические задачи (экспериментально)"
+    "message": "Повторять задачи (экспериментально)"
   },
   "options_general_replayHistoricalTasks_desc": {
-    "message": "Включить сохранение и повтор истории шагов агента (экспериментально, возможны проблемы)"
+    "message": "Включить сохранение и повтор истории шагов (экспериментально, возможны проблемы)"
   },
   "options_general_launchShortcut": {
     "message": "Горячая клавиша браузера"
   },
   "options_general_launchShortcut_desc": {
-    "message": "Надежные горячие клавиши управляются браузером. По умолчанию Ctrl+E, на macOS Command+E. Изменить можно в настройках горячих клавиш браузера."
+    "message": "Настроить глобальное сочетание клавиш для открытия боковой панели Browd"
   },
   "options_models_providers_header": {
     "message": "LLM-провайдеры"
   },
   "options_models_providers_notConfigured": {
-    "message": "Провайдеры еще не настроены. Добавьте провайдера, чтобы начать."
+    "message": "Провайдеры ещё не настроены. Добавьте провайдера, чтобы начать."
   },
   "options_models_providers_btnCancel": {
     "message": "Отмена"
@@ -353,10 +353,10 @@
     "message": "Показать API-ключ"
   },
   "options_models_selection_header": {
-    "message": "Выбор моделей"
+    "message": "Выбор модели"
   },
   "options_models_speechToText_header": {
-    "message": "Speech-to-Text модель"
+    "message": "Модель распознавания речи"
   },
   "options_models_agents_navigator": {
     "message": "Навигирует по сайтам и выполняет действия"
@@ -374,19 +374,19 @@
     "message": "Top P"
   },
   "options_models_labels_reasoning": {
-    "message": "Reasoning"
+    "message": "Глубина размышлений"
   },
   "options_models_labels_systemPrompt": {
     "message": "Системный промпт"
   },
   "options_models_systemPrompt_placeholder": {
-    "message": "Например: Отвечай на том же языке, что выбран в интерфейсе Browd. Будь кратким. Действуй как внимательный research assistant."
+    "message": "Пример: Отвечай на русском. Будь лаконичным. Веди себя как осторожный исследователь."
   },
   "options_models_systemPrompt_desc": {
-    "message": "Необязательные постоянные инструкции для роли, стиля или языка ответов этого агента. Выбранный язык интерфейса тоже передается агенту."
+    "message": "Опциональные постоянные инструкции для роли, стиля или языка ответа. Выбранный язык интерфейса также передаётся агенту."
   },
   "options_models_stt_desc": {
-    "message": "Настройте провайдера/модель для speech-to-text с микрофона. Gemini работает напрямую, OpenRouter требует chat-модель с audio input, а Grok использует отдельный STT API xAI."
+    "message": "Настройте провайдера/модель для микрофона. Gemini работает сразу, OpenRouter требует аудио-модель."
   },
   "options_models_chooseModel": {
     "message": "Выберите модель"
@@ -1025,5 +1025,53 @@
   },
   "options_general_language_ptBR": {
     "message": "Португальский (Бразилия)"
+  },
+  "chat_bookmarks_default1": {
+    "message": "Изучить Browd"
+  },
+  "chat_bookmarks_default2": {
+    "message": "Извлечь данные"
+  },
+  "chat_bookmarks_default3": {
+    "message": "Создать процесс"
+  },
+  "chat_bookmarks_done": {
+    "message": "Готово"
+  },
+  "chat_bookmarks_edit_btn": {
+    "message": "Изменить"
+  },
+  "chat_input_models_button": {
+    "message": "Модели"
+  },
+  "chat_input_models_model": {
+    "message": "Модель"
+  },
+  "chat_input_models_role": {
+    "message": "Роль"
+  },
+  "chat_input_placeholder_with_files": {
+    "message": "Добавить сообщение (необязательно)..."
+  },
+  "options_general_launchShortcut_btnOpen": {
+    "message": "Открыть горячие клавиши"
+  },
+  "options_models_agents_navigator_name": {
+    "message": "Навигатор (Navigator)"
+  },
+  "options_models_agents_planner_name": {
+    "message": "Планировщик (Planner)"
+  },
+  "options_models_reasoning_high": {
+    "message": "Высокий"
+  },
+  "options_models_reasoning_low": {
+    "message": "Низкий"
+  },
+  "options_models_reasoning_medium": {
+    "message": "Средний"
+  },
+  "options_models_reasoning_minimal": {
+    "message": "Минимальный"
   }
 }

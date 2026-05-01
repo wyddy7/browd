@@ -380,7 +380,7 @@
     "message": "System Prompt"
   },
   "options_models_systemPrompt_placeholder": {
-    "message": "Example: Reply in the same language as the Browd interface. Be concise. Act as a careful research assistant."
+    "message": "Example: Reply in English. Be concise. Act as a careful research assistant."
   },
   "options_models_systemPrompt_desc": {
     "message": "Optional persistent instructions for this agent's role, style, or response language. The selected interface language is also passed to the agent."
@@ -1025,5 +1025,53 @@
   },
   "options_general_language_ptBR": {
     "message": "Portuguese (Brazil)"
+  },
+  "chat_bookmarks_default1": {
+    "message": "Explore Browd"
+  },
+  "chat_bookmarks_default2": {
+    "message": "Extract Info"
+  },
+  "chat_bookmarks_default3": {
+    "message": "Create Workflow"
+  },
+  "chat_bookmarks_done": {
+    "message": "Done"
+  },
+  "chat_bookmarks_edit_btn": {
+    "message": "Edit"
+  },
+  "chat_input_models_button": {
+    "message": "Models"
+  },
+  "chat_input_models_model": {
+    "message": "Model"
+  },
+  "chat_input_models_role": {
+    "message": "Role"
+  },
+  "chat_input_placeholder_with_files": {
+    "message": "Add a message (optional)..."
+  },
+  "options_general_launchShortcut_btnOpen": {
+    "message": "Open Shortcuts"
+  },
+  "options_models_agents_navigator_name": {
+    "message": "Navigator"
+  },
+  "options_models_agents_planner_name": {
+    "message": "Planner"
+  },
+  "options_models_reasoning_high": {
+    "message": "High"
+  },
+  "options_models_reasoning_low": {
+    "message": "Low"
+  },
+  "options_models_reasoning_medium": {
+    "message": "Medium"
+  },
+  "options_models_reasoning_minimal": {
+    "message": "Minimal"
   }
 }

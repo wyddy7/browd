@@ -380,7 +380,7 @@
     "message": "系統提示"
   },
   "options_models_systemPrompt_placeholder": {
-    "message": "範例：使用與 Browd 介面相同的語言回答。保持精簡。扮演謹慎的研究助理。"
+    "message": "範例：使用繁體中文回答。保持精簡。扮演謹慎的研究助理。"
   },
   "options_models_systemPrompt_desc": {
     "message": "此代理的角色、風格或回覆語言的選填持久指令。選取的介面語言也會傳給代理。"
@@ -1025,5 +1025,53 @@
   },
   "options_general_language_ptBR": {
     "message": "葡萄牙文（巴西）"
+  },
+  "chat_bookmarks_default1": {
+    "message": "探索 Browd"
+  },
+  "chat_bookmarks_default2": {
+    "message": "提取資料"
+  },
+  "chat_bookmarks_default3": {
+    "message": "建立流程"
+  },
+  "chat_bookmarks_done": {
+    "message": "完成"
+  },
+  "chat_bookmarks_edit_btn": {
+    "message": "編輯"
+  },
+  "chat_input_models_button": {
+    "message": "模型"
+  },
+  "chat_input_models_model": {
+    "message": "模型"
+  },
+  "chat_input_models_role": {
+    "message": "角色"
+  },
+  "chat_input_placeholder_with_files": {
+    "message": "新增訊息（選填）..."
+  },
+  "options_general_launchShortcut_btnOpen": {
+    "message": "開啟快捷鍵設定"
+  },
+  "options_models_agents_navigator_name": {
+    "message": "領航員"
+  },
+  "options_models_agents_planner_name": {
+    "message": "計畫者"
+  },
+  "options_models_reasoning_high": {
+    "message": "高"
+  },
+  "options_models_reasoning_low": {
+    "message": "低"
+  },
+  "options_models_reasoning_medium": {
+    "message": "中"
+  },
+  "options_models_reasoning_minimal": {
+    "message": "極小"
   }
 }

@@ -250,7 +250,7 @@ export const GeneralSettings = ({ onAppearanceThemeChange }: GeneralSettingsProp
                   void chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
                 }}
                 className={`${shortcutButtonClass} text-[var(--browd-text)] hover:bg-[var(--browd-panel-strong)]`}>
-                Open Shortcuts
+                {t('options_general_launchShortcut_btnOpen') || 'Open Shortcuts'}
               </button>
             </div>
           </div>
