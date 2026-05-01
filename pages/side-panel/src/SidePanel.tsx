@@ -22,6 +22,7 @@ import {
 import favoritesStorage, { type FavoritePrompt } from '@extension/storage/lib/prompt/favorites';
 import { t } from '@extension/i18n';
 import MessageList from './components/MessageList';
+import { buildPriorMessagesForAgent } from './utils';
 import ChatInput, { type ChatInputContentController } from './components/ChatInput';
 import ChatHistoryList from './components/ChatHistoryList';
 import BookmarkList from './components/BookmarkList';
@@ -959,6 +960,14 @@ const SidePanel = () => {
         setupConnection();
       }
 
+      // T2h: ship the prior chat turns so the unified agent has
+      // cross-task memory. We re-read from chatHistoryStore (rather
+      // than the in-memory `messages` state) because that is the
+      // persistent source of truth and includes the userMessage we
+      // just appended above. Drop the trailing USER turn — it is the
+      // task we are sending right now.
+      const priorMessages = await buildPriorMessagesForAgent(sessionIdRef.current);
+
       // Send message using the utility function
       if (isFollowUpMode) {
         // Send as follow-up task
@@ -967,8 +976,9 @@ const SidePanel = () => {
           task: text,
           taskId: sessionIdRef.current,
           tabId,
+          priorMessages,
         });
-        console.log('follow_up_task sent', text, tabId, sessionIdRef.current);
+        console.log('follow_up_task sent', text, tabId, sessionIdRef.current, priorMessages.length);
       } else {
         // Send as new task
         await sendMessage({
@@ -976,8 +986,9 @@ const SidePanel = () => {
           task: text,
           taskId: sessionIdRef.current,
           tabId,
+          priorMessages,
         });
-        console.log('new_task sent', text, tabId, sessionIdRef.current);
+        console.log('new_task sent', text, tabId, sessionIdRef.current, priorMessages.length);
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);

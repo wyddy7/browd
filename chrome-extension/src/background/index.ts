@@ -140,7 +140,7 @@ chrome.runtime.onConnect.addListener(port => {
             if (!message.tabId) return port.postMessage({ type: 'error', error: t('bg_errors_noTabId') });
 
             logger.info('new_task', message.tabId, message.task);
-            currentExecutor = await setupExecutor(message.taskId, message.task, browserContext);
+            currentExecutor = await setupExecutor(message.taskId, message.task, browserContext, message.priorMessages);
             subscribeToExecutorEvents(currentExecutor);
 
             const result = await currentExecutor.execute();
@@ -157,6 +157,11 @@ chrome.runtime.onConnect.addListener(port => {
             // If executor exists, add follow-up task
             if (currentExecutor) {
               currentExecutor.addFollowUpTask(message.task);
+              // T2h: re-seed the chat-history snapshot. The side panel
+              // ships the latest chatHistoryStore contents on every
+              // submit; runReactAgent rebuilds its MemorySaver per call,
+              // so unified mode would otherwise restart blank.
+              currentExecutor.setPriorMessages(message.priorMessages);
               // Re-subscribe to events in case the previous subscription was cleaned up
               subscribeToExecutorEvents(currentExecutor);
               const result = await currentExecutor.execute();
@@ -306,7 +311,12 @@ chrome.runtime.onConnect.addListener(port => {
   }
 });
 
-async function setupExecutor(taskId: string, task: string, browserContext: BrowserContext) {
+async function setupExecutor(
+  taskId: string,
+  task: string,
+  browserContext: BrowserContext,
+  priorMessages?: { role: 'user' | 'assistant'; content: string }[],
+) {
   const providers = await llmProviderStore.getAllProviders();
   // if no providers, need to display the options page
   if (Object.keys(providers).length === 0) {
@@ -377,6 +387,9 @@ async function setupExecutor(taskId: string, task: string, browserContext: Brows
     },
     generalSettings: generalSettings,
     hitlSendMessage: msg => currentPort?.postMessage(msg),
+    // T2h: forward the side-panel's chat-history seed so unified mode
+    // has cross-task memory. Classic mode ignores it.
+    priorMessages,
   });
 
   return executor;

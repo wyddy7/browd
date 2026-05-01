@@ -44,11 +44,49 @@ import { createLogger } from '@src/background/log';
 
 const logger = createLogger('runReactAgent');
 
+/**
+ * T2h — chat-history persistence in unified state.
+ *
+ * `runReactAgent` builds a fresh `MemorySaver` on every invocation
+ * (LangGraph's checkpointer is process-local and tied to this closure),
+ * so cross-task memory has to be re-seeded explicitly. The side panel
+ * already keeps a persistent transcript in `chatHistoryStore`; on each
+ * `new_task` / `follow_up_task` it forwards the relevant prior turns as
+ * `PriorMessage[]`. We convert them into `HumanMessage` / `AIMessage`
+ * and prepend to the initial `messages` array so the LLM sees the
+ * conversation up to this turn instead of starting blank.
+ *
+ * Tool messages from prior tasks are intentionally NOT included — the
+ * DOM that produced them is gone, replaying them would mislead the
+ * model. Only finalised user/assistant turns survive.
+ */
+export interface PriorMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+/**
+ * Convert side-panel chat-history entries into LangGraph
+ * `BaseMessage[]`. Exported for unit testing — the real agent loop
+ * simply spreads the result into `messages`.
+ */
+export function priorMessagesToBaseMessages(prior: PriorMessage[]): BaseMessage[] {
+  const out: BaseMessage[] = [];
+  for (const m of prior) {
+    if (!m || typeof m.content !== 'string' || m.content.length === 0) continue;
+    if (m.role === 'user') out.push(new HumanMessage(m.content));
+    else if (m.role === 'assistant') out.push(new AIMessage(m.content));
+  }
+  return out;
+}
+
 export interface RunReactAgentInput {
   context: AgentContext;
   llm: BaseChatModel;
   actions: Action[];
   task: string;
+  /** Conversation up to (but not including) the current task. Empty for the very first turn of a session. */
+  priorMessages?: PriorMessage[];
 }
 
 export interface RunReactAgentResult {
@@ -113,7 +151,7 @@ function extractFinalAnswer(messages: BaseMessage[]): string | null {
 }
 
 export async function runReactAgent(input: RunReactAgentInput): Promise<RunReactAgentResult> {
-  const { context, llm, actions, task } = input;
+  const { context, llm, actions, task, priorMessages } = input;
   // T2g: per-task tool-call budgets. Counter map lives in this closure
   // so it resets to {} on every runReactAgent invocation; tools wrappers
   // increment before dispatch. Past the configured limit the wrapper
@@ -156,10 +194,15 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
     signal: context.controller.signal,
   };
 
+  const seededHistory = priorMessages ? priorMessagesToBaseMessages(priorMessages) : [];
+  if (seededHistory.length > 0) {
+    logger.info(`seeded ${seededHistory.length} prior message(s) from chat history`);
+  }
+
   try {
     const result = await agent.invoke(
       {
-        messages: [new HumanMessage(task)],
+        messages: [...seededHistory, new HumanMessage(task)],
       },
       config,
     );

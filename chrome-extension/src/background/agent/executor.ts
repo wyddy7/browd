@@ -9,7 +9,7 @@ import { createLogger } from '@src/background/log';
 import MessageManager from './messages/service';
 import type BrowserContext from '../browser/context';
 import { ActionBuilder, type Action } from './actions/builder';
-import { runReactAgent } from './agents/runReactAgent';
+import { runReactAgent, type PriorMessage } from './agents/runReactAgent';
 import { EventManager } from './event/manager';
 import { Actors, type EventCallback, EventType, ExecutionState } from './event/types';
 import {
@@ -40,6 +40,13 @@ export interface ExecutorExtraArgs {
   generalSettings?: GeneralSettingsConfig;
   /** Inject to enable real HITL pause/resume. Called by HITLController to send requests to side-panel. */
   hitlSendMessage?: SendMessage;
+  /**
+   * T2h: prior chat turns of this session (last N user/assistant pairs)
+   * forwarded by the side panel from `chatHistoryStore`. Unified mode
+   * seeds these into the LangGraph `messages` array so the agent has
+   * cross-task memory; classic mode ignores them.
+   */
+  priorMessages?: PriorMessage[];
 }
 
 export class Executor {
@@ -57,6 +64,14 @@ export class Executor {
   private readonly navigatorLLM: BaseChatModel;
   /** T2d: full action set, classic uses via NavigatorAgent, unified passes to runReactAgent. */
   private readonly unifiedActions: Action[];
+  /**
+   * T2h: latest known prior chat history for the active session. Set by
+   * the constructor from `extraArgs.priorMessages` and refreshed by
+   * `setPriorMessages()` ahead of every follow-up `execute()` call so
+   * the unified agent sees the conversation up to (but not including)
+   * the new task.
+   */
+  private priorMessages: PriorMessage[] = [];
   constructor(
     task: string,
     taskId: string,
@@ -87,6 +102,7 @@ export class Executor {
     // agentMode='classic' is the inherited Planner+Navigator pipeline.
     // Default 'classic' until T3 evals promote 'unified' to default.
     this.unifiedMode = extraArgs?.generalSettings?.agentMode === 'unified';
+    this.priorMessages = extraArgs?.priorMessages ?? [];
     this.navigatorPrompt = new NavigatorPrompt(
       context.options.maxActionsPerStep,
       extraArgs?.agentSystemPrompts?.navigator,
@@ -140,6 +156,18 @@ export class Executor {
 
     // need to reset previous action results that are not included in memory
     this.context.actionResults = this.context.actionResults.filter(result => result.includeInMemory);
+  }
+
+  /**
+   * T2h: refresh the unified-mode chat-history seed before the next
+   * `execute()`. The side panel sends fresh `priorMessages` on every
+   * `follow_up_task` so the agent sees its own previous answers from
+   * `chatHistoryStore` (the in-memory `MemorySaver` does not persist
+   * across `runReactAgent` invocations). Classic mode does not consume
+   * this — it has its own `MessageManager`.
+   */
+  setPriorMessages(priorMessages: PriorMessage[] | undefined): void {
+    this.priorMessages = priorMessages ?? [];
   }
 
   /**
@@ -301,6 +329,7 @@ export class Executor {
       llm: this.navigatorLLM,
       actions: this.unifiedActions,
       task,
+      priorMessages: this.priorMessages,
     });
     // runReactAgent emits PLANNER/SYSTEM events itself; nothing further
     // to do here. Recursion-limit / abort / error mapping all happen
