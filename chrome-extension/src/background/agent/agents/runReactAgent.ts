@@ -135,9 +135,14 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
     },
   });
 
+  // recursionLimit caps total LangGraph node invocations (each tool call
+  // is ~2 nodes: agent reasoning + tool execution). 30 = up to ~15
+  // tool calls per task. Above that the agent is almost certainly
+  // looping and the prompt's "max 2 web_search / 3 web_fetch_markdown"
+  // limits should have stopped it long ago. Hard cap forces termination.
   const config = {
     configurable: { thread_id: context.taskId },
-    recursionLimit: Math.min(context.options.maxSteps * 2, 100),
+    recursionLimit: Math.min(context.options.maxSteps, 30),
     signal: context.controller.signal,
   };
 

@@ -120,7 +120,18 @@ function htmlToMarkdown(html: string, sourceUrl: string): { title: string; markd
 
 /**
  * Fetch a URL and return its readable content as Markdown.
- * Pure side-effect-free except for the fetch itself.
+ *
+ * T2e: Primary path is Jina Reader (r.jina.ai/<url>) which renders the
+ * page server-side (handles SPAs that hydrate client-side, like
+ * lmsys.org or openrouter.ai) and returns clean markdown directly. No
+ * DOM parsing in the service worker, so the "document is not defined"
+ * error class is uncoded.
+ *
+ * Fallback: if Jina is unreachable (rate-limit, network), try the local
+ * linkedom + Readability path. Best-effort — works for static HTML
+ * (blogs, docs) and fails on JS-only SPAs (which Jina handled fine).
+ *
+ * See auto-docs/browd-agent-evolution.md (Tier 2e).
  */
 export async function webFetchMarkdown(input: {
   url: string;
@@ -133,6 +144,62 @@ export async function webFetchMarkdown(input: {
     return { ok: false, errorType: 'auth_or_config', message: 'URL must be absolute http(s)', url };
   }
 
+  // Primary: Jina Reader. Server-side render + extract.
+  const jinaResult = await tryJinaReader(url, maxChars);
+  if (jinaResult.ok) return jinaResult;
+
+  // Fallback: local fetch + linkedom + Readability. Works for static HTML.
+  return tryLocalExtract(url, maxChars);
+}
+
+async function tryJinaReader(url: string, maxChars: number): Promise<WebFetchResult | WebFetchError> {
+  const endpoint = `https://r.jina.ai/${url}`;
+  let response: Response;
+  try {
+    response = await fetch(endpoint, {
+      method: 'GET',
+      credentials: 'omit',
+      headers: { Accept: 'text/plain' },
+    });
+  } catch (err) {
+    return {
+      ok: false,
+      errorType: 'transient',
+      message: `jina-reader network: ${err instanceof Error ? err.message : String(err)}`,
+      url,
+    };
+  }
+  if (!response.ok) {
+    const errorType: WebFetchError['errorType'] = response.status >= 500 ? 'transient' : 'auth_or_config';
+    return {
+      ok: false,
+      errorType,
+      message: `jina-reader HTTP ${response.status}`,
+      url,
+    };
+  }
+  let body: string;
+  try {
+    body = await response.text();
+  } catch (err) {
+    return {
+      ok: false,
+      errorType: 'transient',
+      message: `jina-reader body: ${err instanceof Error ? err.message : String(err)}`,
+      url,
+    };
+  }
+  // Jina prepends "Title: ...\nURL Source: ...\nMarkdown Content:\n..."
+  // Extract title heuristically; the body itself is already markdown.
+  const titleMatch = body.match(/^Title:\s*(.+)$/m);
+  const title = titleMatch ? titleMatch[1].trim() : url;
+  const contentStart = body.indexOf('Markdown Content:');
+  const markdown = contentStart >= 0 ? body.slice(contentStart + 'Markdown Content:'.length).trim() : body.trim();
+  const { text, truncated } = truncate(markdown, maxChars);
+  return { ok: true, url, title, markdown: text, truncated };
+}
+
+async function tryLocalExtract(url: string, maxChars: number): Promise<WebFetchResult | WebFetchError> {
   let response: Response;
   try {
     response = await fetch(url, {
@@ -145,7 +212,7 @@ export async function webFetchMarkdown(input: {
     return {
       ok: false,
       errorType: 'transient',
-      message: `network: ${err instanceof Error ? err.message : String(err)}`,
+      message: `local network: ${err instanceof Error ? err.message : String(err)}`,
       url,
     };
   }

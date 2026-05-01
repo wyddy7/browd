@@ -8,8 +8,17 @@ vi.mock('@src/background/log', () => ({
 
 const originalFetch = globalThis.fetch;
 
+/**
+ * Mock fetch so Jina Reader returns 404 (forcing fallback) and the
+ * local fetch returns the test html. webFetchMarkdown calls Jina first;
+ * if we want to exercise the local linkedom path we have to fail Jina.
+ */
 function mockFetchOnce(html: string, status = 200): void {
-  globalThis.fetch = vi.fn(async () => {
+  globalThis.fetch = vi.fn(async (url: string) => {
+    const isJina = url.includes('r.jina.ai');
+    if (isJina) {
+      return { ok: false, status: 404, statusText: 'Not Found', text: async () => '' } as Response;
+    }
     return {
       ok: status >= 200 && status < 300,
       status,
@@ -19,12 +28,34 @@ function mockFetchOnce(html: string, status = 200): void {
   }) as unknown as typeof fetch;
 }
 
+/** Mock Jina Reader returning a successful response. */
+function mockJinaSuccess(title: string, markdownContent: string): void {
+  const body = `Title: ${title}\nURL Source: https://example.com\nMarkdown Content:\n${markdownContent}`;
+  globalThis.fetch = vi.fn(async (url: string) => {
+    if (url.includes('r.jina.ai')) {
+      return { ok: true, status: 200, statusText: 'OK', text: async () => body } as Response;
+    }
+    return { ok: false, status: 404, statusText: 'Not Found', text: async () => '' } as Response;
+  }) as unknown as typeof fetch;
+}
+
 afterEach(() => {
   globalThis.fetch = originalFetch;
   vi.restoreAllMocks();
 });
 
 describe('webFetchMarkdown', () => {
+  it('uses Jina Reader as the primary path when reachable', async () => {
+    mockJinaSuccess('Open LLM Leaderboard 2026', '# Top Models\n- DeepSeek V3.2 — $0.28/1M tokens\n- Qwen 2.5\n');
+    const result = await webFetchMarkdown({ url: 'https://llm-stats.com/leaderboards' });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.title).toContain('Open LLM Leaderboard');
+      expect(result.markdown).toContain('DeepSeek V3.2');
+      expect(result.markdown).toContain('$0.28');
+    }
+  });
+
   it('rejects relative URLs', async () => {
     const result = await webFetchMarkdown({ url: '/relative' });
     expect(result.ok).toBe(false);
