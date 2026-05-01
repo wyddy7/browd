@@ -301,6 +301,12 @@
   "options_general_replayHistoricalTasks_desc": {
     "message": "Activer le stockage et le rejeu de l'historique (expérimental, peut présenter des problèmes)"
   },
+  "options_general_agentMode": {
+    "message": "Unified agent mode (experimental)"
+  },
+  "options_general_agentMode_desc": {
+    "message": "Replace the Planner+Navigator pipeline with a single ReAct agent. Faster, requires evidence on done. Default off; flip back to classic if anything regresses."
+  },
   "options_general_launchShortcut": {
     "message": "Raccourci navigateur"
   },

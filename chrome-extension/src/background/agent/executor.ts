@@ -4,6 +4,7 @@ import { t } from '@extension/i18n';
 import { NavigatorAgent, NavigatorActionRegistry } from './agents/navigator';
 import { PlannerAgent, type PlannerOutput } from './agents/planner';
 import { NavigatorPrompt } from './prompts/navigator';
+import { UnifiedPrompt } from './prompts/unified';
 import { PlannerPrompt } from './prompts/planner';
 import { createLogger } from '@src/background/log';
 import MessageManager from './messages/service';
@@ -46,11 +47,12 @@ export class Executor {
   private readonly planner: PlannerAgent;
   private readonly context: AgentContext;
   private readonly plannerPrompt: PlannerPrompt;
-  private readonly navigatorPrompt: NavigatorPrompt;
+  private readonly navigatorPrompt: NavigatorPrompt | UnifiedPrompt;
   private readonly generalSettings: GeneralSettingsConfig | undefined;
   private readonly failureClassifier = new FailureClassifier();
   private readonly _hitlController?: HITLController;
   private tasks: string[] = [];
+  private readonly unifiedMode: boolean = false;
   constructor(
     task: string,
     taskId: string,
@@ -77,14 +79,21 @@ export class Executor {
       context.hitlController = this._hitlController;
     }
     this.tasks.push(task);
-    this.navigatorPrompt = new NavigatorPrompt(
-      context.options.maxActionsPerStep,
-      extraArgs?.agentSystemPrompts?.navigator,
-    );
+    // T2b: agentMode='unified' uses one ReAct loop (no Planner) with the
+    // UnifiedPrompt and the unified action set (evidence-required `done`,
+    // `replan`, `remember`). agentMode='classic' is the inherited
+    // Planner+Navigator pipeline. Default is 'classic' until T3 evals
+    // promote 'unified' to default.
+    this.unifiedMode = extraArgs?.generalSettings?.agentMode === 'unified';
+    this.navigatorPrompt = this.unifiedMode
+      ? new UnifiedPrompt(context.options.maxActionsPerStep, extraArgs?.agentSystemPrompts?.navigator)
+      : new NavigatorPrompt(context.options.maxActionsPerStep, extraArgs?.agentSystemPrompts?.navigator);
     this.plannerPrompt = new PlannerPrompt(extraArgs?.agentSystemPrompts?.planner);
 
     const actionBuilder = new ActionBuilder(context, extractorLLM);
-    const navigatorActionRegistry = new NavigatorActionRegistry(actionBuilder.buildDefaultActions());
+    const navigatorActionRegistry = new NavigatorActionRegistry(
+      this.unifiedMode ? actionBuilder.buildUnifiedActions() : actionBuilder.buildDefaultActions(),
+    );
 
     // Initialize agents with their respective prompts
     this.navigator = new NavigatorAgent(navigatorActionRegistry, {
@@ -184,8 +193,13 @@ export class Executor {
           context.messageManager.compactOldStateMessages();
         }
 
-        // Run planner periodically for guidance
-        if (this.planner && (context.nSteps % context.options.planningInterval === 0 || navigatorDone)) {
+        // T2b: skip the Planner entirely in unified mode — the unified
+        // agent owns its own planning inline via current_state.next_goal.
+        if (
+          !this.unifiedMode &&
+          this.planner &&
+          (context.nSteps % context.options.planningInterval === 0 || navigatorDone)
+        ) {
           navigatorDone = false;
           latestPlanOutput = await this.runPlanner();
 

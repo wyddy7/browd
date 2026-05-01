@@ -5,6 +5,14 @@ import type { BaseStorage } from '../base/types';
 // Interface for general settings configuration
 export type AppearanceTheme = 'light' | 'dark';
 export type InterfaceLanguage = 'system' | 'en' | 'ru' | 'es' | 'fr' | 'de' | 'pt_BR';
+/**
+ * Agent runtime topology.
+ * - 'classic': inherited Planner+Navigator pipeline (two LLM calls per step).
+ * - 'unified': single ReAct agent with full tool surface, evidence-required
+ *   `done`, and structured tracing as the only feedback loop. Experimental
+ *   until T3 evals confirm it wins. See auto-docs/browd-agent-evolution.md.
+ */
+export type AgentMode = 'classic' | 'unified';
 
 export interface GeneralSettingsConfig {
   appearanceTheme: AppearanceTheme;
@@ -19,6 +27,7 @@ export interface GeneralSettingsConfig {
   minWaitPageLoad: number;
   replayHistoricalTasks: boolean;
   launchShortcut: string;
+  agentMode: AgentMode;
 }
 
 export type GeneralSettingsStorage = BaseStorage<GeneralSettingsConfig> & {
@@ -41,6 +50,11 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettingsConfig = {
   minWaitPageLoad: 250,
   replayHistoricalTasks: false,
   launchShortcut: 'Ctrl+E',
+  agentMode: 'classic',
+};
+
+const normalizeAgentMode = (mode: unknown): AgentMode => {
+  return mode === 'unified' ? 'unified' : 'classic';
 };
 
 const storage = createStorage<GeneralSettingsConfig>('general-settings', DEFAULT_GENERAL_SETTINGS, {
@@ -89,6 +103,7 @@ export const generalSettingsStore: GeneralSettingsStorage = {
     updatedSettings.appearanceTheme = normalizeAppearanceTheme(updatedSettings.appearanceTheme);
     updatedSettings.interfaceLanguage = normalizeInterfaceLanguage(updatedSettings.interfaceLanguage);
     updatedSettings.launchShortcut = normalizeShortcut(updatedSettings.launchShortcut);
+    updatedSettings.agentMode = normalizeAgentMode(updatedSettings.agentMode);
 
     // If useVision is true, displayHighlights must also be true
     if (updatedSettings.useVision && !updatedSettings.displayHighlights) {
@@ -105,6 +120,7 @@ export const generalSettingsStore: GeneralSettingsStorage = {
       appearanceTheme: normalizeAppearanceTheme(settings?.appearanceTheme),
       interfaceLanguage: normalizeInterfaceLanguage(settings?.interfaceLanguage),
       launchShortcut: normalizeShortcut(settings?.launchShortcut),
+      agentMode: normalizeAgentMode(settings?.agentMode),
     };
   },
   async resetToDefaults() {

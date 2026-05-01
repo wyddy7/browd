@@ -235,6 +235,19 @@ export const GeneralSettings = ({ onAppearanceThemeChange }: GeneralSettingsProp
             />
           </div>
 
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className={settingTitleClass}>{t('options_general_agentMode')}</h3>
+              <p className={settingDescriptionClass}>{t('options_general_agentMode_desc')}</p>
+            </div>
+            <ToggleSwitch
+              id="agentMode"
+              checked={settings.agentMode === 'unified'}
+              onChange={e => updateSetting('agentMode', e.target.checked ? 'unified' : 'classic')}
+              label={t('options_general_agentMode')}
+            />
+          </div>
+
           <div className="flex items-center justify-between gap-6">
             <div>
               <h3 className={settingTitleClass}>{t('options_general_launchShortcut')}</h3>

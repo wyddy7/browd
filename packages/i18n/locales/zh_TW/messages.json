@@ -301,6 +301,12 @@
   "options_general_replayHistoricalTasks_desc": {
     "message": "啟用儲存與重播代理程式的步驟歷史紀錄 (此為實驗性功能，可能存在問題)"
   },
+  "options_general_agentMode": {
+    "message": "Unified agent mode (experimental)"
+  },
+  "options_general_agentMode_desc": {
+    "message": "Replace the Planner+Navigator pipeline with a single ReAct agent. Faster, requires evidence on done. Default off; flip back to classic if anything regresses."
+  },
   "options_general_launchShortcut": {
     "message": "瀏覽器快捷鍵"
   },

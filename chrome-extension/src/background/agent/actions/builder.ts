@@ -28,8 +28,11 @@ import {
   webFetchMarkdownActionSchema,
   webSearchActionSchema,
   extractPageMarkdownActionSchema,
+  replanActionSchema,
+  rememberActionSchema,
 } from './schemas';
 import { webFetchMarkdown, webSearch, extractActiveTabAsMarkdown } from '../tools/webTools';
+import { handleUnifiedDone, handleReplan, handleRemember } from '../tools/meta';
 import { findFieldByLabel } from '@src/background/browser/dom/fieldFinder';
 import { makeActionError } from '../agentErrors';
 import type { HITLRequest } from '../hitl/types';
@@ -897,6 +900,42 @@ export class ActionBuilder {
       });
     }, extractPageMarkdownActionSchema);
     actions.push(extractMd);
+
+    return actions;
+  }
+
+  /**
+   * T2b: build the action set for the UnifiedAgent.
+   *
+   * Same surface as classic plus: evidence-required `done` (replaces the
+   * lenient one), `replan(reason)`, `remember(fact)`. The unified agent's
+   * prompt instructs it to prefer web_* over browser tools for read-only
+   * tasks and to cite evidence on every `done`.
+   */
+  buildUnifiedActions() {
+    const actions = this.buildDefaultActions();
+
+    // Replace the classic `done` with the evidence-aware one.
+    const idx = actions.findIndex(a => a.name() === 'done');
+    if (idx >= 0) {
+      const ctx = this.context;
+      actions[idx] = new Action(
+        async (input: z.infer<typeof doneActionSchema.schema>) => handleUnifiedDone(ctx, input),
+        doneActionSchema,
+      );
+    }
+
+    const replan = new Action(
+      async (input: z.infer<typeof replanActionSchema.schema>) => handleReplan(this.context, input),
+      replanActionSchema,
+    );
+    actions.push(replan);
+
+    const remember = new Action(
+      async (input: z.infer<typeof rememberActionSchema.schema>) => handleRemember(this.context, input),
+      rememberActionSchema,
+    );
+    actions.push(remember);
 
     return actions;
   }

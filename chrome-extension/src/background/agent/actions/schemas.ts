@@ -12,6 +12,39 @@ export const doneActionSchema: ActionSchema = {
   schema: z.object({
     text: z.string(),
     success: z.boolean(),
+    /**
+     * T2b: optional in classic mode for backwards compatibility, but the
+     * UnifiedAgent rejects empty arrays and forces a repair loop. Each
+     * string is a tool-call ID (currently the trace step number, e.g.
+     * 'step-3') from the trace that supports the answer. Closes the
+     * Planner-hallucination class where `done` was emitted without any
+     * verified tool output.
+     */
+    evidence: z
+      .array(z.string())
+      .optional()
+      .default([])
+      .describe('Tool-call IDs whose results support the answer. Required in unified mode.'),
+    confidence: z.number().min(0).max(1).optional().default(1).describe('0..1 self-rated confidence'),
+  }),
+};
+
+/** T2b meta-tools — only registered for the UnifiedAgent. */
+export const replanActionSchema: ActionSchema = {
+  name: 'replan',
+  description:
+    'Reset the short-term plan and start a fresh approach. Use when the current strategy has failed twice in a row OR new evidence contradicts the previous plan. The reason is logged in memory so the next thought knows why the pivot happened.',
+  schema: z.object({
+    reason: z.string().describe('one-line description of why the pivot is needed'),
+  }),
+};
+
+export const rememberActionSchema: ActionSchema = {
+  name: 'remember',
+  description:
+    'Persist a single short fact into agent memory so it survives compaction. Use for stable IDs, user preferences, or constraints that affect later decisions. Do NOT use for tool results (those already live in the trace).',
+  schema: z.object({
+    fact: z.string().min(1).max(300).describe('the fact to remember (≤ 300 chars)'),
   }),
 };
 
