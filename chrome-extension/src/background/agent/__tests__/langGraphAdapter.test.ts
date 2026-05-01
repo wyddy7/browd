@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { z } from 'zod';
 import { Action } from '../actions/builder';
 import { ActionResult } from '../types';
-import { actionToTool, actionsToTools } from '../tools/langGraphAdapter';
+import { actionToTool, actionsToTools, DEFAULT_TOOL_BUDGETS } from '../tools/langGraphAdapter';
 
 vi.mock('@src/background/log', () => ({
   createLogger: () => ({ warning: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() }),
@@ -76,5 +76,91 @@ describe('langGraphAdapter', () => {
     );
     const tools = actionsToTools(actions);
     expect(tools.map(t => t.name)).toEqual(['a', 'b', 'c', 'e']);
+  });
+
+  describe('T2g per-task tool-call budgets', () => {
+    it('exposes default budgets matching the production trace fix', () => {
+      expect(DEFAULT_TOOL_BUDGETS).toMatchObject({
+        web_search: 5,
+        web_fetch_markdown: 5,
+      });
+    });
+
+    it('increments the counter on each invocation when a budget is supplied', async () => {
+      const calls: string[] = [];
+      const action = makeAction('web_search', async input => {
+        calls.push((input as { value: string }).value);
+        return new ActionResult({ extractedContent: 'results' });
+      });
+      const counters: Record<string, number> = {};
+      const t = actionToTool(action, { counters, limits: { web_search: 5 } });
+      await t.invoke({ value: 'q1' });
+      await t.invoke({ value: 'q2' });
+      await t.invoke({ value: 'q3' });
+      expect(counters.web_search).toBe(3);
+      expect(calls).toEqual(['q1', 'q2', 'q3']);
+    });
+
+    it('blocks calls past the budget without invoking Action.call', async () => {
+      let invocations = 0;
+      const action = makeAction('web_search', async () => {
+        invocations++;
+        return new ActionResult({ extractedContent: 'results' });
+      });
+      const counters: Record<string, number> = {};
+      const t = actionToTool(action, { counters, limits: { web_search: 2 } });
+      const r1 = await t.invoke({ value: 'q1' });
+      const r2 = await t.invoke({ value: 'q2' });
+      const r3 = await t.invoke({ value: 'q3' });
+      expect(r1).toBe('results');
+      expect(r2).toBe('results');
+      expect(r3).toMatch(/budget exhausted for web_search/);
+      expect(r3).toMatch(/Stop calling this tool/);
+      expect(invocations).toBe(2);
+      // Counter still tracks the blocked attempt so repeated overflow
+      // attempts keep returning the same forcing error rather than
+      // silently re-allowing calls.
+      expect(counters.web_search).toBe(3);
+    });
+
+    it('does not affect tools that have no configured limit', async () => {
+      let invocations = 0;
+      const action = makeAction('click_element', async () => {
+        invocations++;
+        return new ActionResult({ extractedContent: 'clicked' });
+      });
+      const counters: Record<string, number> = {};
+      const t = actionToTool(action, { counters, limits: { web_search: 1 } });
+      await t.invoke({ value: 'a' });
+      await t.invoke({ value: 'b' });
+      await t.invoke({ value: 'c' });
+      expect(invocations).toBe(3);
+      // Unbudgeted tools do not write to the counter map.
+      expect(counters.click_element).toBeUndefined();
+    });
+
+    it('actionsToTools threads the budget through to every wrapped tool', async () => {
+      const calls = { web_search: 0, click_element: 0 };
+      const actions = [
+        makeAction('web_search', async () => {
+          calls.web_search++;
+          return new ActionResult({ extractedContent: 'r' });
+        }),
+        makeAction('click_element', async () => {
+          calls.click_element++;
+          return new ActionResult({ extractedContent: 'c' });
+        }),
+      ];
+      const counters: Record<string, number> = {};
+      const tools = actionsToTools(actions, { counters, limits: { web_search: 1 } });
+      const search = tools.find(t => t.name === 'web_search')!;
+      const click = tools.find(t => t.name === 'click_element')!;
+      await search.invoke({ value: 'q' });
+      const blocked = await search.invoke({ value: 'q' });
+      await click.invoke({ value: 'x' });
+      await click.invoke({ value: 'y' });
+      expect(blocked).toMatch(/budget exhausted/);
+      expect(calls).toEqual({ web_search: 1, click_element: 2 });
+    });
   });
 });

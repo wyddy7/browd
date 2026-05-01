@@ -14,7 +14,17 @@
  *     to the LangGraph runtime, which serialises them as ToolMessage
  *     content; the agent's next reasoning turn sees the error.
  *
- * Read order: auto-docs/browd-agent-evolution.md (Tier 2d).
+ * T2g — per-task tool-call budgets. `createReactAgent` (prebuilt) does
+ * not expose conditional edges, so we enforce caps at the wrapper
+ * layer: a `counters` map (closure-owned by `runReactAgent`) is
+ * incremented before dispatch; on overflow the wrapper returns a
+ * forcing error string and skips `Action.call` entirely. The LLM
+ * observes a `ToolMessage` "Error: budget exhausted… write a final
+ * answer now" and the existing ReAct prompt directs it to terminate.
+ * Counters live in JS, not in prompt — prompt manipulation cannot
+ * bypass them.
+ *
+ * Read order: auto-docs/browd-agent-evolution.md (Tier 2d, Tier 2g).
  */
 import { tool } from '@langchain/core/tools';
 import type { z } from 'zod';
@@ -23,6 +33,31 @@ import type { ActionResult } from '../types';
 import { createLogger } from '@src/background/log';
 
 const logger = createLogger('LangGraphAdapter');
+
+/**
+ * Default per-task budgets for read-only research tools that have
+ * historically driven loop bugs (production trace 2026-05-02:
+ * 20× `web_search` on a single task). Numbers chosen so that a
+ * well-behaved agent comfortably fits, and a pathological one is
+ * forced to finalise within recursionLimit. Overridable per
+ * `runReactAgent` invocation.
+ */
+export const DEFAULT_TOOL_BUDGETS: Readonly<Record<string, number>> = Object.freeze({
+  web_search: 5,
+  web_fetch_markdown: 5,
+});
+
+export interface ToolBudgetOptions {
+  /** Mutable counter map; the wrapper increments per invocation. */
+  counters: Record<string, number>;
+  /**
+   * Hard caps per tool name. Tools not present in this map are
+   * unbudgeted (counter not even tracked). When a tool's count
+   * reaches its limit, further calls are blocked at the wrapper
+   * layer and never reach `Action.call`.
+   */
+  limits: Readonly<Record<string, number>>;
+}
 
 /**
  * Render an ActionResult into a string the LLM can read on the next turn.
@@ -51,23 +86,37 @@ function renderResult(result: ActionResult): string {
  * tool here. The LLM just writes the final answer to `messages` and
  * LangGraph terminates. That removes the entire evidence-validation
  * code path that caused false-positive rejections in T2c production.
+ *
+ * Optional `budget` enforces per-task caps: when supplied and the tool
+ * name has a configured limit, the wrapper increments its counter and
+ * blocks past the limit without invoking the underlying action.
  */
-export function actionToTool(action: Action) {
+export function actionToTool(action: Action, budget?: ToolBudgetOptions) {
   const schema = action.schema;
+  const name = schema.name;
+  const limit = budget?.limits?.[name];
   return tool(
     async (input: unknown) => {
+      if (budget && limit !== undefined) {
+        const next = (budget.counters[name] ?? 0) + 1;
+        budget.counters[name] = next;
+        if (next > limit) {
+          logger.warning(`tool ${name} budget exhausted (${next}/${limit}) — blocking call`);
+          return `Error: budget exhausted for ${name} (${next - 1}/${limit}). Stop calling this tool. Write a final answer with what you have.`;
+        }
+      }
       try {
         const result = await action.call(input);
         return renderResult(result);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        logger.warning(`tool ${schema.name} threw`, msg);
+        logger.warning(`tool ${name} threw`, msg);
         // Surface as plain string — LangGraph will wrap in ToolMessage.
         return `Error: ${msg}`;
       }
     },
     {
-      name: schema.name,
+      name,
       description: schema.description,
       schema: schema.schema as z.ZodType,
     },
@@ -78,7 +127,10 @@ export function actionToTool(action: Action) {
  * Translate a list of Actions into a tool registry compatible with
  * createReactAgent. The classic `done` Action is filtered out because
  * the ReAct framework provides terminal semantics natively.
+ *
+ * Pass `budget` to enforce per-task caps (T2g). Without it the
+ * wrappers behave as in T2d: plain Action.call passthrough.
  */
-export function actionsToTools(actions: Action[]) {
-  return actions.filter(a => a.name() !== 'done').map(actionToTool);
+export function actionsToTools(actions: Action[], budget?: ToolBudgetOptions) {
+  return actions.filter(a => a.name() !== 'done').map(a => actionToTool(a, budget));
 }

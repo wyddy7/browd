@@ -35,7 +35,7 @@ import { HumanMessage, AIMessage, SystemMessage, BaseMessage } from '@langchain/
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type { AgentContext } from '../types';
 import type { Action } from '../actions/builder';
-import { actionsToTools } from '../tools/langGraphAdapter';
+import { actionsToTools, DEFAULT_TOOL_BUDGETS } from '../tools/langGraphAdapter';
 import { reactSystemPromptTemplate } from '../prompts/react';
 import { extractForms, formatFormsForPrompt } from '@src/background/browser/dom/forms';
 import { wrapUntrustedContent } from '../messages/utils';
@@ -114,7 +114,16 @@ function extractFinalAnswer(messages: BaseMessage[]): string | null {
 
 export async function runReactAgent(input: RunReactAgentInput): Promise<RunReactAgentResult> {
   const { context, llm, actions, task } = input;
-  const tools = actionsToTools(actions);
+  // T2g: per-task tool-call budgets. Counter map lives in this closure
+  // so it resets to {} on every runReactAgent invocation; tools wrappers
+  // increment before dispatch. Past the configured limit the wrapper
+  // returns a forcing error and never calls Action.call. Default caps
+  // are tuned for the read-only research tools that have historically
+  // driven loop bugs; numbers can be overridden by editing
+  // DEFAULT_TOOL_BUDGETS in langGraphAdapter (NOT via the system
+  // prompt — that path is unenforceable, see T2e follow-up 77ea382).
+  const counters: Record<string, number> = {};
+  const tools = actionsToTools(actions, { counters, limits: DEFAULT_TOOL_BUDGETS });
   const checkpointer = new MemorySaver();
 
   const agent = createReactAgent({
@@ -138,8 +147,9 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
   // recursionLimit caps total LangGraph node invocations (each tool call
   // is ~2 nodes: agent reasoning + tool execution). 30 = up to ~15
   // tool calls per task. Above that the agent is almost certainly
-  // looping and the prompt's "max 2 web_search / 3 web_fetch_markdown"
-  // limits should have stopped it long ago. Hard cap forces termination.
+  // looping; T2g per-tool budgets above stop research-tool loops well
+  // before this hard cap fires. recursionLimit stays as the last-line
+  // safety net for non-budgeted tools.
   const config = {
     configurable: { thread_id: context.taskId },
     recursionLimit: Math.min(context.options.maxSteps, 30),
