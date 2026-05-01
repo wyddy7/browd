@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { BaseAgent, type BaseAgentOptions, type ExtraAgentOptions } from './base';
 import { createLogger } from '@src/background/log';
+import { LoopDetector } from '../guardrails/loopDetector';
 import { ActionResult, type AgentOutput } from '../types';
 import type { Action } from '../actions/builder';
 import { buildDynamicActionSchema } from '../actions/builder';
@@ -76,6 +77,7 @@ export class NavigatorAgent extends BaseAgent<z.ZodType, NavigatorResult> {
   private actionRegistry: NavigatorActionRegistry;
   private jsonSchema: Record<string, unknown>;
   private _stateHistory: BrowserStateHistory | null = null;
+  private readonly loopDetector: LoopDetector;
 
   constructor(
     actionRegistry: NavigatorActionRegistry,
@@ -85,6 +87,10 @@ export class NavigatorAgent extends BaseAgent<z.ZodType, NavigatorResult> {
     super(actionRegistry.setupModelOutputSchema(), options, { ...extraOptions, id: 'navigator' });
 
     this.actionRegistry = actionRegistry;
+    this.loopDetector = new LoopDetector(
+      options.context.options.maxRepeatedAction,
+      options.context.options.loopWindowSize,
+    );
 
     // The zod object is too complex to be used directly, so we need to convert it to json schema first for the model to use
     this.jsonSchema = convertZodToJsonSchema(this.modelOutputSchema, 'NavigatorAgentOutput', true);
@@ -383,6 +389,15 @@ export class NavigatorAgent extends BaseAgent<z.ZodType, NavigatorResult> {
           return results;
         }
 
+        // Loop guard: abort before executing if the same action keeps repeating
+        if (this.loopDetector.isLooping()) {
+          const loopErr = this.loopDetector.buildLoopError();
+          logger.warning(loopErr.message);
+          this.loopDetector.reset();
+          results.push(new ActionResult({ error: loopErr.message, includeInMemory: true }));
+          return results;
+        }
+
         const actionInstance = this.actionRegistry.getAction(actionName);
         if (actionInstance === undefined) {
           throw new Error(`Action ${actionName} not exists`);
@@ -422,6 +437,9 @@ export class NavigatorAgent extends BaseAgent<z.ZodType, NavigatorResult> {
           }
         }
         results.push(result);
+
+        // Record action signature for loop detection
+        this.loopDetector.record(LoopDetector.sigFromAction(action));
 
         // check if the task is paused or stopped
         if (this.context.paused || this.context.stopped) {

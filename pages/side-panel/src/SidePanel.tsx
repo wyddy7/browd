@@ -25,7 +25,10 @@ import MessageList from './components/MessageList';
 import ChatInput, { type ChatInputContentController } from './components/ChatInput';
 import ChatHistoryList from './components/ChatHistoryList';
 import BookmarkList from './components/BookmarkList';
+import { HITLPrompt } from './components/HITLPrompt';
 import { EventType, type AgentEvent, ExecutionState } from './types/event';
+import type { HITLRequest, HITLDecision } from '../../../chrome-extension/src/background/agent/hitl/types';
+import { HITL_REQUEST_MESSAGE } from '../../../chrome-extension/src/background/agent/hitl/types';
 import './SidePanel.css';
 
 type ModelOption = {
@@ -170,6 +173,7 @@ const SidePanel = () => {
   const [isProcessingSpeech, setIsProcessingSpeech] = useState(false);
   const [isReplaying, setIsReplaying] = useState(false);
   const [replayEnabled, setReplayEnabled] = useState(false);
+  const [hitlRequest, setHitlRequest] = useState<HITLRequest | null>(null);
   const sessionIdRef = useRef<string | null>(null);
   const isReplayingRef = useRef<boolean>(false);
   const portRef = useRef<chrome.runtime.Port | null>(null);
@@ -644,6 +648,8 @@ const SidePanel = () => {
           setIsProcessingSpeech(false);
         } else if (message && message.type === 'heartbeat_ack') {
           console.log('Heartbeat acknowledged');
+        } else if (message && message.type === HITL_REQUEST_MESSAGE) {
+          setHitlRequest(message.payload as HITLRequest);
         }
       });
 
@@ -704,6 +710,18 @@ const SidePanel = () => {
       }
     },
     [stopConnection],
+  );
+
+  const submitHITLDecision = useCallback(
+    (id: string, decision: HITLDecision) => {
+      try {
+        sendMessage({ type: 'hitl_decision', id, decision });
+      } catch (e) {
+        console.error('Failed to submit HITL decision', e);
+      }
+      setHitlRequest(null);
+    },
+    [sendMessage],
   );
 
   // Handle replay command
@@ -1484,6 +1502,7 @@ const SidePanel = () => {
                 )}
                 {messages.length > 0 && (
                   <div className="border-t border-[var(--browd-border)] bg-[var(--browd-surface)]/80 p-2 backdrop-blur">
+                    {hitlRequest && <HITLPrompt request={hitlRequest} onDecision={submitHITLDecision} />}
                     <ChatInput
                       onSendMessage={handleSendMessage}
                       onStopTask={handleStopTask}

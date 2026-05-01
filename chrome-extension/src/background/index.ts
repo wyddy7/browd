@@ -17,6 +17,7 @@ import type { BaseChatModel } from '@langchain/core/language_models/chat_models'
 import { DEFAULT_AGENT_OPTIONS } from './agent/types';
 import { SpeechToTextService } from './services/speechToText';
 import { injectBuildDomTreeScripts } from './browser/dom/service';
+import { HITL_DECISION_MESSAGE } from './agent/hitl/types';
 
 const logger = createLogger('background');
 
@@ -26,21 +27,16 @@ let currentPort: chrome.runtime.Port | null = null;
 const SIDE_PANEL_URL = chrome.runtime.getURL('side-panel/index.html');
 
 function getInterfaceLanguageInstruction(language: InterfaceLanguage): string | undefined {
-  const languageNames: Partial<Record<InterfaceLanguage, string>> = {
-    en: 'English',
-    ru: 'Russian',
-    es: 'Spanish',
-    fr: 'French',
-    de: 'German',
-    pt_BR: 'Portuguese (Brazil)',
+  const instructions: Partial<Record<InterfaceLanguage, string>> = {
+    en: 'Respond in English. Be concise and clear.',
+    ru: 'Отвечай на русском. Будь лаконичным и понятным.',
+    es: 'Responde en español. Sé conciso y claro.',
+    fr: 'Réponds en français. Sois concis et clair.',
+    de: 'Antworte auf Deutsch. Sei präzise und klar.',
+    pt_BR: 'Responda em português. Seja conciso e claro.',
   };
 
-  const languageName = languageNames[language];
-  if (!languageName) {
-    return undefined;
-  }
-
-  return `Browd interface language is ${languageName}. Prefer ${languageName} for user-facing replies unless the current user task explicitly asks for another language.`;
+  return instructions[language];
 }
 
 function mergeSystemInstructions(...instructions: Array<string | undefined>) {
@@ -171,6 +167,13 @@ chrome.runtime.onConnect.addListener(port => {
               return port.postMessage({ type: 'error', error: t('bg_cmd_followUpTask_cleaned') });
             }
             break;
+          }
+
+          case 'hitl_decision': {
+            // Side-panel submits user decision for a pending HITL request
+            if (!currentExecutor) return;
+            currentExecutor.hitlController?.submitDecision(message.id, message.decision);
+            return;
           }
 
           case 'cancel_task': {
@@ -373,6 +376,7 @@ async function setupExecutor(taskId: string, task: string, browserContext: Brows
       planningInterval: generalSettings.planningInterval,
     },
     generalSettings: generalSettings,
+    hitlSendMessage: msg => currentPort?.postMessage(msg),
   });
 
   return executor;

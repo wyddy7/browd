@@ -28,6 +28,7 @@ import {
 } from './schemas';
 import { findFieldByLabel } from '@src/background/browser/dom/fieldFinder';
 import { makeActionError } from '../agentErrors';
+import type { HITLRequest } from '../hitl/types';
 import { z } from 'zod';
 import { createLogger } from '@src/background/log';
 import { ExecutionState, Actors } from '../event/types';
@@ -747,22 +748,51 @@ export class ActionBuilder {
     }, fillFieldByLabelActionSchema);
     actions.push(fillFieldByLabel);
 
-    // Human-in-the-loop question — pauses execution, waits for user answer
+    // Human-in-the-loop question — pauses execution and waits for the user to answer
     const askUser = new Action(async (input: z.infer<typeof askUserActionSchema.schema>) => {
       const intent = `Asking user: "${input.question}"`;
       this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_START, intent);
-      // Emit TASK_PAUSE with the question payload so side-panel can render the HITL prompt.
-      // The HITLController (wired externally) will resolve this via a pending Promise.
-      // For now we emit the event and return a placeholder — the HITLController intercepts.
-      this.context.emitEvent(
-        Actors.SYSTEM,
-        ExecutionState.TASK_HITL_ASK,
-        JSON.stringify({ question: input.question, reasoning: input.reasoning, options: input.options }),
-      );
-      // Actual pause/resume is handled by HITLController in executor.ts
-      // This result is overwritten when the controller resolves.
+
+      const hitl = this.context.hitlController;
+      if (!hitl) {
+        // No HITL controller wired — emit event and continue (dev/test mode)
+        this.context.emitEvent(
+          Actors.SYSTEM,
+          ExecutionState.TASK_HITL_ASK,
+          JSON.stringify({ question: input.question, reasoning: input.reasoning, options: input.options }),
+        );
+        return new ActionResult({
+          extractedContent: `[HITL unavailable] Question: "${input.question}"`,
+          includeInMemory: true,
+        });
+      }
+
+      const request: HITLRequest = {
+        id: `hitl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        reason: 'ambiguous_input',
+        pendingAction: { ask_user: input },
+        context: { summary: input.question, risk: 'low', confidence: 0.5 },
+        question: input.question,
+        options: input.options,
+      };
+
+      // Actually pause the agent loop here — resolves when user submits a decision
+      const decision = await hitl.requestDecision(request);
+
+      let answer = '';
+      if (decision.type === 'answer') {
+        answer = decision.answer;
+      } else if (decision.type === 'approve') {
+        answer = '[User approved / skipped]';
+      } else if (decision.type === 'reject') {
+        answer = `[User rejected: ${decision.message}]`;
+      } else if (decision.type === 'edit') {
+        answer = JSON.stringify(decision.editedAction);
+      }
+
+      this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_OK, `User answered: "${answer}"`);
       return new ActionResult({
-        extractedContent: `[Waiting for user answer to: "${input.question}"]`,
+        extractedContent: `User answer: "${answer}"`,
         includeInMemory: true,
       });
     }, askUserActionSchema);

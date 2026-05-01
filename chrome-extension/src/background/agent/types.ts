@@ -6,6 +6,7 @@ import type MessageManager from './messages/service';
 import type { EventManager } from './event/manager';
 import { type Actors, type ExecutionState, AgentEvent } from './event/types';
 import { AgentStepHistory } from './history';
+import type { HITLController } from './hitl/controller';
 
 export interface AgentOptions {
   maxSteps: number;
@@ -50,6 +51,7 @@ export class AgentContext {
   stopped: boolean;
   consecutiveFailures: number;
   nSteps: number;
+  hitlController?: HITLController;
   stepInfo: AgentStepInfo | null;
   actionResults: ActionResult[];
   stateMessageAdded: boolean;

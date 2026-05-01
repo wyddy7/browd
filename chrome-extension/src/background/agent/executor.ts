@@ -24,6 +24,9 @@ import { URLNotAllowedError } from '../browser/views';
 import { chatHistoryStore } from '@extension/storage/lib/chat';
 import type { AgentStepHistory } from './history';
 import type { GeneralSettingsConfig } from '@extension/storage';
+import { FailureClassifier } from './guardrails/failureClassifier';
+import { classifyError } from './agentErrors';
+import { HITLController, type SendMessage } from './hitl/controller';
 
 const logger = createLogger('Executor');
 
@@ -33,6 +36,8 @@ export interface ExecutorExtraArgs {
   agentOptions?: Partial<AgentOptions>;
   agentSystemPrompts?: Partial<Record<'planner' | 'navigator', string>>;
   generalSettings?: GeneralSettingsConfig;
+  /** Inject to enable real HITL pause/resume. Called by HITLController to send requests to side-panel. */
+  hitlSendMessage?: SendMessage;
 }
 
 export class Executor {
@@ -42,6 +47,8 @@ export class Executor {
   private readonly plannerPrompt: PlannerPrompt;
   private readonly navigatorPrompt: NavigatorPrompt;
   private readonly generalSettings: GeneralSettingsConfig | undefined;
+  private readonly failureClassifier = new FailureClassifier();
+  private readonly _hitlController?: HITLController;
   private tasks: string[] = [];
   constructor(
     task: string,
@@ -64,6 +71,10 @@ export class Executor {
     );
 
     this.generalSettings = extraArgs?.generalSettings;
+    if (extraArgs?.hitlSendMessage) {
+      this._hitlController = new HITLController(extraArgs.hitlSendMessage);
+      context.hitlController = this._hitlController;
+    }
     this.tasks.push(task);
     this.navigatorPrompt = new NavigatorPrompt(
       context.options.maxActionsPerStep,
@@ -90,6 +101,10 @@ export class Executor {
     this.context = context;
     // Initialize message history
     this.context.messageManager.initTaskMessages(this.navigatorPrompt.getSystemMessage(), task);
+  }
+
+  get hitlController(): HITLController | undefined {
+    return this._hitlController;
   }
 
   subscribeExecutionEvents(callback: EventCallback): void {
@@ -270,12 +285,12 @@ export class Executor {
       if (navOutput.error) {
         throw new Error(navOutput.error);
       }
+      this.failureClassifier.recordSuccess();
       context.consecutiveFailures = 0;
       if (navOutput.result?.done) {
         return true;
       }
     } catch (error) {
-      logger.error(`Failed to execute step: ${error}`);
       if (
         error instanceof ChatModelAuthError ||
         error instanceof ChatModelBadRequestError ||
@@ -286,8 +301,10 @@ export class Executor {
       ) {
         throw error;
       }
-      context.consecutiveFailures++;
-      logger.error(`Failed to execute step: ${error}`);
+      const classified = classifyError(error);
+      const failAction = this.failureClassifier.next(classified);
+      logger.warning(`FailureClassifier → ${failAction} (${classified.type}): ${classified.message}`);
+      context.consecutiveFailures = this.failureClassifier.getTotalFailures();
       if (context.consecutiveFailures >= context.options.maxFailures) {
         throw new MaxFailuresReachedError(t('exec_errors_maxFailuresReached'));
       }
