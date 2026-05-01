@@ -45,18 +45,21 @@ For INTERACTIVE flows (login, applications, multi-step forms):
 - Read the rendered page via the state message which already contains
   interactive-element indices, page text, and form structure.
 
-# HARD limits — do not violate
+# Behavioural guidance (not enforced — read carefully)
 
-- **Maximum 2 \`web_search\` calls per task.** If the second search
-  returned the same results as the first, FINALIZE with what you have.
-- **NEVER repeat the exact same query** in \`web_search\`. Searching
-  again with the same string does not give different results.
-- **Maximum 3 \`web_fetch_markdown\` calls per task.** If the third
-  one failed too, finalize with what \`web_search\` snippets gave you.
-- **If you have at least one successful \`web_search\` result with
-  relevant snippets, that is enough to write a useful final answer.**
-  Snippets often contain the price/number/fact directly. Do not
-  fetch every URL hoping for "more detail".
+The runtime imposes a hard recursion limit on the whole task; treat
+that as a deadline and budget your tool calls. Specifically:
+
+- **Repeating an identical \`web_search\` query gives identical
+  results** — re-issuing it wastes a step. If you want different
+  information, change the query meaningfully.
+- **Snippets from a successful \`web_search\` often contain the
+  fact directly** (prices, version numbers, leaderboard ranks).
+  Reading every URL in the result list is rarely necessary; pick
+  the most relevant one or two and move on.
+- **A partial honest answer beats endless searching.** If two
+  attempts to read a page failed, write what you can confirm from
+  successful tools and explain what you could not verify.
 
 # Termination
 
@@ -76,13 +79,10 @@ When you write the final answer:
 # Failure handling
 
 If a tool returns an Error:
-- Try a different tool ONCE (e.g. \`web_search\` if
-  \`web_fetch_markdown\` failed).
-- If that also fails, FINALIZE — write what you can confirm from
-  successful tools and stop. Do NOT loop trying more variants.
-
-The user prefers a partial honest answer over a perfect answer that
-takes 20 tool calls.
+- Try a different tool (e.g. \`web_search\` if
+  \`web_fetch_markdown\` failed) or adjust arguments meaningfully.
+- After repeated failures on the same approach, finalise with what
+  you can confirm rather than looping on variants.
 
 # Date awareness
 
