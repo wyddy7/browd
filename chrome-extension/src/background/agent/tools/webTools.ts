@@ -203,10 +203,12 @@ export async function webSearch(input: { query: string; topK?: number }): Promis
 async function tryDuckDuckGo(query: string, topK: number): Promise<WebSearchResult | WebSearchError> {
   const endpoint = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
   try {
+    // No custom User-Agent — DDG html anti-bot blocks unrecognised UA strings.
+    // Service worker default UA is the browser's, which DDG accepts.
     const response = await fetch(endpoint, {
       method: 'GET',
       credentials: 'omit',
-      headers: { Accept: 'text/html', 'User-Agent': 'Mozilla/5.0 (Browd Agent)' },
+      headers: { Accept: 'text/html' },
     });
     if (!response.ok) {
       return { ok: false, errorType: 'transient', message: `DDG HTTP ${response.status}` };
@@ -256,10 +258,11 @@ function parseDuckDuckGoHtml(html: string, topK: number): WebSearchHit[] {
 async function tryBing(query: string, topK: number): Promise<WebSearchResult | WebSearchError> {
   const endpoint = `https://www.bing.com/search?q=${encodeURIComponent(query)}`;
   try {
+    // Same rationale as DDG — let Bing see the browser's default UA.
     const response = await fetch(endpoint, {
       method: 'GET',
       credentials: 'omit',
-      headers: { Accept: 'text/html', 'User-Agent': 'Mozilla/5.0 (Browd Agent)' },
+      headers: { Accept: 'text/html' },
     });
     if (!response.ok) {
       return { ok: false, errorType: 'transient', message: `Bing HTTP ${response.status}` };

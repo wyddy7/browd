@@ -85,8 +85,16 @@ export class Executor {
     // Planner+Navigator pipeline. Default is 'classic' until T3 evals
     // promote 'unified' to default.
     this.unifiedMode = extraArgs?.generalSettings?.agentMode === 'unified';
+    // T2c hotfix: in unified mode FORCE maxActionsPerStep=1. ReAct semantics
+    // require one observation per thought; batching multiple actions in a
+    // single LLM turn defeats the verifier-then-replan loop and produces
+    // confusing traces (e.g. multiple `done` calls in one step retrying
+    // different evidence ids). Classic keeps user-configured value.
+    if (this.unifiedMode) {
+      context.options.maxActionsPerStep = 1;
+    }
     this.navigatorPrompt = this.unifiedMode
-      ? new UnifiedPrompt(context.options.maxActionsPerStep, extraArgs?.agentSystemPrompts?.navigator)
+      ? new UnifiedPrompt(1, extraArgs?.agentSystemPrompts?.navigator)
       : new NavigatorPrompt(context.options.maxActionsPerStep, extraArgs?.agentSystemPrompts?.navigator);
     this.plannerPrompt = new PlannerPrompt(extraArgs?.agentSystemPrompts?.planner);
 
@@ -289,7 +297,12 @@ export class Executor {
       }
 
       const navigatorDone = await this.navigate();
-      if (navigatorDone) {
+      // T2c safety: paranoidly check that any action in this step set
+      // isDone, not just the last one. With maxActionsPerStep=1 navigate()
+      // already returns true on done, but if a future change re-enables
+      // batching this catches the "done in middle of batch" case.
+      const someDone = (context.actionResults ?? []).some(r => r.isDone);
+      if (navigatorDone || someDone) {
         terminated = true;
         break;
       }
