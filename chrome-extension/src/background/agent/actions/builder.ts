@@ -25,7 +25,11 @@ import {
   scrollToBottomActionSchema,
   fillFieldByLabelActionSchema,
   askUserActionSchema,
+  webFetchMarkdownActionSchema,
+  webSearchActionSchema,
+  extractPageMarkdownActionSchema,
 } from './schemas';
+import { webFetchMarkdown, webSearch, extractActiveTabAsMarkdown } from '../tools/webTools';
 import { findFieldByLabel } from '@src/background/browser/dom/fieldFinder';
 import { makeActionError } from '../agentErrors';
 import type { HITLRequest } from '../hitl/types';
@@ -855,6 +859,44 @@ export class ActionBuilder {
       });
     }, askUserActionSchema);
     actions.push(askUser);
+
+    // T1: web tools — read-only path that bypasses the browser DOM.
+    // Each tool returns a JSON-stringified result so the LLM sees structured
+    // evidence (which T2 will use to enforce evidence-on-done).
+    const webFetchMd = new Action(async (input: z.infer<typeof webFetchMarkdownActionSchema.schema>) => {
+      const result = await webFetchMarkdown({ url: input.url, maxChars: input.maxChars });
+      if (!result.ok) {
+        return new ActionResult({ error: `web_fetch_markdown failed: ${result.errorType}: ${result.message}` });
+      }
+      const summary = `# ${result.title}\n${result.markdown}${result.truncated ? '' : ''}`;
+      return new ActionResult({ extractedContent: summary, includeInMemory: true });
+    }, webFetchMarkdownActionSchema);
+    actions.push(webFetchMd);
+
+    const wSearch = new Action(async (input: z.infer<typeof webSearchActionSchema.schema>) => {
+      const result = await webSearch({ query: input.query, topK: input.topK });
+      if (!result.ok) {
+        return new ActionResult({ error: `web_search failed: ${result.errorType}: ${result.message}` });
+      }
+      const summary = result.results.map((r, i) => `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.snippet}`).join('\n\n');
+      return new ActionResult({
+        extractedContent: `web_search(${input.query}) via ${result.engine}:\n${summary}`,
+        includeInMemory: true,
+      });
+    }, webSearchActionSchema);
+    actions.push(wSearch);
+
+    const extractMd = new Action(async (input: z.infer<typeof extractPageMarkdownActionSchema.schema>) => {
+      const result = await extractActiveTabAsMarkdown({ maxChars: input.maxChars });
+      if (!result.ok) {
+        return new ActionResult({ error: `extract_page_as_markdown failed: ${result.errorType}: ${result.message}` });
+      }
+      return new ActionResult({
+        extractedContent: `# ${result.title}\n${result.markdown}`,
+        includeInMemory: true,
+      });
+    }, extractPageMarkdownActionSchema);
+    actions.push(extractMd);
 
     return actions;
   }

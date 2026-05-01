@@ -1,0 +1,348 @@
+/**
+ * T1 web tools — read-only path that bypasses the browser DOM.
+ *
+ * Three tools land here:
+ *   - web_fetch_markdown(url, maxChars)
+ *   - web_search(query, topK)
+ *   - extract_page_as_markdown(maxChars) — for the active tab
+ *
+ * All three are pure background-side fetch + Readability + Turndown.
+ * They never open a tab, never click, and never touch the puppeteer
+ * connection. Use them for information-seeking tasks; use the existing
+ * browser tools for interactive flows.
+ *
+ * Read order before editing: auto-docs/browd-agent-evolution.md (Tier 1).
+ */
+import { Readability, isProbablyReaderable } from '@mozilla/readability';
+import TurndownService from 'turndown';
+import { createLogger } from '@src/background/log';
+
+const logger = createLogger('WebTools');
+
+export interface WebFetchResult {
+  ok: true;
+  url: string;
+  title: string;
+  markdown: string;
+  truncated: boolean;
+}
+
+export interface WebFetchError {
+  ok: false;
+  errorType: 'transient' | 'auth_or_config' | 'parse_failed';
+  message: string;
+  url: string;
+}
+
+export interface WebSearchHit {
+  title: string;
+  url: string;
+  snippet: string;
+}
+
+export interface WebSearchResult {
+  ok: true;
+  engine: 'duckduckgo' | 'bing';
+  results: WebSearchHit[];
+}
+
+export interface WebSearchError {
+  ok: false;
+  errorType: 'transient' | 'parse_failed';
+  message: string;
+}
+
+const turndown = new TurndownService({
+  headingStyle: 'atx',
+  bulletListMarker: '-',
+  codeBlockStyle: 'fenced',
+});
+
+// Strip nav/footer/aside/script/style ahead of Readability — these tend to
+// poison the readability score on agent-style sites that lack obvious main.
+turndown.remove(['script', 'style', 'noscript', 'iframe']);
+
+function truncate(text: string, maxChars: number): { text: string; truncated: boolean } {
+  if (text.length <= maxChars) return { text, truncated: false };
+  return {
+    text: `${text.slice(0, maxChars)}\n\n…[truncated, ${text.length - maxChars} chars hidden]`,
+    truncated: true,
+  };
+}
+
+function htmlToMarkdown(html: string, sourceUrl: string): { title: string; markdown: string } {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+
+  // Set the base URL so relative anchors resolve. Readability uses doc.documentURI.
+  try {
+    const base = doc.createElement('base');
+    base.href = sourceUrl;
+    doc.head?.prepend(base);
+  } catch {
+    // Some hostile docs throw — ignore.
+  }
+
+  let title = doc.title || sourceUrl;
+  let articleHtml = '';
+
+  if (isProbablyReaderable(doc)) {
+    const reader = new Readability(doc.cloneNode(true) as Document);
+    const article = reader.parse();
+    if (article?.content) {
+      articleHtml = article.content;
+      title = article.title || title;
+    }
+  }
+
+  // Fallback when Readability declined or returned nothing useful.
+  if (!articleHtml) {
+    const main = doc.querySelector('main') ?? doc.querySelector('article') ?? doc.body;
+    articleHtml = main?.innerHTML ?? doc.body?.innerHTML ?? '';
+  }
+
+  const markdown = turndown
+    .turndown(articleHtml)
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  return { title: title.trim(), markdown };
+}
+
+/**
+ * Fetch a URL and return its readable content as Markdown.
+ * Pure side-effect-free except for the fetch itself.
+ */
+export async function webFetchMarkdown(input: {
+  url: string;
+  maxChars?: number;
+}): Promise<WebFetchResult | WebFetchError> {
+  const maxChars = input.maxChars ?? 3000;
+  const url = input.url;
+
+  if (!/^https?:\/\//i.test(url)) {
+    return { ok: false, errorType: 'auth_or_config', message: 'URL must be absolute http(s)', url };
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'GET',
+      credentials: 'omit',
+      redirect: 'follow',
+      headers: { Accept: 'text/html,application/xhtml+xml' },
+    });
+  } catch (err) {
+    return {
+      ok: false,
+      errorType: 'transient',
+      message: `network: ${err instanceof Error ? err.message : String(err)}`,
+      url,
+    };
+  }
+
+  if (!response.ok) {
+    const errorType: WebFetchError['errorType'] = response.status >= 500 ? 'transient' : 'auth_or_config';
+    return {
+      ok: false,
+      errorType,
+      message: `HTTP ${response.status} ${response.statusText}`,
+      url,
+    };
+  }
+
+  let html: string;
+  try {
+    html = await response.text();
+  } catch (err) {
+    return {
+      ok: false,
+      errorType: 'transient',
+      message: `read body failed: ${err instanceof Error ? err.message : String(err)}`,
+      url,
+    };
+  }
+
+  let title: string;
+  let markdown: string;
+  try {
+    ({ title, markdown } = htmlToMarkdown(html, url));
+  } catch (err) {
+    logger.warning('htmlToMarkdown failed', err);
+    return {
+      ok: false,
+      errorType: 'parse_failed',
+      message: err instanceof Error ? err.message : String(err),
+      url,
+    };
+  }
+
+  const { text, truncated } = truncate(markdown, maxChars);
+  return { ok: true, url, title, markdown: text, truncated };
+}
+
+/**
+ * Search the web and return up to topK {title, url, snippet} hits.
+ * Falls back DuckDuckGo → Bing if the primary fails.
+ */
+export async function webSearch(input: { query: string; topK?: number }): Promise<WebSearchResult | WebSearchError> {
+  const topK = input.topK ?? 5;
+  const query = input.query.trim();
+  if (!query) {
+    return { ok: false, errorType: 'parse_failed', message: 'empty query' };
+  }
+
+  const ddg = await tryDuckDuckGo(query, topK);
+  if (ddg.ok) return ddg;
+
+  const bing = await tryBing(query, topK);
+  if (bing.ok) return bing;
+
+  return { ok: false, errorType: 'transient', message: `both engines failed: ${ddg.message} | ${bing.message}` };
+}
+
+async function tryDuckDuckGo(query: string, topK: number): Promise<WebSearchResult | WebSearchError> {
+  const endpoint = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+  try {
+    const response = await fetch(endpoint, {
+      method: 'GET',
+      credentials: 'omit',
+      headers: { Accept: 'text/html', 'User-Agent': 'Mozilla/5.0 (Browd Agent)' },
+    });
+    if (!response.ok) {
+      return { ok: false, errorType: 'transient', message: `DDG HTTP ${response.status}` };
+    }
+    const html = await response.text();
+    const results = parseDuckDuckGoHtml(html, topK);
+    if (results.length === 0) {
+      return { ok: false, errorType: 'parse_failed', message: 'DDG: no results parsed' };
+    }
+    return { ok: true, engine: 'duckduckgo', results };
+  } catch (err) {
+    return { ok: false, errorType: 'transient', message: `DDG: ${err instanceof Error ? err.message : String(err)}` };
+  }
+}
+
+function parseDuckDuckGoHtml(html: string, topK: number): WebSearchHit[] {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  const out: WebSearchHit[] = [];
+  // DuckDuckGo HTML markup uses .result blocks with .result__title > a and .result__snippet.
+  const blocks = doc.querySelectorAll('.result, .web-result');
+  for (const block of Array.from(blocks)) {
+    const link = block.querySelector('.result__a, .result__title a, a.result__a') as HTMLAnchorElement | null;
+    const snippetEl = block.querySelector('.result__snippet') as HTMLElement | null;
+    if (!link) continue;
+    const rawHref = link.getAttribute('href') ?? '';
+    // DDG sometimes wraps URLs in /l/?uddg=...&kh=...
+    let url = rawHref;
+    try {
+      const u = new URL(rawHref, 'https://duckduckgo.com');
+      const wrapped = u.searchParams.get('uddg');
+      if (wrapped) url = decodeURIComponent(wrapped);
+      else url = u.toString();
+    } catch {
+      // keep rawHref
+    }
+    out.push({
+      title: (link.textContent ?? '').trim(),
+      url,
+      snippet: (snippetEl?.textContent ?? '').replace(/\s+/g, ' ').trim(),
+    });
+    if (out.length >= topK) break;
+  }
+  return out;
+}
+
+async function tryBing(query: string, topK: number): Promise<WebSearchResult | WebSearchError> {
+  const endpoint = `https://www.bing.com/search?q=${encodeURIComponent(query)}`;
+  try {
+    const response = await fetch(endpoint, {
+      method: 'GET',
+      credentials: 'omit',
+      headers: { Accept: 'text/html', 'User-Agent': 'Mozilla/5.0 (Browd Agent)' },
+    });
+    if (!response.ok) {
+      return { ok: false, errorType: 'transient', message: `Bing HTTP ${response.status}` };
+    }
+    const html = await response.text();
+    const results = parseBingHtml(html, topK);
+    if (results.length === 0) {
+      return { ok: false, errorType: 'parse_failed', message: 'Bing: no results parsed' };
+    }
+    return { ok: true, engine: 'bing', results };
+  } catch (err) {
+    return { ok: false, errorType: 'transient', message: `Bing: ${err instanceof Error ? err.message : String(err)}` };
+  }
+}
+
+function parseBingHtml(html: string, topK: number): WebSearchHit[] {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  const out: WebSearchHit[] = [];
+  // Bing organic results live in li.b_algo with h2 > a and .b_caption p.
+  const items = doc.querySelectorAll('li.b_algo');
+  for (const item of Array.from(items)) {
+    const link = item.querySelector('h2 a') as HTMLAnchorElement | null;
+    const captionP = item.querySelector('.b_caption p') as HTMLElement | null;
+    if (!link) continue;
+    out.push({
+      title: (link.textContent ?? '').trim(),
+      url: link.href,
+      snippet: (captionP?.textContent ?? '').replace(/\s+/g, ' ').trim(),
+    });
+    if (out.length >= topK) break;
+  }
+  return out;
+}
+
+/**
+ * Extract the currently-active tab's main content as Markdown via content
+ * script injection. The page must be open and accessible.
+ */
+export async function extractActiveTabAsMarkdown(input: {
+  maxChars?: number;
+}): Promise<WebFetchResult | WebFetchError> {
+  const maxChars = input.maxChars ?? 3000;
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  const tab = tabs[0];
+  if (!tab?.id || !tab.url) {
+    return { ok: false, errorType: 'auth_or_config', message: 'no active tab', url: '' };
+  }
+  if (!/^https?:/i.test(tab.url)) {
+    return { ok: false, errorType: 'auth_or_config', message: 'active tab is not http(s)', url: tab.url };
+  }
+
+  let html: string;
+  try {
+    const [{ result }] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () => document.documentElement.outerHTML,
+    });
+    html = String(result ?? '');
+  } catch (err) {
+    return {
+      ok: false,
+      errorType: 'transient',
+      message: `script injection failed: ${err instanceof Error ? err.message : String(err)}`,
+      url: tab.url,
+    };
+  }
+  if (!html) {
+    return { ok: false, errorType: 'parse_failed', message: 'empty document', url: tab.url };
+  }
+
+  let title: string;
+  let markdown: string;
+  try {
+    ({ title, markdown } = htmlToMarkdown(html, tab.url));
+  } catch (err) {
+    return {
+      ok: false,
+      errorType: 'parse_failed',
+      message: err instanceof Error ? err.message : String(err),
+      url: tab.url,
+    };
+  }
+  const { text, truncated } = truncate(markdown, maxChars);
+  return { ok: true, url: tab.url, title, markdown: text, truncated };
+}

@@ -242,6 +242,53 @@ export const fillFieldByLabelActionSchema: ActionSchema = {
 };
 
 /**
+ * T1 — read-only web tools.
+ *
+ * These three let the agent satisfy information-seeking tasks without
+ * opening a browser tab or interacting with the DOM. Prefer these for
+ * "find X", "what is Y", "look up Z" style requests. See
+ * auto-docs/browd-agent-evolution.md (Tier 1) for context.
+ */
+export const webFetchMarkdownActionSchema: ActionSchema = {
+  name: 'web_fetch_markdown',
+  description:
+    'Fetch a URL and return its main readable content as Markdown (no tab opened). Use for read-only research: docs pages, articles, leaderboards. Do NOT use for interactive flows (login, forms) — use go_to_url + click for those.',
+  schema: z.object({
+    intent: z.string().default('').describe('purpose of this fetch'),
+    url: z.string().describe('absolute URL to fetch'),
+    maxChars: z
+      .number()
+      .int()
+      .min(500)
+      .max(8000)
+      .optional()
+      .default(3000)
+      .describe('truncate the markdown to this many characters; default 3000'),
+  }),
+};
+
+export const webSearchActionSchema: ActionSchema = {
+  name: 'web_search',
+  description:
+    'Search the web and return up to topK {title, url, snippet} hits without opening any tab. Prefer this over search_google when the result is the answer (no need to navigate). Falls back across engines if the primary fails.',
+  schema: z.object({
+    intent: z.string().default('').describe('why you are searching'),
+    query: z.string().describe('search query'),
+    topK: z.number().int().min(1).max(10).optional().default(5).describe('how many results to return; default 5'),
+  }),
+};
+
+export const extractPageMarkdownActionSchema: ActionSchema = {
+  name: 'extract_page_as_markdown',
+  description:
+    'Extract the currently-active tab as Markdown (Readability + Turndown over the live DOM). Use when the agent already navigated and now wants to read content semantically rather than by DOM index.',
+  schema: z.object({
+    intent: z.string().default('').describe('purpose'),
+    maxChars: z.number().int().min(500).max(8000).optional().default(3000),
+  }),
+};
+
+/**
  * Ask the user a clarifying question and wait for their answer before continuing.
  * Use when a form field is ambiguous, goal is unclear, or confidence is low.
  * The user's answer is injected into agent memory and the task resumes.
