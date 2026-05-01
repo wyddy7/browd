@@ -310,6 +310,12 @@ export class Executor {
 
     if (terminated) {
       const finalMessage = context.finalAnswer || 'Task completed.';
+      // In classic mode the Planner emits STEP_OK with the final_answer,
+      // which the side panel renders as a chat message (Actors.PLANNER +
+      // STEP_OK has skip=false). Unified has no Planner, so we emit the
+      // same event ourselves to surface the answer in the chat. Without
+      // this, only TASK_OK fires (skip=true) and finalAnswer never shows.
+      context.emitEvent(Actors.PLANNER, ExecutionState.STEP_OK, finalMessage);
       context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_OK, finalMessage);
     } else if (step >= allowedMaxSteps) {
       logger.error('❌ Task failed: Max steps reached');

@@ -15,6 +15,7 @@
  */
 import { Readability, isProbablyReaderable } from '@mozilla/readability';
 import TurndownService from 'turndown';
+import { parseHTML } from 'linkedom';
 import { createLogger } from '@src/background/log';
 
 const logger = createLogger('WebTools');
@@ -70,11 +71,16 @@ function truncate(text: string, maxChars: number): { text: string; truncated: bo
   };
 }
 
+/**
+ * MV3 service workers do NOT have DOMParser, document, or window. We use
+ * linkedom (`parseHTML`) which gives a spec-compliant Document implemented
+ * in pure JS — works without DOM APIs. Readability and Turndown both
+ * accept linkedom's Document and Element types.
+ */
 function htmlToMarkdown(html: string, sourceUrl: string): { title: string; markdown: string } {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, 'text/html');
+  const { document: doc } = parseHTML(html);
 
-  // Set the base URL so relative anchors resolve. Readability uses doc.documentURI.
+  // Set the base URL so relative anchors resolve.
   try {
     const base = doc.createElement('base');
     base.href = sourceUrl;
@@ -86,8 +92,12 @@ function htmlToMarkdown(html: string, sourceUrl: string): { title: string; markd
   let title = doc.title || sourceUrl;
   let articleHtml = '';
 
-  if (isProbablyReaderable(doc)) {
-    const reader = new Readability(doc.cloneNode(true) as Document);
+  // linkedom's Document is structurally compatible with the Readability
+  // input but the type cast is needed because @mozilla/readability ships
+  // its own Document/Element types.
+  const docForReader = doc as unknown as Document;
+  if (isProbablyReaderable(docForReader)) {
+    const reader = new Readability(docForReader.cloneNode(true) as Document);
     const article = reader.parse();
     if (article?.content) {
       articleHtml = article.content;
@@ -225,8 +235,7 @@ async function tryDuckDuckGo(query: string, topK: number): Promise<WebSearchResu
 }
 
 function parseDuckDuckGoHtml(html: string, topK: number): WebSearchHit[] {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, 'text/html');
+  const { document: doc } = parseHTML(html);
   const out: WebSearchHit[] = [];
   // DuckDuckGo HTML markup uses .result blocks with .result__title > a and .result__snippet.
   const blocks = doc.querySelectorAll('.result, .web-result');
@@ -279,8 +288,7 @@ async function tryBing(query: string, topK: number): Promise<WebSearchResult | W
 }
 
 function parseBingHtml(html: string, topK: number): WebSearchHit[] {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, 'text/html');
+  const { document: doc } = parseHTML(html);
   const out: WebSearchHit[] = [];
   // Bing organic results live in li.b_algo with h2 > a and .b_caption p.
   const items = doc.querySelectorAll('li.b_algo');
