@@ -349,10 +349,27 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
   // mode of plain createReactAgent — when the agent emits a no-tool-
   // call AIMessage, the replanner gets to decide whether the user
   // task is actually answered or there are more subgoals to do.
+  // T2f-task-params: planSchema now extracts a separate
+  // taskParameters object so the executor can see concrete URLs /
+  // queries / names structurally — not only inside subgoal text.
+  // Belt #3 against subgoal-abstraction drift (along with the
+  // <original-user-task> block and the HumanMessage echo). Even if
+  // the LLM ignores the prompt rule and writes "the provided URL"
+  // in a subgoal, the URL itself is still pinned in this object
+  // and re-injected into every step's system prompt.
   const planSchema = z.object({
     reasoning: z.string().describe('one-sentence understanding of the task'),
     plan: z.array(z.string().min(3)).min(1).max(7).describe('1-7 concrete subgoals, each in imperative form'),
+    taskParameters: z
+      .object({
+        urls: z.array(z.string()).default([]).describe('every full URL mentioned in the user task'),
+        queries: z.array(z.string()).default([]).describe('every search query / keyword the user explicitly named'),
+        names: z.array(z.string()).default([]).describe('every concrete name (person, product, repo, address)'),
+      })
+      .default({ urls: [], queries: [], names: [] })
+      .describe('structured copy of the concrete parameters from the user task — extract before writing subgoals'),
   });
+  type PlanType = z.infer<typeof planSchema>;
   const replanSchema = z.object({
     decision: z
       .enum(['continue', 'finish'])
@@ -384,26 +401,28 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
   // subgoal per invocation, fresh thread each time so the inner
   // message context stays small (just enough to execute the single
   // step) and counters/dupGuard accumulate across the whole task.
-  const buildSystemPromptForStep = (currentStep: string, completed: Array<[string, string]>) => {
+  const buildSystemPromptForStep = (
+    currentStep: string,
+    completed: Array<[string, string]>,
+    params: PlanType['taskParameters'],
+  ) => {
     const completedBlock = completed.length
       ? `\n<completed-so-far>\n${completed.map(([s, r]) => `- ${s} → ${r}`).join('\n')}\n</completed-so-far>`
       : '';
-    // T2f-plan-context-leak: include the FULL original user task in
-    // every step's system prompt so the executor never has to
-    // infer URLs / queries / names that the planner abstracted out.
-    // The 2026-05-02 bug was the planner emitting
-    // "Open the provided GitHub repository URL" with no URL, and
-    // the executor inventing a github.com/langchain-ai/deepagents URL
-    // from prior chat-history context.
-    return `${baseSystemPrompt}\n<original-user-task>\n${task}\n</original-user-task>\n<current-subgoal>\nFocus on this single subgoal of the larger user task:\n${currentStep}\n\nIf the subgoal text refers to "the provided URL" / "the requested term" / similar abstractions, ALWAYS resolve them by re-reading the original user task above. Do not invent parameters from memory.\n\nFinish this subgoal with at most a few tool calls, then write a brief description of what you achieved. Do NOT solve the entire user task in one go — the orchestrator will pick the next subgoal.\n</current-subgoal>${completedBlock}`;
+    const paramsBlock =
+      params.urls.length || params.queries.length || params.names.length
+        ? `\n<task-parameters>\nThese are the EXACT concrete parameters the user named in the original task. Use these verbatim — never substitute similar-looking values from training data, current tab state, or chat history.\n${params.urls.length ? `URLs: ${params.urls.map(u => `"${u}"`).join(', ')}\n` : ''}${params.queries.length ? `Queries: ${params.queries.map(q => `"${q}"`).join(', ')}\n` : ''}${params.names.length ? `Names: ${params.names.map(n => `"${n}"`).join(', ')}\n` : ''}</task-parameters>`
+        : '';
+    return `${baseSystemPrompt}\n<original-user-task>\n${task}\n</original-user-task>${paramsBlock}\n<current-subgoal>\nFocus on this single subgoal of the larger user task:\n${currentStep}\n\nIf the subgoal text refers to "the provided URL" / "the requested term" / similar abstractions, ALWAYS resolve them by re-reading the original user task above and the <task-parameters> block. Do not invent parameters from memory or the current tab.\n\nFinish this subgoal with at most a few tool calls, then write a brief description of what you achieved. Do NOT solve the entire user task in one go — the orchestrator will pick the next subgoal.\n</current-subgoal>${completedBlock}`;
   };
 
   const runReactStep = async (
     currentStep: string,
     completed: Array<[string, string]>,
     stepIndex: number,
+    params: PlanType['taskParameters'],
   ): Promise<string> => {
-    const stepSystemPrompt = buildSystemPromptForStep(currentStep, completed);
+    const stepSystemPrompt = buildSystemPromptForStep(currentStep, completed, params);
     const agent = createReactAgent({
       llm,
       tools,
@@ -516,6 +535,12 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
       default: () => [],
     }),
     response: Annotation<string | null>({ reducer: (_, n) => n, default: () => null }),
+    // T2f-task-params: structured params from the user task, set by
+    // the planner once and re-read by every executor step.
+    taskParameters: Annotation<PlanType['taskParameters']>({
+      reducer: (_, n) => n,
+      default: () => ({ urls: [], queries: [], names: [] }),
+    }),
   });
 
   const plannerNode = async () => {
@@ -541,15 +566,17 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
       new HumanMessage(task),
     ];
     try {
-      const result = (await planner.invoke(messages)) as z.infer<typeof planSchema>;
-      logger.info(`plan ready: ${result.plan.length} subgoals`);
+      const result = (await planner.invoke(messages)) as PlanType;
+      logger.info(
+        `plan ready: ${result.plan.length} subgoals; params: urls=${result.taskParameters.urls.length}, queries=${result.taskParameters.queries.length}, names=${result.taskParameters.names.length}`,
+      );
       emitPlanChecklist(result.plan.map(s => ({ text: s, done: false })));
-      return { plan: result.plan };
+      return { plan: result.plan, taskParameters: result.taskParameters };
     } catch (err) {
       logger.warning('planner step failed; degrading to single-step plan from raw task', err);
       const fallback = [task];
       emitPlanChecklist(fallback.map(s => ({ text: s, done: false })));
-      return { plan: fallback };
+      return { plan: fallback, taskParameters: { urls: [], queries: [], names: [] } };
     }
   };
 
@@ -561,7 +588,7 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
     logger.info(`executing subgoal ${state.pastSteps.length + 1}: ${currentStep}`);
     let stepResult: string;
     try {
-      stepResult = await runReactStep(currentStep, state.pastSteps, state.pastSteps.length);
+      stepResult = await runReactStep(currentStep, state.pastSteps, state.pastSteps.length, state.taskParameters);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       logger.warning(`subgoal "${currentStep}" failed: ${msg}`);
