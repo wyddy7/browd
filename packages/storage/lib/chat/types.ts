@@ -30,6 +30,19 @@ export interface Message {
    * never persisted to chatHistoryStore.
    */
   planItems?: { text: string; done: boolean }[];
+  /**
+   * T2f-thinking-split: lifecycle phase of an agent-emitted message
+   * inside one user-task run.
+   *   'thinking' — intermediate work (Navigator step, screenshot
+   *     capture, internal Planner reasoning, retry, replan). Folded
+   *     into a collapsible section by MessageList so the chat doesn't
+   *     drown in transcript noise.
+   *   'final' — the answer the user actually asked for. Always
+   *     rendered outside the collapsible.
+   * Undefined = pre-T2f-thinking-split message or user input;
+   * rendered as plain.
+   */
+  phase?: 'thinking' | 'final';
 }
 
 export interface ChatMessage extends Message {

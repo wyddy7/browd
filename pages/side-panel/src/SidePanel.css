@@ -419,3 +419,34 @@ code {
     opacity: 0.85;
   }
 }
+
+/* T2f-thinking-split — agent process work folded into a collapsible
+   <details>. Same calm panel surface as the rest of the chat;
+   summary acts as the affordance. Open state animates a subtle slide. */
+.browd-thinking-group summary::-webkit-details-marker {
+  display: none;
+}
+
+.browd-thinking-group[open] {
+  background: var(--browd-panel);
+}
+
+.browd-thinking-group[open] > summary > span:first-child {
+  display: inline-block;
+  transform: rotate(180deg);
+}
+
+.browd-thinking-group > div {
+  animation: browd-thinking-reveal 220ms ease-out;
+}
+
+@keyframes browd-thinking-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 0.95;
+    transform: translateY(0);
+  }
+}

@@ -390,13 +390,37 @@ export async function extractActiveTabAsMarkdown(input: {
     return { ok: false, errorType: 'auth_or_config', message: 'active tab is not http(s)', url: tab.url };
   }
 
-  let html: string;
+  // T2f-final-fix-8: Readability/Turndown still touch global document
+  // in some code paths under MV3 SW (gmail, docs.google.com, dynamic
+  // SPAs). The "parse_failed: document is not defined" error in the
+  // 2026-05-02 gmail trace is from that. Switch the primary
+  // extraction strategy to "run innerText in the page context via
+  // chrome.scripting.executeScript", which never crosses the SW
+  // boundary for DOM access. Fall back to the local linkedom +
+  // Readability + Turndown path only when innerText is too short
+  // (i.e. heavy SPAs that render late).
+  let pageTitle = '';
+  let pageText = '';
   try {
     const [{ result }] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      func: () => document.documentElement.outerHTML,
+      func: () => {
+        const safeText = (() => {
+          // Prefer the visible content of the current view (innerText
+          // respects display:none, which is what readers want).
+          const main =
+            (document.querySelector('main') as HTMLElement | null) ??
+            (document.querySelector('article') as HTMLElement | null) ??
+            document.body;
+          return main?.innerText ?? document.body?.innerText ?? '';
+        })();
+        return { title: document.title, text: safeText };
+      },
     });
-    html = String(result ?? '');
+    pageTitle = String(result?.title ?? '');
+    pageText = String(result?.text ?? '')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
   } catch (err) {
     return {
       ok: false,
@@ -405,22 +429,36 @@ export async function extractActiveTabAsMarkdown(input: {
       url: tab.url,
     };
   }
-  if (!html) {
-    return { ok: false, errorType: 'parse_failed', message: 'empty document', url: tab.url };
+
+  if (pageText.length >= 200) {
+    const { text, truncated } = truncate(pageText, maxChars);
+    return { ok: true, url: tab.url, title: pageTitle || tab.url, markdown: text, truncated };
   }
 
-  let title: string;
-  let markdown: string;
+  // Fallback: full outerHTML → linkedom → Readability → Turndown for
+  // pages where innerText returned almost nothing (rare but happens
+  // on heavily-virtualised SPAs). Wrapped in try so the
+  // "document is not defined" error surfaces as a soft fallback,
+  // not an agent-killing throw.
   try {
-    ({ title, markdown } = htmlToMarkdown(html, tab.url));
+    const [{ result: htmlResult }] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () => document.documentElement.outerHTML,
+    });
+    const html = String(htmlResult ?? '');
+    if (!html) {
+      // Worst case — return whatever innerText we had, even if short.
+      const { text, truncated } = truncate(pageText, maxChars);
+      return { ok: true, url: tab.url, title: pageTitle || tab.url, markdown: text, truncated };
+    }
+    const { title, markdown } = htmlToMarkdown(html, tab.url);
+    const { text, truncated } = truncate(markdown, maxChars);
+    return { ok: true, url: tab.url, title: title || pageTitle || tab.url, markdown: text, truncated };
   } catch (err) {
-    return {
-      ok: false,
-      errorType: 'parse_failed',
-      message: err instanceof Error ? err.message : String(err),
-      url: tab.url,
-    };
+    // Innerhtml fallback failed too — return the short innerText we
+    // had instead of an error. Better partial than empty.
+    logger.warning('htmlToMarkdown fallback failed; returning short innerText', err);
+    const { text, truncated } = truncate(pageText || `(empty page on ${tab.url})`, maxChars);
+    return { ok: true, url: tab.url, title: pageTitle || tab.url, markdown: text, truncated };
   }
-  const { text, truncated } = truncate(markdown, maxChars);
-  return { ok: true, url: tab.url, title, markdown: text, truncated };
 }

@@ -197,6 +197,11 @@ const SidePanel = () => {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [lightboxUrl]);
+  // T2f-thinking-split: tracks the start index of the current
+  // agent run so TASK_OK / TASK_FAIL can mark the slice
+  // [runStartIdx..end-1] as 'thinking' and the last message as
+  // 'final'. Null between runs.
+  const runStartIdxRef = useRef<number | null>(null);
   const sessionIdRef = useRef<string | null>(null);
   const isReplayingRef = useRef<boolean>(false);
   const portRef = useRef<chrome.runtime.Port | null>(null);
@@ -497,12 +502,34 @@ const SidePanel = () => {
               // Reset historical session flag and trace when a new task starts
               setIsHistoricalSession(false);
               setTraceEntries([]);
+              // T2f-thinking-split: anchor the run start so we can
+              // mark all subsequent messages until TASK_OK/FAIL/CANCEL
+              // as 'thinking' (last one of the slice gets 'final').
+              setMessages(prev => {
+                runStartIdxRef.current = prev.length;
+                return prev;
+              });
               break;
             case ExecutionState.TASK_OK:
               setIsFollowUpMode(true);
               setInputEnabled(true);
               setShowStopButton(false);
               setIsReplaying(false);
+              // T2f-thinking-split: mark the run slice. Final = last
+              // message (the answer), thinking = everything before it
+              // in the slice. Slight quirk: TASK_OK fires AFTER the
+              // final Planner STEP_OK with the answer, so the answer
+              // is already in messages at this point.
+              setMessages(prev => {
+                const start = runStartIdxRef.current;
+                if (start === null || start >= prev.length) return prev;
+                runStartIdxRef.current = null;
+                return prev.map((m, i) => {
+                  if (i < start) return m;
+                  if (i === prev.length - 1) return { ...m, phase: 'final' as const };
+                  return { ...m, phase: 'thinking' as const };
+                });
+              });
               break;
             case ExecutionState.TASK_FAIL:
               setIsFollowUpMode(true);
@@ -510,6 +537,18 @@ const SidePanel = () => {
               setShowStopButton(false);
               setIsReplaying(false);
               skip = false;
+              setMessages(prev => {
+                const start = runStartIdxRef.current;
+                if (start === null || start >= prev.length) return prev;
+                runStartIdxRef.current = null;
+                // On fail the last message IS the failure reason —
+                // keep it as final so the user sees "what broke".
+                return prev.map((m, i) => {
+                  if (i < start) return m;
+                  if (i === prev.length - 1) return { ...m, phase: 'final' as const };
+                  return { ...m, phase: 'thinking' as const };
+                });
+              });
               break;
             case ExecutionState.TASK_CANCEL:
               setIsFollowUpMode(false);
@@ -517,6 +556,15 @@ const SidePanel = () => {
               setShowStopButton(false);
               setIsReplaying(false);
               skip = false;
+              setMessages(prev => {
+                const start = runStartIdxRef.current;
+                if (start === null || start >= prev.length) return prev;
+                runStartIdxRef.current = null;
+                return prev.map((m, i) => {
+                  if (i < start) return m;
+                  return { ...m, phase: 'thinking' as const };
+                });
+              });
               break;
             case ExecutionState.TASK_PAUSE:
               break;

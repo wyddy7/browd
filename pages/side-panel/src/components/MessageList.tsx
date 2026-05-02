@@ -9,17 +9,75 @@ interface MessageListProps {
   onThumbClick?: (url: string) => void;
 }
 
+// T2f-thinking-split: group consecutive 'thinking' messages into a
+// single collapsible <details> block so the chat shows one tidy
+// "Thinking N steps" affordance instead of a wall of intermediate
+// Planner reasoning + Navigator action logs + screenshot thumbnails.
+// Final answer / user input / pre-T2f-thinking-split messages render
+// outside, full-width, like before.
+type Group =
+  | { kind: 'thinking'; items: Array<{ msg: Message; index: number }> }
+  | { kind: 'plain'; msg: Message; index: number };
+
+function groupMessages(messages: Message[]): Group[] {
+  const out: Group[] = [];
+  for (let i = 0; i < messages.length; i++) {
+    const m = messages[i];
+    if (m.phase === 'thinking') {
+      const last = out[out.length - 1];
+      if (last && last.kind === 'thinking') {
+        last.items.push({ msg: m, index: i });
+      } else {
+        out.push({ kind: 'thinking', items: [{ msg: m, index: i }] });
+      }
+    } else {
+      out.push({ kind: 'plain', msg: m, index: i });
+    }
+  }
+  return out;
+}
+
 export default memo(function MessageList({ messages, onThumbClick }: MessageListProps) {
+  const groups = groupMessages(messages);
   return (
     <div className="max-w-full space-y-4">
-      {messages.map((message, index) => (
-        <MessageBlock
-          key={`${message.actor}-${message.timestamp}-${index}`}
-          message={message}
-          isSameActor={index > 0 ? messages[index - 1].actor === message.actor : false}
-          onThumbClick={onThumbClick}
-        />
-      ))}
+      {groups.map((g, gi) => {
+        if (g.kind === 'thinking') {
+          // We rebuild a "previous-actor" flag inside the collapsed
+          // group so the avatar grouping still feels right when
+          // expanded.
+          return (
+            <details
+              key={`thinking-${gi}-${g.items[0].index}`}
+              className="browd-thinking-group rounded-md border border-[var(--browd-border)] bg-[var(--browd-panel)]/60 px-3 py-2 text-sm">
+              <summary className="cursor-pointer select-none list-none text-[var(--browd-muted)] hover:text-[var(--browd-text)] transition-colors">
+                <span className="mr-2">⌄</span>
+                Thinking — {g.items.length} step{g.items.length === 1 ? '' : 's'}
+              </summary>
+              <div className="mt-2 space-y-3 opacity-95">
+                {g.items.map((it, idx) => (
+                  <MessageBlock
+                    key={`t-${it.msg.actor}-${it.msg.timestamp}-${it.index}`}
+                    message={it.msg}
+                    isSameActor={idx > 0 ? g.items[idx - 1].msg.actor === it.msg.actor : false}
+                    onThumbClick={onThumbClick}
+                  />
+                ))}
+              </div>
+            </details>
+          );
+        }
+        const prev = g.index > 0 ? messages[g.index - 1] : null;
+        const isSameActor = prev?.phase !== 'thinking' && prev?.actor === g.msg.actor;
+        return (
+          <MessageBlock
+            key={`${g.msg.actor}-${g.msg.timestamp}-${g.index}`}
+            message={g.msg}
+            isSameActor={Boolean(isSameActor)}
+            onThumbClick={onThumbClick}
+          />
+        );
+      })}
     </div>
   );
 });

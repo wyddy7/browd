@@ -3,11 +3,14 @@ import { createStorage } from '../base/base';
 import type { BaseStorage } from '../base/types';
 
 // Template data
+// T2f-thinking-split: added "Email summary" as a default — covers the
+// canonical "value of a personal browser agent" demo (operate on the
+// user's authenticated Gmail, which cloud agents can't do).
 const defaultFavoritePrompts = [
   {
-    title: 'Explore Browd',
+    title: 'Email summary',
     content:
-      'Open the Browd repository at https://github.com/wyddy7/browd and summarize what the project does, how to run it locally, and one concrete way I could improve it next.',
+      "Open my Gmail (mail.google.com), read the last 5 emails in the inbox, and write a short summary of the day: who wrote, what they want, which need a reply. Don't open promotional newsletters in detail — one line each is enough.",
   },
   {
     title: 'Extract Info',
@@ -18,6 +21,11 @@ const defaultFavoritePrompts = [
     title: 'Create Workflow',
     content:
       'Look at the current page and draft a reusable step-by-step workflow for this task. Keep it concise and actionable so I can reuse it later.',
+  },
+  {
+    title: 'Explore Browd',
+    content:
+      'Open the Browd repository at https://github.com/wyddy7/browd and summarize what the project does, how to run it locally, and one concrete way I could improve it next.',
   },
 ];
 
@@ -60,6 +68,10 @@ const systemPromptMatchers = [
     prompt.title === 'Create Workflow' ||
     prompt.title === 'Create a reusable workflow' ||
     prompt.content.includes('draft a reusable step-by-step workflow for this task'),
+  (prompt: FavoritePrompt) =>
+    prompt.title === 'Email summary' ||
+    prompt.content.includes('Open my Gmail (mail.google.com)') ||
+    prompt.content.includes('write a short summary of the day'),
 ];
 
 function isSystemPrompt(prompt: FavoritePrompt): boolean {
