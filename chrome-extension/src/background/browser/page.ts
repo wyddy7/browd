@@ -1687,9 +1687,16 @@ export default class Page {
         }
       }
     } finally {
-      // Clean up event listeners
-      this._puppeteerPage.off('request', onRequest);
-      this._puppeteerPage.off('response', onResponse);
+      // T2f-final-fix-2: null-guard the listener cleanup. The page can
+      // detach mid-task (LinkedIn rapid SPA navigation, debugger
+      // disconnect, tab close) and Bae._waitForStableNetwork would
+      // otherwise crash on `null.off(...)`. Logged for observability.
+      try {
+        this._puppeteerPage?.off('request', onRequest);
+        this._puppeteerPage?.off('response', onResponse);
+      } catch (cleanupErr) {
+        logger.warning('network listener cleanup failed (page detached?)', cleanupErr);
+      }
     }
     console.debug(`Network stabilized for ${this._config.waitForNetworkIdlePageLoadTime} seconds`);
   }

@@ -4,6 +4,7 @@ import { AiOutlineLoading3Quarters } from 'react-icons/ai';
 import { FiPaperclip } from 'react-icons/fi';
 import { t } from '@extension/i18n';
 import { chatInputDraftStorage } from '@extension/storage';
+import { TokenRing } from './TokenRing';
 
 type QuickAgent = 'planner' | 'navigator';
 type QuickModelRole = QuickAgent | 'stt';
@@ -41,6 +42,13 @@ interface ChatInputProps {
   // Historical session ID - if provided, shows replay button instead of send button
   historicalSessionId?: string | null;
   onReplay?: (sessionId: string) => void;
+  /**
+   * T2f-final-fix-2 — live token usage shown right of the paperclip
+   * button. SidePanel owns the cumulative state; ChatInput is purely
+   * presentational here. Hover surfaces a tooltip with the full
+   * "<used>/<context window>" breakdown.
+   */
+  tokenUsage?: { input: number; output: number; contextWindow: number } | null;
 }
 
 // File attachment interface
@@ -70,6 +78,7 @@ export default function ChatInput({
   setContent,
   historicalSessionId,
   onReplay,
+  tokenUsage,
 }: ChatInputProps) {
   const [text, setText] = useState('');
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
@@ -475,6 +484,13 @@ export default function ChatInput({
                 className="hidden"
                 aria-hidden="true"
               />
+
+              {/* T2f-final-fix-2: live token-usage ring next to the
+                  attachment button. Stays mounted but invisible
+                  until the first TASK_USAGE event arrives. */}
+              {tokenUsage && (
+                <TokenRing used={tokenUsage.input + tokenUsage.output} contextWindow={tokenUsage.contextWindow} />
+              )}
             </div>
 
             <div className="flex items-center gap-2">

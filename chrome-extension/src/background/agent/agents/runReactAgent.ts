@@ -277,6 +277,79 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
     },
   });
 
+  const seededHistory = priorMessages ? priorMessagesToBaseMessages(priorMessages) : [];
+  if (seededHistory.length > 0) {
+    logger.info(`seeded ${seededHistory.length} prior message(s) from chat history`);
+  }
+  logger.info(`runReactAgent visionMode=${visionMode} (tools=${tools.length})`);
+
+  // T2f-final-fix-2 — accumulate token usage via LangChain's callback
+  // hook rather than parsing result.messages at the end. invoke() can
+  // throw mid-task (puppeteer frame errors, captcha redirects, etc.);
+  // callbacks fire on every LLM end so we still see the totals when
+  // we land in the catch block. We accept three usage shapes —
+  // standard usage_metadata + Anthropic streaming + OpenAI legacy —
+  // because OpenRouter routes to multiple back-ends and each surfaces
+  // it differently.
+  let cumulativeIn = 0;
+  let cumulativeOut = 0;
+  const usageCallback = {
+    handleLLMEnd: (output: unknown) => {
+      const o = output as {
+        llmOutput?: {
+          tokenUsage?: { promptTokens?: number; completionTokens?: number };
+          usage?: { input_tokens?: number; output_tokens?: number };
+        };
+        generations?: Array<
+          Array<{
+            message?: {
+              usage_metadata?: { input_tokens?: number; output_tokens?: number };
+              response_metadata?: { usage?: { input_tokens?: number; output_tokens?: number } };
+            };
+          }>
+        >;
+      };
+      const fromLlmOutput = o.llmOutput?.tokenUsage
+        ? { input: o.llmOutput.tokenUsage.promptTokens ?? 0, output: o.llmOutput.tokenUsage.completionTokens ?? 0 }
+        : o.llmOutput?.usage
+          ? { input: o.llmOutput.usage.input_tokens ?? 0, output: o.llmOutput.usage.output_tokens ?? 0 }
+          : null;
+      let dIn = fromLlmOutput?.input ?? 0;
+      let dOut = fromLlmOutput?.output ?? 0;
+      if (!dIn && !dOut && Array.isArray(o.generations)) {
+        for (const generation of o.generations) {
+          for (const item of generation) {
+            const u = item.message?.usage_metadata ?? item.message?.response_metadata?.usage;
+            if (u) {
+              dIn += u.input_tokens ?? 0;
+              dOut += u.output_tokens ?? 0;
+            }
+          }
+        }
+      }
+      if (dIn || dOut) {
+        cumulativeIn += dIn;
+        cumulativeOut += dOut;
+        logger.info(`usage tick: +${dIn} in / +${dOut} out (cum ${cumulativeIn}/${cumulativeOut})`);
+      }
+    },
+  };
+  const emitUsage = () => {
+    if (cumulativeIn || cumulativeOut) {
+      context.emitEvent(
+        Actors.SYSTEM,
+        ExecutionState.TASK_USAGE,
+        JSON.stringify({
+          inputTokens: cumulativeIn,
+          outputTokens: cumulativeOut,
+          contextWindow: input.contextWindow ?? 100_000,
+        }),
+      );
+    } else {
+      logger.warning('no token usage observed — provider may not expose usage_metadata; ring will stay empty');
+    }
+  };
+
   // recursionLimit caps total LangGraph node invocations (each tool call
   // is ~2 nodes: agent reasoning + tool execution). 30 = up to ~15
   // tool calls per task. Above that the agent is almost certainly
@@ -287,13 +360,8 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
     configurable: { thread_id: context.taskId },
     recursionLimit: Math.min(context.options.maxSteps, 30),
     signal: context.controller.signal,
+    callbacks: [usageCallback],
   };
-
-  const seededHistory = priorMessages ? priorMessagesToBaseMessages(priorMessages) : [];
-  if (seededHistory.length > 0) {
-    logger.info(`seeded ${seededHistory.length} prior message(s) from chat history`);
-  }
-  logger.info(`runReactAgent visionMode=${visionMode} (tools=${tools.length})`);
 
   try {
     const result = await agent.invoke(
@@ -302,53 +370,7 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
       },
       config,
     );
-    // T2f-final-2 / T2f-final-fix: pull token-usage from every fresh
-    // AIMessage. Different providers expose usage in different
-    // shapes — LangChain standardises on AIMessage.usage_metadata
-    // (v0.3+) but older / OpenRouter / streaming paths can land it
-    // in response_metadata.tokenUsage (OpenAI) or response_metadata.usage
-    // (Anthropic). We accept all three so the ring lights up
-    // regardless of provider quirks.
-    let inputTokens = 0;
-    let outputTokens = 0;
-    let usageSeen = 0;
-    for (const msg of result.messages) {
-      const m = msg as {
-        usage_metadata?: { input_tokens?: number; output_tokens?: number };
-        response_metadata?: {
-          tokenUsage?: { promptTokens?: number; completionTokens?: number };
-          usage?: { input_tokens?: number; output_tokens?: number };
-        };
-      };
-      const u = m.usage_metadata ?? m.response_metadata?.usage ?? null;
-      if (u) {
-        inputTokens += u.input_tokens ?? 0;
-        outputTokens += u.output_tokens ?? 0;
-        usageSeen += 1;
-      } else if (m.response_metadata?.tokenUsage) {
-        inputTokens += m.response_metadata.tokenUsage.promptTokens ?? 0;
-        outputTokens += m.response_metadata.tokenUsage.completionTokens ?? 0;
-        usageSeen += 1;
-      }
-    }
-    logger.info(
-      `usage parsed: input=${inputTokens} output=${outputTokens} fromMessages=${usageSeen}/${result.messages.length}`,
-    );
-    if (inputTokens || outputTokens) {
-      context.emitEvent(
-        Actors.SYSTEM,
-        ExecutionState.TASK_USAGE,
-        JSON.stringify({
-          inputTokens,
-          outputTokens,
-          contextWindow: input.contextWindow ?? 100_000,
-        }),
-      );
-    } else {
-      logger.warning(
-        'no usage_metadata on any AIMessage — provider may not expose token counts (token ring will stay empty)',
-      );
-    }
+    emitUsage();
     const finalAnswer = extractFinalAnswer(result.messages);
     if (finalAnswer) {
       context.finalAnswer = finalAnswer;
@@ -360,6 +382,11 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
     context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_FAIL, msg);
     return { finalAnswer: null, error: msg };
   } catch (err) {
+    // T2f-final-fix-2: even when invoke() throws mid-task, the LLM
+    // has already produced some turns — emit cumulative usage we
+    // gathered through the callback so the ring updates instead of
+    // staying empty.
+    emitUsage();
     const message = err instanceof Error ? err.message : String(err);
     if (context.stopped || message.includes('aborted')) {
       context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_CANCEL, 'Task cancelled');

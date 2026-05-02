@@ -22,7 +22,6 @@ import {
 import favoritesStorage, { type FavoritePrompt } from '@extension/storage/lib/prompt/favorites';
 import { t } from '@extension/i18n';
 import MessageList from './components/MessageList';
-import { TokenRing } from './components/TokenRing';
 import { buildPriorMessagesForAgent } from './utils';
 import ChatInput, { type ChatInputContentController } from './components/ChatInput';
 import ChatHistoryList from './components/ChatHistoryList';
@@ -1461,9 +1460,6 @@ const SidePanel = () => {
             ) : (
               <img src={brandLogoSrc} alt="Browd logo" className="size-7" />
             )}
-            {!showHistory && tokenUsage && (
-              <TokenRing used={tokenUsage.input + tokenUsage.output} contextWindow={tokenUsage.contextWindow} />
-            )}
           </div>
           <div className="header-icons">
             {!showHistory && (
@@ -1591,6 +1587,7 @@ const SidePanel = () => {
                         isDarkMode={isDarkMode}
                         historicalSessionId={isHistoricalSession && replayEnabled ? currentSessionId : null}
                         onReplay={handleReplay}
+                        tokenUsage={tokenUsage}
                       />
                     </div>
                     <div className="flex-1 overflow-y-auto bg-[var(--browd-bg)]/35">
@@ -1657,6 +1654,7 @@ const SidePanel = () => {
                       isDarkMode={isDarkMode}
                       historicalSessionId={isHistoricalSession && replayEnabled ? currentSessionId : null}
                       onReplay={handleReplay}
+                      tokenUsage={tokenUsage}
                     />
                   </div>
                 )}
