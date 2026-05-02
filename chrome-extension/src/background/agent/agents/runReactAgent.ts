@@ -33,6 +33,7 @@ import { createReactAgent } from '@langchain/langgraph/prebuilt';
 import { MemorySaver } from '@langchain/langgraph';
 import { HumanMessage, AIMessage, SystemMessage, BaseMessage } from '@langchain/core/messages';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
+import { z } from 'zod';
 import type { AgentContext } from '../types';
 import type { Action } from '../actions/builder';
 import { actionsToTools, DEFAULT_TOOL_BUDGETS } from '../tools/langGraphAdapter';
@@ -235,7 +236,51 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
   // in the trace UI, identical shape to a regular tool call,
   // thumbnail attached automatically).
   const screenshotAction = visionMode === 'always' ? actions.find(a => a.name() === 'screenshot') : undefined;
-  const systemPromptText = visionMode === 'off' ? reactSystemPromptTemplate : buildReactVisionPrompt(visionMode);
+  const baseSystemPrompt = visionMode === 'off' ? reactSystemPromptTemplate : buildReactVisionPrompt(visionMode);
+
+  // T2f-plan — minimal Plan-and-Execute pattern from LangGraph docs
+  // (https://langchain-ai.github.io/langgraphjs/tutorials/plan-and-execute/).
+  // One structured-output LLM call BEFORE the ReAct loop produces a
+  // 1-7 step plan; the plan is emitted to the side panel as a
+  // Planner message and pinned to the system prompt so the ReAct
+  // agent treats it as the spine of execution. We deliberately do
+  // not run the full replan-loop variant yet — the up-front plan
+  // alone closes the "thrashing past 30 steps" failure mode in the
+  // 2026-05-02 LinkedIn trace.
+  const planSchema = z.object({
+    reasoning: z.string().describe('one-sentence understanding of the task'),
+    plan: z.array(z.string().min(3)).min(1).max(7).describe('1-7 concrete subgoals, each in imperative form'),
+  });
+  type Plan = z.infer<typeof planSchema>;
+  let plan: Plan | null = null;
+  try {
+    // withStructuredOutput is the LangChain-native API for forcing a
+    // schema-conforming response. Works with OpenAI / OpenRouter /
+    // Anthropic / Gemini through the unified ChatModel interface.
+    const planner = llm.withStructuredOutput(planSchema, { name: 'plan' });
+    const messages: BaseMessage[] = [
+      new SystemMessage(
+        `You are the planner half of a browser-agent loop. Read the user request and decompose it into 1-7 concrete subgoals that an executor with browser tools (click, type, scroll, screenshot, web_search, web_fetch_markdown) will walk in order. Subgoals should be observable steps — "open X", "find Y on the page", "compare Z". Avoid micro-actions like "wait" or "scroll a bit". If the request is trivial (1-2 actions) emit a short plan; do not pad. If the request is unclear, plan around the most plausible interpretation rather than asking the user.`,
+      ),
+      ...priorMessagesToBaseMessages(priorMessages ?? []),
+      new HumanMessage(task),
+    ];
+    plan = (await planner.invoke(messages)) as Plan;
+    logger.info(`plan ready: ${plan.plan.length} subgoals`);
+    context.emitEvent(
+      Actors.PLANNER,
+      ExecutionState.STEP_OK,
+      `Plan:\n${plan.plan.map((s, i) => `${i + 1}. ${s}`).join('\n')}\n\n_${plan.reasoning}_`,
+    );
+  } catch (err) {
+    // Don't fail the task if the planner step itself fails (provider
+    // doesn't support structured output, network blip, etc.). Log
+    // and fall through to a plan-less ReAct loop.
+    logger.warning('planner step failed, continuing without an up-front plan', err);
+  }
+  const systemPromptText = plan
+    ? `${baseSystemPrompt}\n<plan>\nThe planner already decomposed this task into the subgoals below. Walk them in order. After completing a subgoal, move to the next; if a subgoal turns out to be unreachable, finalise honestly with what you have rather than thrashing.\n\n${plan.plan.map((s, i) => `${i + 1}. ${s}`).join('\n')}\n</plan>`
+    : baseSystemPrompt;
 
   const agent = createReactAgent({
     llm,
