@@ -220,7 +220,10 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
   //    reason about, which is exactly what those modes provide.
   //    Without 'always'/'fallback' the LLM cannot see image pixels
   //    and would emit hallucinated coordinates.
-  const COORDINATE_TOOLS = new Set(['click_at', 'type_at', 'scroll_at']);
+  // T2f-handover: hitl_click_at sits next to the regular coord tools
+  // — same gating, since the agent needs the screenshot context to
+  // pick the (x,y) marker before handing off.
+  const COORDINATE_TOOLS = new Set(['click_at', 'type_at', 'scroll_at', 'hitl_click_at']);
   // T2f-replan: in 'always' mode the user's intent is "act through
   // pixels". Physically remove DOM-interaction tools from the registry
   // so the model can't fall back to fragile DOM indices when it gets

@@ -385,3 +385,37 @@ code {
 .browd-screenshot-lightbox-close:hover {
   background: var(--browd-panel);
 }
+
+/* T2f-handover — pulsing ring marker over the screenshot thumb in
+   the HITL "Help me click" prompt. Coordinates are translated from
+   image-pixels to the rendered thumb's percentage; the ring breathes
+   so the user can spot it on busy pages without it being intrusive. */
+.browd-hitl-click-target img {
+  display: block;
+}
+
+.browd-hitl-click-marker {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  margin-left: -14px;
+  margin-top: -14px;
+  border-radius: 50%;
+  border: 2px solid var(--browd-accent);
+  background: hsl(var(--browd-accent-h, 220) 90% 60% / 0.18);
+  box-shadow: 0 0 0 2px #fff inset;
+  pointer-events: none;
+  animation: browd-hitl-marker-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes browd-hitl-marker-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.18);
+    opacity: 0.85;
+  }
+}

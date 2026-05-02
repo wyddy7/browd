@@ -8,7 +8,8 @@ export type HITLReason =
   | 'sensitive_action' // about to submit, delete, purchase
   | 'low_confidence' // skill mapping confidence < threshold
   | 'ambiguous_input' // field not found, goal unclear
-  | 'repeated_failure'; // multiple reasoning failures
+  | 'repeated_failure' // multiple reasoning failures
+  | 'real_user_click'; // T2f-handover — antibot wall, ask the user to click manually
 
 export type HITLRisk = 'low' | 'medium' | 'high';
 
@@ -26,6 +27,19 @@ export interface HITLContext {
   risk: HITLRisk;
   /** Agent's confidence in the pending action (0..1). */
   confidence: number;
+  /**
+   * T2f-handover: optional context for `real_user_click` requests.
+   * imageThumb is a base64 JPEG (the same size we already ship via
+   * the trace pipeline). x/y are image-pixel coordinates of the
+   * spot the agent wants the user to click; the side panel renders
+   * a marker over the thumb so the user knows where to look.
+   */
+  userClick?: {
+    x: number;
+    y: number;
+    imageThumbBase64?: string;
+    imageThumbMime?: string;
+  };
 }
 
 /**

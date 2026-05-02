@@ -335,6 +335,30 @@ export const typeAtActionSchema: ActionSchema = {
   }),
 };
 
+/**
+ * T2f-handover — escape hatch for hard antibot walls (LinkedIn /jobs
+ * filters, Cloudflare turnstile, X "Show more replies"). Every CDP /
+ * extension click generates `MouseEvent.isTrusted = false`; sites
+ * with `if (!e.isTrusted) return` handlers silently ignore us. Real
+ * user clicks have isTrusted=true. This action emits a HITL request
+ * with a screenshot thumb + (x,y) marker; the user clicks the real
+ * button manually and confirms in the side panel. Use sparingly —
+ * only for individual blocked buttons, not for whole flows.
+ */
+export const hitlClickAtActionSchema: ActionSchema = {
+  name: 'hitl_click_at',
+  description:
+    'Ask the human to click a specific spot manually because the page is ignoring synthetic clicks (anti-automation wall). Use ONLY after 2+ failed click_at / click_element attempts on the same target. The user clicks the real button in their browser, confirms, and you continue.',
+  schema: z.object({
+    intent: z.string().describe("what the click is supposed to achieve, in the user's language"),
+    x: z.number().int().describe('image-pixel x coordinate of the target (from the latest screenshot)'),
+    y: z.number().int().describe('image-pixel y coordinate of the target (from the latest screenshot)'),
+    reason: z
+      .string()
+      .describe('why automation cannot do this — e.g. "the Все фильтры button no-ops on synthetic clicks"'),
+  }),
+};
+
 export const scrollAtActionSchema: ActionSchema = {
   name: 'scroll_at',
   description:

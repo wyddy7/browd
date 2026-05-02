@@ -32,6 +32,7 @@ import {
   clickAtActionSchema,
   typeAtActionSchema,
   scrollAtActionSchema,
+  hitlClickAtActionSchema,
 } from './schemas';
 import { webFetchMarkdown, webSearch, extractActiveTabAsMarkdown } from '../tools/webTools';
 import { findFieldByLabel } from '@src/background/browser/dom/fieldFinder';
@@ -1023,6 +1024,62 @@ export class ActionBuilder {
       }
     }, typeAtActionSchema);
     actions.push(typeAt);
+
+    // T2f-handover: real-user click for isTrusted-walls. Captures
+    // a fresh thumb (no grid — the user is the one clicking, they
+    // don't need labelled coordinates), pushes a HITLRequest and
+    // blocks until the user confirms or rejects.
+    const hitlClickAt = new Action(async (input: z.infer<typeof hitlClickAtActionSchema.schema>) => {
+      const { x, y, intent, reason } = input;
+      this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_START, intent);
+      const hitl = this.context.hitlController;
+      if (!hitl) {
+        return new ActionResult({ error: 'hitl_click_at unavailable: HITL controller not wired' });
+      }
+      let thumbBase64: string | undefined;
+      let thumbMime: string | undefined;
+      try {
+        const page = await this.context.browserContext.getCurrentPage();
+        const fullBase64 = await page.takeScreenshot();
+        if (fullBase64) {
+          const downscaled = await downscaleJpegToThumb(fullBase64, 'image/jpeg', 480, 270, 0.8);
+          if (downscaled) {
+            thumbBase64 = downscaled.base64;
+            thumbMime = downscaled.mime;
+          }
+        }
+      } catch (err) {
+        logger.warning('hitl_click_at thumb capture failed', err);
+      }
+      try {
+        const decision = await hitl.requestDecision({
+          id: `hitl-click-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          reason: 'real_user_click',
+          pendingAction: { hitl_click_at: { x, y, intent, reason } },
+          context: {
+            summary: intent,
+            risk: 'low',
+            confidence: 0.4,
+            userClick: { x, y, imageThumbBase64: thumbBase64, imageThumbMime: thumbMime },
+          },
+        });
+        if (decision.type === 'approve') {
+          this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_OK, 'user confirmed click');
+          return new ActionResult({ extractedContent: 'user clicked it manually', includeInMemory: true });
+        }
+        if (decision.type === 'reject') {
+          return new ActionResult({
+            error: `user could not perform the click: ${decision.message || 'no reason given'}`,
+          });
+        }
+        // approve-but-with-edit / answer aren't meaningful here — treat as approve.
+        return new ActionResult({ extractedContent: 'user responded; assuming click happened', includeInMemory: true });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return new ActionResult({ error: `hitl_click_at: ${message}` });
+      }
+    }, hitlClickAtActionSchema);
+    actions.push(hitlClickAt);
 
     const scrollAt = new Action(async (input: z.infer<typeof scrollAtActionSchema.schema>) => {
       const intent = input.intent || `scroll_at (${input.x},${input.y}) dy=${input.dy}`;
