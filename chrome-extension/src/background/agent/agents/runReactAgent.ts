@@ -351,16 +351,21 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
   };
 
   // recursionLimit caps total LangGraph node invocations (each tool
-  // call is ~2 nodes: agent reasoning + tool execution). The default
-  // generalSettings.maxSteps=100 maps to ~200 node visits, which
-  // matches browser-use / AutoGPT defaults for multi-page tasks
-  // (LinkedIn profile-then-jobs needs 30-50 actions easily). We cap
-  // at 200 hard so a runaway loop still terminates eventually; T2g
-  // per-tool budgets and the duplicate-call guard catch the common
-  // pathologies before recursion fires.
+  // call ≈ 2 nodes: agent reasoning + tool execution). Industry
+  // consensus for browser agents:
+  //   - WebVoyager / SeeAct (research): 20-30 steps
+  //   - Anthropic Computer Use docs: 50 steps recommended
+  //   - LangGraph default: 25 (recursionLimit)
+  //   - Browser-Use default: 100 (but with multi-action batching)
+  //   - Magentic-One: ~40-50
+  // Sweet spot for a single-action ReAct loop is 50 steps =
+  // recursionLimit 100. Pathologies (loops, dead-ends) are caught
+  // earlier by T2g per-tool budgets and the duplicate-call guard;
+  // this is the "give up and tell the user" cap, not a working
+  // budget. Hitting it usually means the task needs decomposition.
   const config = {
     configurable: { thread_id: context.taskId },
-    recursionLimit: Math.min(Math.max(context.options.maxSteps * 2, 60), 200),
+    recursionLimit: Math.min(context.options.maxSteps * 2, 100),
     signal: context.controller.signal,
     callbacks: [usageCallback],
   };

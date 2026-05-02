@@ -55,7 +55,11 @@ export type GeneralSettingsStorage = BaseStorage<GeneralSettingsConfig> & {
 export const DEFAULT_GENERAL_SETTINGS: GeneralSettingsConfig = {
   appearanceTheme: 'light',
   interfaceLanguage: 'system',
-  maxSteps: 100,
+  // T2f-final-fix-6: 50 is the industry sweet spot for browser
+  // agents (Anthropic Computer Use docs, Magentic-One, LangGraph
+  // recursionLimit + 2x). Hitting it usually means the task needs
+  // decomposition, not a higher limit. Power users can raise via UI.
+  maxSteps: 50,
   maxActionsPerStep: 5,
   maxFailures: 3,
   useVision: false,

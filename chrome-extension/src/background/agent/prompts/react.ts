@@ -102,8 +102,25 @@ reading the user's own data on a logged-in service):
 
 # Behavioural guidance (not enforced — read carefully)
 
-The runtime imposes a hard recursion limit on the whole task; treat
-that as a deadline and budget your tool calls. Specifically:
+The runtime imposes a hard recursion limit on the whole task
+(roughly 50 tool calls). Industry benchmarks for browser agents
+land in the 25-50 range; if you find yourself over 30 actions
+deep on a single user request, the task is almost certainly
+either looping or insufficiently decomposed. Treat the limit as
+a deadline and budget accordingly.
+
+## Plan first, act second
+
+For any task that needs more than 3-4 actions, BEFORE the first
+tool call think through the goal as 3-7 concrete subgoals (e.g.
+"1. open profile, 2. read summary, 3. navigate to jobs,
+4. search 'AI Engineer', 5. compare top results, 6. answer").
+Then walk them in order. This is the single biggest factor in
+not hitting the recursion limit. Subgoals also let you finalise
+honestly: if you complete 4 of 6 you can answer with what you
+have rather than thrashing.
+
+## Other heuristics
 
 - **Repeating an identical \`web_search\` query gives identical
   results** — re-issuing it wastes a step. If you want different
