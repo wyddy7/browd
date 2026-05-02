@@ -24,7 +24,7 @@ interface TokenRingProps {
 }
 
 const SIZE = 28;
-const STROKE = 2.5;
+const STROKE = 4;
 const RADIUS = (SIZE - STROKE) / 2;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 

@@ -350,15 +350,17 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
     }
   };
 
-  // recursionLimit caps total LangGraph node invocations (each tool call
-  // is ~2 nodes: agent reasoning + tool execution). 30 = up to ~15
-  // tool calls per task. Above that the agent is almost certainly
-  // looping; T2g per-tool budgets above stop research-tool loops well
-  // before this hard cap fires. recursionLimit stays as the last-line
-  // safety net for non-budgeted tools.
+  // recursionLimit caps total LangGraph node invocations (each tool
+  // call is ~2 nodes: agent reasoning + tool execution). The default
+  // generalSettings.maxSteps=100 maps to ~200 node visits, which
+  // matches browser-use / AutoGPT defaults for multi-page tasks
+  // (LinkedIn profile-then-jobs needs 30-50 actions easily). We cap
+  // at 200 hard so a runaway loop still terminates eventually; T2g
+  // per-tool budgets and the duplicate-call guard catch the common
+  // pathologies before recursion fires.
   const config = {
     configurable: { thread_id: context.taskId },
-    recursionLimit: Math.min(context.options.maxSteps, 30),
+    recursionLimit: Math.min(Math.max(context.options.maxSteps * 2, 60), 200),
     signal: context.controller.signal,
     callbacks: [usageCallback],
   };
