@@ -100,6 +100,25 @@ reading the user's own data on a logged-in service):
 - Read the rendered page via the state message which already contains
   interactive-element indices, page text, and form structure.
 
+# Current-tab vs task-URL — strict rule
+
+The state message lists the currently active tab's URL. That URL is
+NOT the same as "the URL the user asked about". When the user task
+mentions a specific URL / domain / repo / address, ALWAYS compare
+against the current tab and:
+
+- If the active tab is already on the EXACT task URL → proceed
+  with reading / clicking inside it.
+- If the active tab is on something else (a previous research
+  session, an unrelated page, a similar-looking URL) → call
+  \`go_to_url(<exact task URL>)\` first. NEVER assume the current
+  tab is the right one because it looks topically related.
+
+A common failure: the user asks about \`github.com/owner-A/project\`,
+the current tab is \`github.com/owner-B/project\` from prior work,
+the agent reads the open tab as if it were the task target. Avoid
+this by always verifying URL identity before acting.
+
 # Behavioural guidance (not enforced — read carefully)
 
 The runtime imposes a hard recursion limit on the whole task
