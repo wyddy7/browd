@@ -487,3 +487,130 @@ code {
 .browd-trace-group[open] .browd-trace-chevron {
   transform: rotate(180deg);
 }
+
+/* T2f-plan-pinned — compact checklist pinned above the chat. Same
+   chevron rotation pattern as thinking / trace groups. Default open
+   so the user always sees the plan; can collapse for a one-line
+   summary. */
+.browd-plan-pinned-group summary::-webkit-details-marker {
+  display: none;
+}
+
+.browd-plan-pinned-chevron {
+  display: inline-block;
+  transition: transform 180ms ease;
+}
+
+.browd-plan-pinned-group[open] .browd-plan-pinned-chevron {
+  transform: rotate(180deg);
+}
+
+/* T2f-md-render — universal markdown rendering for chat messages.
+   Same Anthropic-style minimal: headings tighter, code block soft
+   surface (no hard border), lists aligned, links accent-coloured. */
+.browd-markdown {
+  white-space: normal;
+  word-break: break-word;
+}
+
+.browd-markdown h1,
+.browd-markdown h2,
+.browd-markdown h3,
+.browd-markdown h4 {
+  font-weight: 600;
+  color: var(--browd-text);
+  line-height: 1.25;
+  margin: 0.55rem 0 0.35rem;
+}
+
+.browd-markdown h1 {
+  font-size: 1.05rem;
+}
+
+.browd-markdown h2 {
+  font-size: 1rem;
+}
+
+.browd-markdown h3,
+.browd-markdown h4 {
+  font-size: 0.94rem;
+}
+
+.browd-markdown p {
+  margin: 0.35rem 0;
+}
+
+.browd-markdown ul,
+.browd-markdown ol {
+  margin: 0.35rem 0;
+  padding-left: 1.2rem;
+}
+
+.browd-markdown ul {
+  list-style: disc;
+}
+
+.browd-markdown ol {
+  list-style: decimal;
+}
+
+.browd-markdown li {
+  margin: 0.15rem 0;
+}
+
+.browd-markdown a {
+  color: var(--browd-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.browd-markdown a:hover {
+  text-decoration-thickness: 2px;
+}
+
+.browd-markdown blockquote {
+  margin: 0.35rem 0;
+  padding-left: 0.6rem;
+  border-left: 2px solid var(--browd-border);
+  color: var(--browd-faint);
+}
+
+.browd-markdown strong {
+  color: var(--browd-text);
+}
+
+.browd-markdown em {
+  font-style: italic;
+}
+
+.browd-markdown hr {
+  border: 0;
+  border-top: 1px solid var(--browd-border);
+  margin: 0.6rem 0;
+}
+
+.browd-code-inline {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85em;
+  background: var(--browd-panel-strong);
+  padding: 0.05rem 0.35rem;
+  border-radius: 4px;
+  color: var(--browd-text);
+}
+
+.browd-markdown pre {
+  margin: 0.45rem 0;
+  background: var(--browd-panel-strong);
+  border-radius: 6px;
+  padding: 0.55rem 0.7rem;
+  overflow-x: auto;
+}
+
+.browd-markdown pre .browd-code-block {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--browd-text);
+  background: transparent;
+  padding: 0;
+}

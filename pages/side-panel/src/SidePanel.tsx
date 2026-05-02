@@ -22,6 +22,7 @@ import {
 import favoritesStorage, { type FavoritePrompt } from '@extension/storage/lib/prompt/favorites';
 import { t } from '@extension/i18n';
 import MessageList from './components/MessageList';
+import { PlanPinned } from './components/PlanPinned';
 import { buildPriorMessagesForAgent } from './utils';
 import ChatInput, { type ChatInputContentController } from './components/ChatInput';
 import ChatHistoryList from './components/ChatHistoryList';
@@ -189,6 +190,10 @@ const SidePanel = () => {
   // MessageList thumbnails and TracePanel previews open this; window.open
   // with a data: URL is blocked in Chromium so we render in-panel.
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  // T2f-plan-pinned — current plan as a compact pinned checklist
+  // above the message list, instead of an inline chat message that
+  // scrolls away. Cleared between runs.
+  const [currentPlan, setCurrentPlan] = useState<{ text: string; done: boolean }[] | null>(null);
   useEffect(() => {
     if (!lightboxUrl) return;
     const onKey = (e: KeyboardEvent) => {
@@ -632,23 +637,11 @@ const SidePanel = () => {
                     items?: { text: string; done: boolean }[];
                   };
                   if (parsed.type === 'plan' && Array.isArray(parsed.items)) {
-                    setMessages(prev => {
-                      // Replace the previous plan message in-place so
-                      // the chat shows a single live checklist that
-                      // updates as the agent works through it,
-                      // instead of stacking 5 plan snapshots.
-                      const idx = prev.findIndex(m => m.actor === Actors.PLANNER && Array.isArray(m.planItems));
-                      const updated: Message = {
-                        actor: Actors.PLANNER,
-                        content: 'Plan',
-                        timestamp: Date.now(),
-                        planItems: parsed.items,
-                      };
-                      if (idx === -1) return [...prev, updated];
-                      const next = [...prev];
-                      next[idx] = updated;
-                      return next;
-                    });
+                    // T2f-plan-pinned: render checklist as a pinned
+                    // affordance above the chat instead of an inline
+                    // message. Updates in place as planner /
+                    // replanner re-emit.
+                    setCurrentPlan(parsed.items);
                     return;
                   }
                 } catch {
@@ -1217,6 +1210,7 @@ const SidePanel = () => {
     setIsHistoricalSession(false);
     setTokenUsage(null);
     setTraceEntries([]);
+    setCurrentPlan(null);
 
     // Disconnect any existing connection
     stopConnection();
@@ -1714,6 +1708,11 @@ const SidePanel = () => {
                       />
                     </div>
                   </>
+                )}
+                {currentPlan && currentPlan.length > 0 && (
+                  <div className="browd-plan-pinned border-b border-[var(--browd-border)] bg-[var(--browd-surface)]/85 px-3 py-2 backdrop-blur">
+                    <PlanPinned items={currentPlan} />
+                  </div>
                 )}
                 {messages.length > 0 && (
                   <div className="scrollbar-gutter-stable relative flex-1 overflow-x-hidden overflow-y-scroll bg-[var(--browd-bg)]/60 p-3 scroll-smooth">

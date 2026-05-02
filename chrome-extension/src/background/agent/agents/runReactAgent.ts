@@ -639,6 +639,16 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
       logger.warning(`subgoal "${currentStep}" failed: ${msg}`);
       stepResult = `failed: ${msg}`;
     }
+    // T2f-plan-pinned-live: emit a fresh checklist immediately after
+    // the step finishes (before the replanner runs). The just-
+    // completed subgoal flips to done in the side-panel right away
+    // instead of waiting for the replanner LLM round trip.
+    const remainingAfter = state.plan.slice(1);
+    emitPlanChecklist([
+      ...state.pastSteps.map(([s]) => ({ text: s, done: true })),
+      { text: currentStep, done: !stepResult.startsWith('failed:') },
+      ...remainingAfter.map(s => ({ text: s, done: false })),
+    ]);
     return { pastSteps: [[currentStep, stepResult] as [string, string]] };
   };
 

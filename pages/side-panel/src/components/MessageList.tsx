@@ -1,6 +1,7 @@
 import type { Message } from '@extension/storage';
 import { ACTOR_PROFILES } from '../types/message';
 import { memo } from 'react';
+import ReactMarkdown from 'react-markdown';
 
 interface MessageListProps {
   messages: Message[];
@@ -117,13 +118,40 @@ function MessageBlock({ message, isSameActor, onThumbClick }: MessageBlockProps)
           {Array.isArray(message.planItems) && message.planItems.length > 0 ? (
             <PlanChecklist items={message.planItems} />
           ) : (
-            <div className="whitespace-pre-wrap break-words text-sm leading-6 text-[var(--browd-muted)]">
+            <div className="browd-markdown break-words text-sm leading-6 text-[var(--browd-muted)]">
               {isProgress ? (
                 <div className="h-1 overflow-hidden rounded bg-[var(--browd-panel-strong)]">
                   <div className="browd-progress h-full animate-progress" />
                 </div>
               ) : (
-                message.content
+                <ReactMarkdown
+                  components={{
+                    // Anchors open in a new tab so the agent's chat
+                    // doesn't get hijacked when the user clicks.
+                    a: ({ href, children, ...props }) => (
+                      <a href={href} target="_blank" rel="noopener noreferrer" {...props}>
+                        {children}
+                      </a>
+                    ),
+                    // Inline code stays inline; block code gets a
+                    // soft surface so it stands out without a hard
+                    // border (matches the Anthropic-style minimalism
+                    // we settled on for thinking/trace).
+                    code: ({ className, children, ...props }) => {
+                      const isBlock = (className ?? '').includes('language-');
+                      return isBlock ? (
+                        <code className={`browd-code-block ${className ?? ''}`} {...props}>
+                          {children}
+                        </code>
+                      ) : (
+                        <code className="browd-code-inline" {...props}>
+                          {children}
+                        </code>
+                      );
+                    },
+                  }}>
+                  {message.content}
+                </ReactMarkdown>
               )}
             </div>
           )}
