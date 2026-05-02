@@ -69,6 +69,8 @@ function MessageBlock({ message, isSameActor, onThumbClick }: MessageBlockProps)
             <ScreenshotThumb
               base64={message.imageThumbBase64}
               mime={message.imageThumbMime ?? 'image/jpeg'}
+              fullBase64={message.imageFullBase64}
+              fullMime={message.imageFullMime}
               onOpen={onThumbClick}
             />
           ) : null}
@@ -91,20 +93,37 @@ function MessageBlock({ message, isSameActor, onThumbClick }: MessageBlockProps)
  *   details without committing to the lightbox. Pure CSS — no JS
  *   listeners, no layout shift on the rest of the chat.
  */
-function ScreenshotThumb({ base64, mime, onOpen }: { base64: string; mime: string; onOpen?: (url: string) => void }) {
-  const url = `data:${mime};base64,${base64}`;
+function ScreenshotThumb({
+  base64,
+  mime,
+  fullBase64,
+  fullMime,
+  onOpen,
+}: {
+  base64: string;
+  mime: string;
+  fullBase64?: string;
+  fullMime?: string;
+  onOpen?: (url: string) => void;
+}) {
+  const thumbUrl = `data:${mime};base64,${base64}`;
+  // T2f-final-fix: prefer full-resolution payload for the lightbox so
+  // the user sees a sharp screenshot, not the upscaled 256×144 thumb.
+  // Hover preview also uses the full image when available — at 2× the
+  // thumb is fine, but free upgrade when the high-res bytes are here.
+  const fullUrl = fullBase64 ? `data:${fullMime ?? 'image/jpeg'};base64,${fullBase64}` : thumbUrl;
   return (
     <div className="browd-screenshot-thumb-wrap relative mt-1">
       <button
         type="button"
-        onClick={() => onOpen?.(url)}
+        onClick={() => onOpen?.(fullUrl)}
         className="browd-screenshot-thumb block overflow-hidden rounded-md border border-[var(--browd-border)] bg-[var(--browd-panel-strong)] hover:opacity-95 transition-opacity"
         aria-label="open screenshot preview"
         title="click to enlarge — hover for quick preview">
-        <img src={url} alt="agent screenshot" className="block max-h-40 w-auto" />
+        <img src={thumbUrl} alt="agent screenshot" className="block max-h-40 w-auto" />
       </button>
       <div className="browd-screenshot-thumb-hover" aria-hidden="true">
-        <img src={url} alt="" className="block w-full" />
+        <img src={fullUrl} alt="" className="block w-full" />
       </div>
     </div>
   );

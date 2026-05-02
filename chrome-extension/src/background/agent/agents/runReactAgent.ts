@@ -208,6 +208,9 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
   // DEFAULT_TOOL_BUDGETS in langGraphAdapter (NOT via the system
   // prompt — that path is unenforceable, see T2e follow-up 77ea382).
   const counters: Record<string, number> = {};
+  // T2f-final-fix: consecutive-duplicate guard shared across all
+  // tool wrappers — see langGraphAdapter for the threshold logic.
+  const dupGuard = { lastKey: null as string | null, consecutive: 0 };
   // T2f-3 / T2f-coords: gate vision-only tools on visionMode.
   //  - 'screenshot' belongs to 'fallback' only ('always' captures
   //    via stateModifier, 'off' never).
@@ -223,7 +226,7 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
     if (COORDINATE_TOOLS.has(n)) return visionMode !== 'off';
     return true;
   });
-  const tools = actionsToTools(filteredActions, { counters, limits: DEFAULT_TOOL_BUDGETS });
+  const tools = actionsToTools(filteredActions, { counters, limits: DEFAULT_TOOL_BUDGETS }, dupGuard);
   const checkpointer = new MemorySaver();
   // T2f-1.5: in 'always' mode the agent calls the SAME screenshot
   // Action that 'fallback' exposes — just on its own behalf, every
@@ -299,19 +302,38 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
       },
       config,
     );
-    // T2f-final-2: pull token-usage out of every AIMessage that came
-    // back from this invoke. priorMessages we seeded ourselves carry
-    // no usage_metadata, so summing across all AIMessages is safe —
-    // only freshly-generated turns contribute.
+    // T2f-final-2 / T2f-final-fix: pull token-usage from every fresh
+    // AIMessage. Different providers expose usage in different
+    // shapes — LangChain standardises on AIMessage.usage_metadata
+    // (v0.3+) but older / OpenRouter / streaming paths can land it
+    // in response_metadata.tokenUsage (OpenAI) or response_metadata.usage
+    // (Anthropic). We accept all three so the ring lights up
+    // regardless of provider quirks.
     let inputTokens = 0;
     let outputTokens = 0;
+    let usageSeen = 0;
     for (const msg of result.messages) {
-      const usage = (msg as { usage_metadata?: { input_tokens?: number; output_tokens?: number } }).usage_metadata;
-      if (usage) {
-        inputTokens += usage.input_tokens ?? 0;
-        outputTokens += usage.output_tokens ?? 0;
+      const m = msg as {
+        usage_metadata?: { input_tokens?: number; output_tokens?: number };
+        response_metadata?: {
+          tokenUsage?: { promptTokens?: number; completionTokens?: number };
+          usage?: { input_tokens?: number; output_tokens?: number };
+        };
+      };
+      const u = m.usage_metadata ?? m.response_metadata?.usage ?? null;
+      if (u) {
+        inputTokens += u.input_tokens ?? 0;
+        outputTokens += u.output_tokens ?? 0;
+        usageSeen += 1;
+      } else if (m.response_metadata?.tokenUsage) {
+        inputTokens += m.response_metadata.tokenUsage.promptTokens ?? 0;
+        outputTokens += m.response_metadata.tokenUsage.completionTokens ?? 0;
+        usageSeen += 1;
       }
     }
+    logger.info(
+      `usage parsed: input=${inputTokens} output=${outputTokens} fromMessages=${usageSeen}/${result.messages.length}`,
+    );
     if (inputTokens || outputTokens) {
       context.emitEvent(
         Actors.SYSTEM,
@@ -321,6 +343,10 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
           outputTokens,
           contextWindow: input.contextWindow ?? 100_000,
         }),
+      );
+    } else {
+      logger.warning(
+        'no usage_metadata on any AIMessage — provider may not expose token counts (token ring will stay empty)',
       );
     }
     const finalAnswer = extractFinalAnswer(result.messages);

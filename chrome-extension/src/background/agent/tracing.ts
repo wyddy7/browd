@@ -45,6 +45,16 @@ export interface TraceEntry {
    */
   imageThumbBase64?: string;
   imageThumbMime?: string;
+  /**
+   * T2f-final-fix: optional full-resolution base64 JPEG for the
+   * in-panel lightbox. Live trace listeners see this; persistence
+   * to chrome.storage.local strips it (full-size frames would balloon
+   * the ring buffer to hundreds of MB on long tasks). Lightbox state
+   * is therefore best-effort — historical entries reload as
+   * thumb-only.
+   */
+  imageFullBase64?: string;
+  imageFullMime?: string;
 }
 
 export interface TraceStorage {
@@ -176,6 +186,9 @@ export class Tracer {
     /** T2f-1.5: optional thumbnail base64 attached to the entry. */
     imageThumbBase64?: string;
     imageThumbMime?: string;
+    /** T2f-final-fix: full-resolution base64 (live UI only — not persisted). */
+    imageFullBase64?: string;
+    imageFullMime?: string;
   }): void {
     if (!this.activeTaskId) {
       // Drop silently — nothing to attribute it to. Caller forgot setContext.
@@ -194,6 +207,8 @@ export class Tracer {
       kind: input.kind,
       imageThumbBase64: input.imageThumbBase64,
       imageThumbMime: input.imageThumbMime,
+      imageFullBase64: input.imageFullBase64,
+      imageFullMime: input.imageFullMime,
     };
     this.buffer.push(entry);
     if (this.buffer.length > MAX_ENTRIES_PER_TASK) {
@@ -221,7 +236,13 @@ export class Tracer {
   async flush(): Promise<void> {
     if (!this.activeTaskId || this.buffer.length === 0) return;
     try {
-      await this.storage.write(this.activeTaskId, [...this.buffer]);
+      // T2f-final-fix: strip full-resolution screenshot bytes before
+      // persisting. Live listeners already saw the entry with the
+      // full payload; storage only needs the thumb (the full-size
+      // ring buffer would cap the trace at ~5 entries given storage
+      // quotas — not useful).
+      const persisted = this.buffer.map(({ imageFullBase64: _f, imageFullMime: _m, ...rest }) => rest);
+      await this.storage.write(this.activeTaskId, persisted);
     } catch (err) {
       logger.error('Failed to flush trace buffer', err);
     }

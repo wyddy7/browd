@@ -25,6 +25,9 @@ export interface StructuredTraceEntry {
   /** T2f-1.5: inline thumbnail for the screenshot tool. */
   imageThumbBase64?: string;
   imageThumbMime?: string;
+  /** T2f-final-fix: full-resolution payload for the lightbox. */
+  imageFullBase64?: string;
+  imageFullMime?: string;
 }
 
 export type TraceEntry = LegacyTraceEntry | StructuredTraceEntry;
@@ -90,6 +93,12 @@ export function TracePanel({ entries, onExport, onThumbClick }: TracePanelProps)
           const thumb = entry.imageThumbBase64
             ? `data:${entry.imageThumbMime ?? 'image/jpeg'};base64,${entry.imageThumbBase64}`
             : null;
+          // T2f-final-fix: open the full-res frame in the lightbox if
+          // the live trace event carried it. Falls back to the thumb
+          // for historical entries (storage strips the full payload).
+          const lightboxUrl = entry.imageFullBase64
+            ? `data:${entry.imageFullMime ?? 'image/jpeg'};base64,${entry.imageFullBase64}`
+            : thumb;
           return (
             <div key={i} className="leading-snug flex gap-2 items-center">
               <span className={okColor}>{okIcon}</span>
@@ -97,7 +106,7 @@ export function TracePanel({ entries, onExport, onThumbClick }: TracePanelProps)
               {thumb ? (
                 <button
                   type="button"
-                  onClick={() => onThumbClick?.(thumb)}
+                  onClick={() => lightboxUrl && onThumbClick?.(lightboxUrl)}
                   className="rounded border border-[var(--browd-border)] overflow-hidden hover:opacity-80 transition-opacity"
                   title="click to enlarge"
                   aria-label="open screenshot preview">

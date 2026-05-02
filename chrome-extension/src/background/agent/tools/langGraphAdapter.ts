@@ -60,6 +60,28 @@ export interface ToolBudgetOptions {
 }
 
 /**
+ * T2f-final-fix — consecutive-duplicate guard.
+ *
+ * Production trace 2026-05-02 (LinkedIn): the agent called
+ * `input_text({index:181, text:'AI Engineer'})` five times in a row
+ * because the underlying click silently failed each time. T2g budgets
+ * caught nothing — `input_text` is not a research tool. recursionLimit
+ * eventually fires, but only after 30 wasted nodes.
+ *
+ * Mitigation: track the last tool call. If the same `tool + args`
+ * fires three times back-to-back, return a forcing error and block
+ * the action. Three is the smallest threshold that still allows
+ * legitimate retry-after-state-change patterns (e.g. click_element
+ * after a page reload reuses the same index).
+ */
+export interface DuplicateGuardState {
+  lastKey: string | null;
+  consecutive: number;
+}
+
+const DUPLICATE_THRESHOLD = 3;
+
+/**
  * Render an ActionResult into a value the LLM can read on the next
  * turn. Errors propagate as the result text so the model can reason
  * about them (LangGraph wraps errors into ToolMessage(content)).
@@ -107,7 +129,7 @@ function renderResult(result: ActionResult): ToolReturn {
  * name has a configured limit, the wrapper increments its counter and
  * blocks past the limit without invoking the underlying action.
  */
-export function actionToTool(action: Action, budget?: ToolBudgetOptions) {
+export function actionToTool(action: Action, budget?: ToolBudgetOptions, dupGuard?: DuplicateGuardState) {
   const schema = action.schema;
   const name = schema.name;
   const limit = budget?.limits?.[name];
@@ -119,6 +141,30 @@ export function actionToTool(action: Action, budget?: ToolBudgetOptions) {
         if (next > limit) {
           logger.warning(`tool ${name} budget exhausted (${next}/${limit}) — blocking call`);
           return `Error: budget exhausted for ${name} (${next - 1}/${limit}). Stop calling this tool. Write a final answer with what you have.`;
+        }
+      }
+      // T2f-final-fix: consecutive-duplicate guard. The autocapture
+      // `screenshot` Action runs every step regardless of LLM choices
+      // (visionMode='always'), so we explicitly skip it here — repeats
+      // are normal and expected.
+      if (dupGuard && name !== 'screenshot') {
+        const argsKey = (() => {
+          try {
+            return JSON.stringify(input ?? {});
+          } catch {
+            return '<unserialisable>';
+          }
+        })();
+        const key = `${name}:${argsKey}`;
+        if (key === dupGuard.lastKey) {
+          dupGuard.consecutive += 1;
+        } else {
+          dupGuard.lastKey = key;
+          dupGuard.consecutive = 1;
+        }
+        if (dupGuard.consecutive >= DUPLICATE_THRESHOLD) {
+          logger.warning(`tool ${name} called ${dupGuard.consecutive}× with identical args — blocking`);
+          return `Error: ${name} has been called ${dupGuard.consecutive} times in a row with identical arguments. The previous attempts did not produce the change you wanted. Do NOT retry with the same arguments. Either pick a different element index from the latest state message, switch to a different tool (e.g. fill_field_by_label, send_keys, click_at), or finalise with what you have.`;
         }
       }
       try {
@@ -144,9 +190,11 @@ export function actionToTool(action: Action, budget?: ToolBudgetOptions) {
  * createReactAgent. The classic `done` Action is filtered out because
  * the ReAct framework provides terminal semantics natively.
  *
- * Pass `budget` to enforce per-task caps (T2g). Without it the
- * wrappers behave as in T2d: plain Action.call passthrough.
+ * Pass `budget` to enforce per-task caps (T2g). Pass `dupGuard` to
+ * trip after 3 consecutive identical tool calls (T2f-final-fix).
+ * Without either, the wrappers behave as in T2d: plain Action.call
+ * passthrough.
  */
-export function actionsToTools(actions: Action[], budget?: ToolBudgetOptions) {
-  return actions.filter(a => a.name() !== 'done').map(a => actionToTool(a, budget));
+export function actionsToTools(actions: Action[], budget?: ToolBudgetOptions, dupGuard?: DuplicateGuardState) {
+  return actions.filter(a => a.name() !== 'done').map(a => actionToTool(a, budget, dupGuard));
 }

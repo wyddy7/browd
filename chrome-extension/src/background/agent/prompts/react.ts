@@ -143,6 +143,25 @@ If a tool returns an Error:
 - After repeated failures on the same approach, finalise with what
   you can confirm rather than looping on variants.
 
+## Loop avoidance — strict
+
+NEVER call the same tool with the same arguments twice in a row.
+DOM element indices change between page reloads, redirects, modal
+opens — re-read the latest state-message Interactive elements
+listing and pick a fresh index, or switch to a different tool, or
+finalise.
+
+After a failed \`click_element\` / \`input_text\` / \`fill_field_by_label\`:
+1. Look at the most recent state message — the Interactive elements
+   listing has been refreshed; the previous index may no longer
+   exist or may now point to a different node.
+2. If the page navigated unexpectedly (URL changed) the click may
+   have actually worked — check the URL field at the top of the
+   state message before retrying.
+3. The runtime trips a hard duplicate-guard after 3 identical
+   tool calls in a row and will return a forcing error. Do not
+   wait for that — recover proactively after the first failure.
+
 # Date awareness
 
 The state message carries the real current date in the

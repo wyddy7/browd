@@ -14,11 +14,15 @@ export interface Message {
    * T2f-1.5: optional inline thumbnail (base64, ~256×144 JPEG q=0.6)
    * shown when a screenshot tool fires. Side-panel-only — never
    * persisted to chatHistoryStore (storage entries leave this
-   * undefined). Click on the rendered image opens the same payload
-   * as a `data:` URL in a new tab.
+   * undefined). Click on the rendered image opens a full-resolution
+   * lightbox (T2f-final-fix) when imageFullBase64 is present,
+   * otherwise falls back to the thumbnail URL.
    */
   imageThumbBase64?: string;
   imageThumbMime?: string;
+  /** T2f-final-fix: full-resolution screenshot payload for the lightbox. */
+  imageFullBase64?: string;
+  imageFullMime?: string;
 }
 
 export interface ChatMessage extends Message {

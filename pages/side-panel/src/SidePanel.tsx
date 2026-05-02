@@ -524,8 +524,11 @@ const SidePanel = () => {
             case ExecutionState.TASK_RESUME:
               break;
             case ExecutionState.TASK_USAGE: {
-              // T2f-final-2: parse the cumulative token totals for
-              // this invoke and add them to the session running total.
+              // T2f-final-2 / T2f-final-fix: parse cumulative token
+              // totals for this invoke and add them to the session
+              // running total. Logged so a DevTools open on the side
+              // panel makes it obvious whether the event is reaching
+              // the UI (vs. dropped silently by the provider).
               try {
                 const parsed = JSON.parse(content ?? '{}') as {
                   inputTokens?: number;
@@ -533,13 +536,14 @@ const SidePanel = () => {
                   contextWindow?: number;
                 };
                 const cw = parsed.contextWindow ?? 100_000;
+                console.log('[Browd] TASK_USAGE', parsed);
                 setTokenUsage(prev => ({
                   input: (prev?.input ?? 0) + (parsed.inputTokens ?? 0),
                   output: (prev?.output ?? 0) + (parsed.outputTokens ?? 0),
                   contextWindow: cw,
                 }));
-              } catch {
-                // ignore — telemetry is non-critical
+              } catch (err) {
+                console.warn('[Browd] TASK_USAGE parse failed', err, content);
               }
               return;
             }
@@ -607,6 +611,8 @@ const SidePanel = () => {
                       tool?: string;
                       imageThumbBase64?: string;
                       imageThumbMime?: string;
+                      imageFullBase64?: string;
+                      imageFullMime?: string;
                     };
                     setTraceEntries(prev => [...prev.slice(-19), structured as TraceEntry]);
                     // T2f-1.5: when the screenshot tool fires, also drop
@@ -626,6 +632,8 @@ const SidePanel = () => {
                           timestamp: Date.now(),
                           imageThumbBase64: structured.imageThumbBase64,
                           imageThumbMime: structured.imageThumbMime,
+                          imageFullBase64: structured.imageFullBase64,
+                          imageFullMime: structured.imageFullMime,
                         },
                       ]);
                     }

@@ -149,12 +149,20 @@ export class Action {
   ): Promise<void> {
     let imageThumbBase64: string | undefined;
     let imageThumbMime: string | undefined;
+    let imageFullBase64: string | undefined;
+    let imageFullMime: string | undefined;
     if (toolName === 'screenshot' && result.imageBase64) {
+      // T2f-final-fix: ship both a small chat thumbnail (for inline
+      // rendering and storage) and the full-resolution JPEG (for the
+      // in-panel lightbox). The tracer strips the full payload before
+      // persisting so the storage ring buffer doesn't blow up.
       const thumb = await downscaleJpegToThumb(result.imageBase64, result.imageMime ?? 'image/jpeg');
       if (thumb) {
         imageThumbBase64 = thumb.base64;
         imageThumbMime = thumb.mime;
       }
+      imageFullBase64 = result.imageBase64;
+      imageFullMime = result.imageMime ?? 'image/jpeg';
     }
     globalTracer.record({
       tool: toolName,
@@ -165,6 +173,8 @@ export class Action {
       kind,
       imageThumbBase64,
       imageThumbMime,
+      imageFullBase64,
+      imageFullMime,
     });
   }
 
