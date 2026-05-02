@@ -388,7 +388,14 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
     const completedBlock = completed.length
       ? `\n<completed-so-far>\n${completed.map(([s, r]) => `- ${s} → ${r}`).join('\n')}\n</completed-so-far>`
       : '';
-    return `${baseSystemPrompt}\n<current-subgoal>\nFocus on this single subgoal of the larger user task:\n${currentStep}\n\nFinish this subgoal with at most a few tool calls, then write a brief description of what you achieved. Do NOT solve the entire user task in one go — the orchestrator will pick the next subgoal.\n</current-subgoal>${completedBlock}`;
+    // T2f-plan-context-leak: include the FULL original user task in
+    // every step's system prompt so the executor never has to
+    // infer URLs / queries / names that the planner abstracted out.
+    // The 2026-05-02 bug was the planner emitting
+    // "Open the provided GitHub repository URL" with no URL, and
+    // the executor inventing a github.com/langchain-ai/deepagents URL
+    // from prior chat-history context.
+    return `${baseSystemPrompt}\n<original-user-task>\n${task}\n</original-user-task>\n<current-subgoal>\nFocus on this single subgoal of the larger user task:\n${currentStep}\n\nIf the subgoal text refers to "the provided URL" / "the requested term" / similar abstractions, ALWAYS resolve them by re-reading the original user task above. Do not invent parameters from memory.\n\nFinish this subgoal with at most a few tool calls, then write a brief description of what you achieved. Do NOT solve the entire user task in one go — the orchestrator will pick the next subgoal.\n</current-subgoal>${completedBlock}`;
   };
 
   const runReactStep = async (
@@ -483,7 +490,20 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
       signal: context.controller.signal,
       callbacks: [usageCallback],
     };
-    const stepResult = await agent.invoke({ messages: [new HumanMessage(`Subgoal: ${currentStep}`)] }, stepConfig);
+    // T2f-plan-context-leak: ship the original task in the
+    // HumanMessage so a model that ignores the system prompt's
+    // <original-user-task> block still sees parameters in chat
+    // context. Belt and braces against subgoal-abstraction drift.
+    const stepResult = await agent.invoke(
+      {
+        messages: [
+          new HumanMessage(
+            `Original user task:\n${task}\n\nCurrent subgoal:\n${currentStep}\n\nExecute the current subgoal only. Resolve any abstract reference in the subgoal text (e.g. "the provided URL", "the requested term") by re-reading the original user task above.`,
+          ),
+        ],
+      },
+      stepConfig,
+    );
     return extractFinalAnswer(stepResult.messages) ?? 'no observable result';
   };
 
@@ -501,7 +521,21 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
   const plannerNode = async () => {
     const messages: BaseMessage[] = [
       new SystemMessage(
-        `You are the planner half of a browser-agent loop. Read the user request and decompose it into 1-7 concrete subgoals that an executor with browser tools (click, type, scroll, screenshot, web_search, web_fetch_markdown) will walk in order. Subgoals should be observable steps — "open X", "find Y on the page", "compare Z". Avoid micro-actions like "wait" or "scroll a bit". If the request is trivial (1-2 actions) emit a short plan; do not pad. If the request is unclear, plan around the most plausible interpretation rather than asking the user.`,
+        `You are the planner half of a browser-agent loop. Read the user request and decompose it into 1-7 concrete subgoals that an executor with browser tools (click, type, scroll, screenshot, web_search, web_fetch_markdown) will walk in order.
+
+CRITICAL: each subgoal text must be SELF-CONTAINED. Inline every concrete parameter from the user request — full URLs, exact search queries, addresses, person names, file names. NEVER write "the provided URL", "the requested page", "the user's query"; write the actual URL / query / name. The executor sees ONLY the subgoal text on its turn — if you abstract away parameters they are lost and the executor will hallucinate replacements from memory.
+
+Examples of good subgoals:
+- "Open https://github.com/wyddy7/browd in a new tab"
+- "Search for 'AI Engineer remote' jobs on linkedin.com/jobs"
+- "Read the README at the repository root"
+
+Examples of bad (DO NOT WRITE):
+- "Open the provided URL" — URL is missing
+- "Search the requested term" — term is missing
+- "Read the README" without saying which repo
+
+Subgoals should be observable steps — "open X", "find Y on the page", "compare Z". Avoid micro-actions like "wait" or "scroll a bit". If the request is trivial (1-2 actions) emit a short plan; do not pad. If the request is unclear, plan around the most plausible interpretation rather than asking the user.`,
       ),
       ...priorMessagesToBaseMessages(priorMessages ?? []),
       new HumanMessage(task),
