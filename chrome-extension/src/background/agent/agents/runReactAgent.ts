@@ -223,7 +223,8 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
   // T2f-handover: hitl_click_at sits next to the regular coord tools
   // — same gating, since the agent needs the screenshot context to
   // pick the (x,y) marker before handing off.
-  const COORDINATE_TOOLS = new Set(['click_at', 'type_at', 'scroll_at', 'hitl_click_at']);
+  // T2f-drag: drag_at is also a coordinate tool (canvas shape drawing).
+  const COORDINATE_TOOLS = new Set(['click_at', 'type_at', 'scroll_at', 'hitl_click_at', 'drag_at']);
   // T2f-replan: in 'always' mode the user's intent is "act through
   // pixels". Physically remove DOM-interaction tools from the registry
   // so the model can't fall back to fragile DOM indices when it gets
@@ -415,8 +416,12 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
           if (visionMode === 'fallback' && screenshotAction) {
             const browserStateForTriggers = await context.browserContext.getState(false).catch(() => null);
             const currentUrl = browserStateForTriggers?.url ?? '';
-            const domEmpty = (browserStateForTriggers?.selectorMap?.size ?? 0) === 0;
-            const urlChanged = currentUrl !== '' && currentUrl !== fallbackTriggerState.lastCapturedUrl;
+            // T2f-drag: skip auto-capture on non-web URLs (chrome://,
+            // about:blank, devtools://). takeScreenshot would just
+            // return an error there, polluting the trace.
+            const isWebPage = /^https?:\/\//i.test(currentUrl);
+            const domEmpty = isWebPage && (browserStateForTriggers?.selectorMap?.size ?? 0) === 0;
+            const urlChanged = isWebPage && currentUrl !== fallbackTriggerState.lastCapturedUrl;
             const lastToolMsg = [...state.messages].reverse().find(m => m.constructor?.name === 'ToolMessage');
             const lastContent =
               typeof (lastToolMsg as { content?: unknown })?.content === 'string'

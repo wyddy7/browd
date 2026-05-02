@@ -567,6 +567,35 @@ export default class Page {
   }
 
   /**
+   * T2f-drag — drag from one image-pixel coordinate to another.
+   * mouse.move → mouse.down → stepped mouse.move → mouse.up so the
+   * gesture is readable to canvas frameworks (Excalidraw, tldraw,
+   * Figma) that drop straight A→B teleports as no-movement.
+   */
+  async dragAtImageCoord(
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number,
+  ): Promise<{ fromCssX: number; fromCssY: number; toCssX: number; toCssY: number; vw: number; vh: number }> {
+    if (!this._puppeteerPage) throw new Error('Puppeteer page is not connected');
+    const a = await this._coordToCss(fromX, fromY);
+    const b = await this._coordToCss(toX, toY);
+    const page = this._puppeteerPage;
+    await page.mouse.move(a.cssX, a.cssY);
+    await page.mouse.down();
+    const steps = 8;
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps;
+      const x = Math.round(a.cssX + (b.cssX - a.cssX) * t);
+      const y = Math.round(a.cssY + (b.cssY - a.cssY) * t);
+      await page.mouse.move(x, y);
+    }
+    await page.mouse.up();
+    return { fromCssX: a.cssX, fromCssY: a.cssY, toCssX: b.cssX, toCssY: b.cssY, vw: a.vw, vh: a.vh };
+  }
+
+  /**
    * T2f-coords verification: capture a stable signature of the page so the
    * caller can detect no-op coordinate clicks. Cheaper than re-running
    * the full state extraction.

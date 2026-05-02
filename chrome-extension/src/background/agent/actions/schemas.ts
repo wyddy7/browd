@@ -359,6 +359,25 @@ export const hitlClickAtActionSchema: ActionSchema = {
   }),
 };
 
+/**
+ * T2f-drag — canvas / whiteboard shape-drawing primitive. click_at
+ * does only mouse-down + mouse-up at one point, but Excalidraw,
+ * tldraw, Figma, draw.io etc. require a drag (down at A, move to B,
+ * up at B) to produce a shape. drag_at provides that.
+ */
+export const dragAtActionSchema: ActionSchema = {
+  name: 'drag_at',
+  description:
+    'Press and hold the mouse at (fromX, fromY), drag to (toX, toY), then release. ONLY for canvas / whiteboard shape drawing or non-DOM widgets that need a drag gesture. Coordinates are in image pixels (the most recent screenshot).',
+  schema: z.object({
+    intent: z.string().default('').describe('what the drag is supposed to draw / move'),
+    fromX: z.number().int().describe('image-pixel x of the drag start'),
+    fromY: z.number().int().describe('image-pixel y of the drag start'),
+    toX: z.number().int().describe('image-pixel x of the drag end'),
+    toY: z.number().int().describe('image-pixel y of the drag end'),
+  }),
+};
+
 export const scrollAtActionSchema: ActionSchema = {
   name: 'scroll_at',
   description:

@@ -33,6 +33,7 @@ import {
   typeAtActionSchema,
   scrollAtActionSchema,
   hitlClickAtActionSchema,
+  dragAtActionSchema,
 } from './schemas';
 import { webFetchMarkdown, webSearch, extractActiveTabAsMarkdown } from '../tools/webTools';
 import { findFieldByLabel } from '@src/background/browser/dom/fieldFinder';
@@ -944,6 +945,16 @@ export class ActionBuilder {
       this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_START, intent);
       try {
         const page = await this.context.browserContext.getCurrentPage();
+        // T2f-drag: silent-skip if puppeteer isn't attached yet (the
+        // tab is still on chrome://, about:blank, or otherwise pre-
+        // attach). The fallback auto-trigger fires on dom-empty, which
+        // is also true for those pages, so we'd otherwise spam errors.
+        if (!page.attached) {
+          return new ActionResult({
+            extractedContent: 'screenshot skipped: page not yet attached',
+            includeInMemory: false,
+          });
+        }
         let base64 = await page.takeScreenshot();
         if (!base64) {
           return new ActionResult({ error: 'screenshot returned no data' });
@@ -1080,6 +1091,24 @@ export class ActionBuilder {
       }
     }, hitlClickAtActionSchema);
     actions.push(hitlClickAt);
+
+    // T2f-drag: drag gesture for canvas / whiteboard shape drawing.
+    // Same registry gating as click_at (see runReactAgent).
+    const dragAt = new Action(async (input: z.infer<typeof dragAtActionSchema.schema>) => {
+      const intent = input.intent || `drag_at (${input.fromX},${input.fromY}) → (${input.toX},${input.toY})`;
+      this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_START, intent);
+      try {
+        const page = await this.context.browserContext.getCurrentPage();
+        const m = await page.dragAtImageCoord(input.fromX, input.fromY, input.toX, input.toY);
+        const msg = `dragged image (${input.fromX},${input.fromY}) → (${input.toX},${input.toY}) [css (${m.fromCssX},${m.fromCssY}) → (${m.toCssX},${m.toCssY})]`;
+        this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_OK, msg);
+        return new ActionResult({ extractedContent: msg, includeInMemory: true });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return new ActionResult({ error: `drag_at failed: ${message}` });
+      }
+    }, dragAtActionSchema);
+    actions.push(dragAt);
 
     const scrollAt = new Action(async (input: z.infer<typeof scrollAtActionSchema.schema>) => {
       const intent = input.intent || `scroll_at (${input.x},${input.y}) dy=${input.dy}`;
