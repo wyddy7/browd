@@ -505,6 +505,23 @@ code {
   transform: rotate(180deg);
 }
 
+/* T2f-plan-pinned-live — pulsing ring on the currently-executing
+   subgoal so the user sees motion during long single-step
+   subgoals. Same accent colour as the done state, just animated. */
+.browd-plan-item-pulse {
+  animation: browd-plan-item-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes browd-plan-item-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 hsl(var(--browd-accent-h, 220) 90% 60% / 0.55);
+  }
+  50% {
+    box-shadow: 0 0 0 4px hsl(var(--browd-accent-h, 220) 90% 60% / 0);
+  }
+}
+
 /* T2f-md-render — universal markdown rendering for chat messages.
    Same Anthropic-style minimal: headings tighter, code block soft
    surface (no hard border), lists aligned, links accent-coloured. */

@@ -14,7 +14,7 @@
 import { memo } from 'react';
 
 interface PlanPinnedProps {
-  items: { text: string; done: boolean }[];
+  items: { text: string; done: boolean; inProgress?: boolean }[];
 }
 
 export const PlanPinned = memo(function PlanPinned({ items }: PlanPinnedProps) {
@@ -30,22 +30,28 @@ export const PlanPinned = memo(function PlanPinned({ items }: PlanPinnedProps) {
         </span>
       </summary>
       <ul className="browd-plan-pinned-list mt-1 space-y-0.5 pl-3">
-        {items.map((it, i) => (
-          <li key={i} className={`flex items-start gap-2 text-sm leading-5 ${it.done ? 'opacity-70' : ''}`}>
-            <span
-              aria-hidden="true"
-              className={`mt-1 inline-flex h-3 w-3 shrink-0 items-center justify-center rounded-full border ${
-                it.done
-                  ? 'border-[var(--browd-accent)] bg-[var(--browd-accent)]'
-                  : 'border-[var(--browd-border-strong)] bg-transparent'
-              }`}>
-              {it.done ? <span className="text-[8px] leading-none text-[var(--browd-bg)]">✓</span> : null}
-            </span>
-            <span className={it.done ? 'text-[var(--browd-muted)] line-through' : 'text-[var(--browd-text)]'}>
-              {it.text}
-            </span>
-          </li>
-        ))}
+        {items.map((it, i) => {
+          const ringClass = it.done
+            ? 'border-[var(--browd-accent)] bg-[var(--browd-accent)]'
+            : it.inProgress
+              ? 'border-[var(--browd-accent)] bg-transparent browd-plan-item-pulse'
+              : 'border-[var(--browd-border-strong)] bg-transparent';
+          const textClass = it.done
+            ? 'text-[var(--browd-muted)] line-through'
+            : it.inProgress
+              ? 'text-[var(--browd-text)] font-medium'
+              : 'text-[var(--browd-text)]';
+          return (
+            <li key={i} className={`flex items-start gap-2 text-sm leading-5 ${it.done ? 'opacity-70' : ''}`}>
+              <span
+                aria-hidden="true"
+                className={`mt-1 inline-flex h-3 w-3 shrink-0 items-center justify-center rounded-full border ${ringClass}`}>
+                {it.done ? <span className="text-[8px] leading-none text-[var(--browd-bg)]">✓</span> : null}
+              </span>
+              <span className={textClass}>{it.text}</span>
+            </li>
+          );
+        })}
       </ul>
     </details>
   );

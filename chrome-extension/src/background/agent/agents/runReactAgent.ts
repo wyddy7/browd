@@ -437,8 +437,11 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
   const replanner = llm.withStructuredOutput(replanSchema, { name: 'replan' });
 
   // emit a checklist update — the side panel renders this as a
-  // live checkbox list rather than a static text plan.
-  const emitPlanChecklist = (items: { text: string; done: boolean }[]) => {
+  // live checkbox list rather than a static text plan. inProgress
+  // is a third state for the currently-executing step (pulsing
+  // ring while the executor is mid-step), since done/!done alone
+  // hides activity during long single-step subgoals.
+  const emitPlanChecklist = (items: { text: string; done: boolean; inProgress?: boolean }[]) => {
     context.emitEvent(Actors.PLANNER, ExecutionState.STEP_OK, JSON.stringify({ type: 'plan', items }));
   };
 
@@ -630,7 +633,17 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
       return { response: 'no remaining plan steps' };
     }
     const currentStep = state.plan[0];
+    const remainingAfter = state.plan.slice(1);
     logger.info(`executing subgoal ${state.pastSteps.length + 1}: ${currentStep}`);
+    // T2f-plan-pinned-live: emit IN-PROGRESS for the current step
+    // BEFORE running it. Without this the checklist sits frozen
+    // throughout the entire runReactStep (multiple LLM rounds + tool
+    // calls), so the user sees no movement for 10–30 seconds.
+    emitPlanChecklist([
+      ...state.pastSteps.map(([s]) => ({ text: s, done: true })),
+      { text: currentStep, done: false, inProgress: true },
+      ...remainingAfter.map(s => ({ text: s, done: false })),
+    ]);
     let stepResult: string;
     try {
       stepResult = await runReactStep(currentStep, state.pastSteps, state.pastSteps.length, state.taskParameters);
@@ -639,11 +652,9 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
       logger.warning(`subgoal "${currentStep}" failed: ${msg}`);
       stepResult = `failed: ${msg}`;
     }
-    // T2f-plan-pinned-live: emit a fresh checklist immediately after
-    // the step finishes (before the replanner runs). The just-
-    // completed subgoal flips to done in the side-panel right away
-    // instead of waiting for the replanner LLM round trip.
-    const remainingAfter = state.plan.slice(1);
+    // After the step: flip current to done (or leave at false if it
+    // came back as a "failed:..." marker — replanner picks up from
+    // there).
     emitPlanChecklist([
       ...state.pastSteps.map(([s]) => ({ text: s, done: true })),
       { text: currentStep, done: !stepResult.startsWith('failed:') },
@@ -690,7 +701,14 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
         emitPlanChecklist(state.pastSteps.map(([s]) => ({ text: s, done: true })));
         return { response: result.response };
       }
-      const newPlan = result.plan && result.plan.length > 0 ? result.plan : remaining;
+      // T2f-plan-pinned-live: replanner LLM sometimes echoes
+      // already-completed subgoals into the new plan ("p1, p2, p3"
+      // when only "p2, p3" should remain). Filter out any item that
+      // matches a pastSteps entry by exact text — cheap and avoids
+      // the "checkbox unflips itself" UX bug.
+      const rawNewPlan = result.plan && result.plan.length > 0 ? result.plan : remaining;
+      const completedTexts = new Set(state.pastSteps.map(([s]) => s));
+      const newPlan = rawNewPlan.filter(s => !completedTexts.has(s));
       const items = [
         ...state.pastSteps.map(([s]) => ({ text: s, done: true })),
         ...newPlan.map(s => ({ text: s, done: false })),
