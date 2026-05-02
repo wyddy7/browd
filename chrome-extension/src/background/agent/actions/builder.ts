@@ -905,12 +905,19 @@ export class ActionBuilder {
     // T1: web tools — read-only path that bypasses the browser DOM.
     // Each tool returns a JSON-stringified result so the LLM sees structured
     // evidence (which T2 will use to enforce evidence-on-done).
+    // T2f-untrusted-wrap: web_fetch_markdown returns arbitrary
+    // third-party page content. Wrap it as untrusted so embedded
+    // "Ignore previous instructions" / forged tool calls / prompt
+    // injection attempts in the content are framed as data, not
+    // instructions. Same wrap is applied to web_search snippets and
+    // extract_page_as_markdown output.
     const webFetchMd = new Action(async (input: z.infer<typeof webFetchMarkdownActionSchema.schema>) => {
       const result = await webFetchMarkdown({ url: input.url, maxChars: input.maxChars });
       if (!result.ok) {
         return new ActionResult({ error: `web_fetch_markdown failed: ${result.errorType}: ${result.message}` });
       }
-      const summary = `# ${result.title}\n${result.markdown}${result.truncated ? '' : ''}`;
+      const inner = `# ${result.title}\n${result.markdown}`;
+      const summary = `web_fetch_markdown(${result.url}):\n${wrapUntrustedContent(inner)}`;
       return new ActionResult({ extractedContent: summary, includeInMemory: true });
     }, webFetchMarkdownActionSchema);
     actions.push(webFetchMd);
@@ -922,7 +929,7 @@ export class ActionBuilder {
       }
       const summary = result.results.map((r, i) => `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.snippet}`).join('\n\n');
       return new ActionResult({
-        extractedContent: `web_search(${input.query}) via ${result.engine}:\n${summary}`,
+        extractedContent: `web_search(${input.query}) via ${result.engine}:\n${wrapUntrustedContent(summary)}`,
         includeInMemory: true,
       });
     }, webSearchActionSchema);
@@ -1153,12 +1160,15 @@ export class ActionBuilder {
     actions.push(scrollAt);
 
     const extractMd = new Action(async (input: z.infer<typeof extractPageMarkdownActionSchema.schema>) => {
+      // T2f-untrusted-wrap: extracted page markdown is also third-
+      // party content; wrap it before showing to the LLM.
       const result = await extractActiveTabAsMarkdown({ maxChars: input.maxChars });
       if (!result.ok) {
         return new ActionResult({ error: `extract_page_as_markdown failed: ${result.errorType}: ${result.message}` });
       }
+      const inner = `# ${result.title}\n${result.markdown}`;
       return new ActionResult({
-        extractedContent: `# ${result.title}\n${result.markdown}`,
+        extractedContent: `extract_page_as_markdown(${result.url}):\n${wrapUntrustedContent(inner)}`,
         includeInMemory: true,
       });
     }, extractPageMarkdownActionSchema);

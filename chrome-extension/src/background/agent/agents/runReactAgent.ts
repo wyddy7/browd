@@ -142,7 +142,13 @@ async function buildBrowserStateMessage(
   const elementsText = browserState.elementTree.clickableElementsToString(context.options.includeAttributes);
   const forms = extractForms(browserState);
   const formsSection = formatFormsForPrompt(forms);
-  const pageTextSection = browserState.pageText ? `## Page readable text\n${browserState.pageText}\n` : '';
+  // T2f-untrusted-wrap: page text is untrusted page content (could
+  // contain "ignore previous instructions" prompt-injection bait
+  // from any site). Wrap it so the LLM treats the contents as data,
+  // not instructions. Same treatment as Interactive elements.
+  const pageTextSection = browserState.pageText
+    ? `## Page readable text\n${wrapUntrustedContent(browserState.pageText)}\n`
+    : '';
   const timeStr = new Date().toISOString().slice(0, 16).replace('T', ' ');
 
   // T2f-tab-iso-1b — split tabs into <agent-tab> (full DOM, the

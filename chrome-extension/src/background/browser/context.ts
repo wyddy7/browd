@@ -40,6 +40,13 @@ export default class BrowserContext {
 
   public updateConfig(config: Partial<BrowserContextConfig>): void {
     this._config = { ...this._config, ...config };
+    // T2f-firewall-live: propagate to all attached pages so firewall
+    // changes (allow/deny lists) take effect immediately without
+    // restarting the task. Page caches its own merged config —
+    // mid-task updates were silently lost before this.
+    for (const page of this._attachedPages.values()) {
+      page.updateConfig(config);
+    }
   }
 
   public updateCurrentTabId(tabId: number): void {

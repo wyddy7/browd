@@ -90,6 +90,26 @@ chrome.tabs.onRemoved.addListener(tabId => {
   browserContext.removeAttachedPage(tabId);
 });
 
+// T2f-firewall-live: keep BrowserContext config in sync with
+// firewallStore. The store has chrome.storage liveUpdate; subscribe
+// re-fetches the latest values whenever the user edits the firewall
+// in Options. Without this, edits during a running task were
+// ignored until the next new_task.
+firewallStore.subscribe(() => {
+  void (async () => {
+    try {
+      const fw = await firewallStore.getFirewall();
+      browserContext.updateConfig({
+        allowedUrls: fw.enabled ? fw.allowList : [],
+        deniedUrls: fw.enabled ? fw.denyList : [],
+      });
+      logger.info('firewall config refreshed (enabled=%s, deny=%d)', String(fw.enabled), fw.denyList.length);
+    } catch (err) {
+      logger.warning('firewall live-update failed', err);
+    }
+  })();
+});
+
 logger.info('background loaded');
 
 // Listen for simple messages (e.g., from options page and content scripts)

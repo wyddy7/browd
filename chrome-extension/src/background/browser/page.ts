@@ -82,6 +82,16 @@ export default class Page {
       false;
   }
 
+  /**
+   * T2f-firewall-live: BrowserContext propagates config updates to
+   * attached pages so firewall changes (allowList / denyList /
+   * displayHighlights) take effect mid-task without recreating the
+   * Page. Page caches the merged config locally; we just overwrite.
+   */
+  updateConfig(config: Partial<BrowserContextConfig>): void {
+    this._config = { ...this._config, ...config };
+  }
+
   get tabId(): number {
     return this._tabId;
   }
