@@ -144,18 +144,36 @@ async function buildBrowserStateMessage(
   const formsSection = formatFormsForPrompt(forms);
   const pageTextSection = browserState.pageText ? `## Page readable text\n${browserState.pageText}\n` : '';
   const timeStr = new Date().toISOString().slice(0, 16).replace('T', ' ');
-  const otherTabs = browserState.tabs
+
+  // T2f-tab-iso-1b — split tabs into <agent-tab> (full DOM, the
+  // workspace where the agent acts) and <user-tabs> (URL+title only,
+  // the user's parallel tabs that the agent must NOT touch unless
+  // they call take_over_user_tab). When the agent has its own pinned
+  // tab (set via openAgentTab in unified mode), the active tab in
+  // browserState IS the agent tab; everything else is user space.
+  // In legacy mode the active tab is the user's, so we render the
+  // legacy "Current tab" / "Other tabs" sections for back-compat.
+  const userTabsList = browserState.tabs
     .filter(t => t.id !== browserState.tabId)
-    .map(t => `- {id: ${t.id}, url: ${t.url}, title: ${t.title}}`)
-    .join('\n');
+    .map(t => `- {id: ${t.id}, url: ${t.url}, title: ${t.title}}`);
+  const userTabsBlock = userTabsList.length
+    ? `<user-tabs note="The user has these tabs open. You may NOT navigate / click / read them without first calling take_over_user_tab(tabId) — doing so disrupts the user's parallel work.">\n${userTabsList.join('\n')}\n</user-tabs>`
+    : '<user-tabs>(none)</user-tabs>';
 
   const wrapped = elementsText ? wrapUntrustedContent(elementsText) : '';
+  const agentTabId = context.browserContext.agentTabId();
+  const agentTabHeader = agentTabId
+    ? `<agent-tab note="This is your dedicated workspace. You can read and interact with it freely.">
+id: ${browserState.tabId}, url: ${browserState.url}, title: ${browserState.title}
+</agent-tab>`
+    : `<active-tab note="No dedicated agent tab — operating in the user's active tab (legacy mode).">
+id: ${browserState.tabId}, url: ${browserState.url}, title: ${browserState.title}
+</active-tab>`;
 
   const text = `[Browser state @ ${timeStr}]
-Current tab: {id: ${browserState.tabId}, url: ${browserState.url}, title: ${browserState.title}}
-Other tabs:
-${otherTabs || '  (none)'}
-${pageTextSection}Interactive elements:
+${agentTabHeader}
+${userTabsBlock}
+${pageTextSection}Interactive elements (in your tab):
 ${wrapped || '(empty page)'}
 ${formsSection ? `\n${formsSection}\n` : ''}
 Current date: ${timeStr}
