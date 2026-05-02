@@ -495,6 +495,86 @@ export default class Page {
     }
   }
 
+  /**
+   * T2f-coords — coordinate-based interaction primitives.
+   *
+   * The agent reasons in IMAGE pixels (the screenshot it sees). Puppeteer's
+   * mouse.click / keyboard.type expect CSS pixels. On retina displays the
+   * factor differs by `devicePixelRatio`. We read it once from the page,
+   * clamp to the viewport (otherwise a hallucinated (-1, 9999) coord
+   * silently no-ops), and run the action. Verification is left to the
+   * caller — the action loop in pre-T0 already detects no-op steps.
+   */
+  private async _coordToCss(
+    x: number,
+    y: number,
+  ): Promise<{ cssX: number; cssY: number; dpr: number; vw: number; vh: number }> {
+    if (!this._puppeteerPage) {
+      throw new Error('Puppeteer page is not connected');
+    }
+    const dpr = (await this._puppeteerPage.evaluate(() => window.devicePixelRatio || 1)) as number;
+    const viewport = this._puppeteerPage.viewport();
+    const vw = viewport?.width ?? 1280;
+    const vh = viewport?.height ?? 800;
+    const cssX = Math.max(0, Math.min(vw - 1, Math.round(x / dpr)));
+    const cssY = Math.max(0, Math.min(vh - 1, Math.round(y / dpr)));
+    return { cssX, cssY, dpr, vw, vh };
+  }
+
+  async clickAtImageCoord(x: number, y: number): Promise<{ cssX: number; cssY: number; vw: number; vh: number }> {
+    if (!this._puppeteerPage) throw new Error('Puppeteer page is not connected');
+    const m = await this._coordToCss(x, y);
+    await this._puppeteerPage.mouse.click(m.cssX, m.cssY);
+    return { cssX: m.cssX, cssY: m.cssY, vw: m.vw, vh: m.vh };
+  }
+
+  async typeAtImageCoord(
+    x: number,
+    y: number,
+    text: string,
+  ): Promise<{ cssX: number; cssY: number; vw: number; vh: number }> {
+    if (!this._puppeteerPage) throw new Error('Puppeteer page is not connected');
+    const m = await this._coordToCss(x, y);
+    await this._puppeteerPage.mouse.click(m.cssX, m.cssY);
+    await this._puppeteerPage.keyboard.type(text);
+    return { cssX: m.cssX, cssY: m.cssY, vw: m.vw, vh: m.vh };
+  }
+
+  async scrollAtImageCoord(
+    x: number,
+    y: number,
+    dy: number,
+  ): Promise<{ cssX: number; cssY: number; vw: number; vh: number }> {
+    if (!this._puppeteerPage) throw new Error('Puppeteer page is not connected');
+    const m = await this._coordToCss(x, y);
+    await this._puppeteerPage.mouse.move(m.cssX, m.cssY);
+    await this._puppeteerPage.mouse.wheel({ deltaY: dy });
+    return { cssX: m.cssX, cssY: m.cssY, vw: m.vw, vh: m.vh };
+  }
+
+  /**
+   * T2f-coords verification: capture a stable signature of the page so the
+   * caller can detect no-op coordinate clicks. Cheaper than re-running
+   * the full state extraction.
+   */
+  async readClickSignature(): Promise<{ url: string; scrollY: number; domHash: string }> {
+    if (!this._puppeteerPage) {
+      return { url: this._state.url, scrollY: 0, domHash: '' };
+    }
+    const sig = (await this._puppeteerPage.evaluate(() => {
+      const html = document.documentElement.outerHTML;
+      // Cheap hash — last 16 chars of a sum-of-charcodes string.
+      let h = 0;
+      for (let i = 0; i < html.length; i++) h = (h * 31 + html.charCodeAt(i)) | 0;
+      return {
+        url: location.href,
+        scrollY: Math.round(window.scrollY),
+        domHash: String(h),
+      };
+    })) as { url: string; scrollY: number; domHash: string };
+    return sig;
+  }
+
   url(): string {
     if (this._puppeteerPage) {
       return this._puppeteerPage.url();

@@ -284,13 +284,66 @@ export const webSearchActionSchema: ActionSchema = {
  * message already carries a fresh screenshot every step, so this tool
  * is redundant and is omitted from the registry. With 'off' it is
  * also omitted.
+ *
+ * T2f-coords — `gridOverlay` enables a 10×10 coordinate grid drawn
+ * over the JPEG. Set true when about to call `click_at`/`type_at`/
+ * `scroll_at` — the labelled grid centres make coordinate prediction
+ * meaningfully more accurate (Set-of-Mark / WebVoyager-style
+ * grounding). False keeps the screenshot clean.
  */
 export const screenshotActionSchema: ActionSchema = {
   name: 'screenshot',
   description:
-    'Capture the current viewport as a JPEG and attach it to the next reasoning turn. Use only when the DOM listing is insufficient (canvas, video, custom widgets, ambiguous form). Each call adds image tokens — call once when the visual state actually changed, not every step.',
+    'Capture the current viewport as a JPEG and attach it to the next reasoning turn. Use only when the DOM listing is insufficient (canvas, video, custom widgets, ambiguous form). Each call adds image tokens — call once when the visual state actually changed, not every step. Pass gridOverlay=true when you intend to call click_at/type_at/scroll_at next, so the screenshot you reason on carries explicit coordinates.',
   schema: z.object({
     intent: z.string().default('').describe('why a screenshot is needed right now'),
+    gridOverlay: z
+      .boolean()
+      .optional()
+      .default(false)
+      .describe('overlay a 10×10 coordinate grid for click-grounding (use before coordinate-based actions)'),
+  }),
+};
+
+/**
+ * T2f-coords — coordinate-based interactions. Use only when DOM
+ * tooling cannot reach the element (canvas, video, custom widget,
+ * closed-shadow-DOM, cross-origin iframe). Coordinates are in
+ * IMAGE pixels of the most recent screenshot; the runtime converts
+ * to CSS pixels via window.devicePixelRatio.
+ */
+export const clickAtActionSchema: ActionSchema = {
+  name: 'click_at',
+  description:
+    'Click at image-pixel coordinates from the most recent screenshot. ONLY for elements that have no DOM index (canvas, video, custom widget). Prefer click_element when an index exists. Coordinates must come from a fresh screenshot with gridOverlay=true.',
+  schema: z.object({
+    intent: z.string().default('').describe('what you are trying to click'),
+    x: z.number().int().describe('image-pixel x coordinate of the click'),
+    y: z.number().int().describe('image-pixel y coordinate of the click'),
+  }),
+};
+
+export const typeAtActionSchema: ActionSchema = {
+  name: 'type_at',
+  description:
+    'Click at image-pixel coordinates and type text into whatever input takes focus. ONLY for inputs without a DOM index. Prefer fill_field_by_label / input_text when DOM is available.',
+  schema: z.object({
+    intent: z.string().default('').describe('what field you are filling'),
+    x: z.number().int().describe('image-pixel x coordinate of the input'),
+    y: z.number().int().describe('image-pixel y coordinate of the input'),
+    text: z.string().describe('text to type after focusing the input'),
+  }),
+};
+
+export const scrollAtActionSchema: ActionSchema = {
+  name: 'scroll_at',
+  description:
+    'Scroll a custom container under image-pixel coordinates. ONLY for nested scrollable areas that scroll_to_percent / scroll_by cannot reach (e.g. virtualised lists in custom widgets). Positive dy scrolls down.',
+  schema: z.object({
+    intent: z.string().default('').describe('why this nested scroll is needed'),
+    x: z.number().int().describe('image-pixel x coordinate inside the scrollable area'),
+    y: z.number().int().describe('image-pixel y coordinate inside the scrollable area'),
+    dy: z.number().int().describe('vertical scroll amount in CSS pixels (positive=down)'),
   }),
 };
 

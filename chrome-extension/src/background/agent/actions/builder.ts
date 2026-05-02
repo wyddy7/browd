@@ -29,6 +29,9 @@ import {
   webSearchActionSchema,
   extractPageMarkdownActionSchema,
   screenshotActionSchema,
+  clickAtActionSchema,
+  typeAtActionSchema,
+  scrollAtActionSchema,
 } from './schemas';
 import { webFetchMarkdown, webSearch, extractActiveTabAsMarkdown } from '../tools/webTools';
 import { findFieldByLabel } from '@src/background/browser/dom/fieldFinder';
@@ -40,7 +43,7 @@ import { ExecutionState, Actors } from '../event/types';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { wrapUntrustedContent } from '../messages/utils';
 import { globalTracer } from '../tracing';
-import { downscaleJpegToThumb } from '../imageUtils';
+import { downscaleJpegToThumb, applyCoordinateGrid } from '../imageUtils';
 
 const logger = createLogger('Action');
 
@@ -918,20 +921,38 @@ export class ActionBuilder {
     // converts them into a multimodal ToolMessage. Registry-side
     // gating happens in T2f-4 — this Action is created here so it's
     // available when the Executor decides to opt in.
+    //
+    // T2f-coords: when `gridOverlay` is true a labelled 10×10
+    // coordinate grid is drawn over the JPEG before it travels to
+    // the LLM. Set-of-Mark / WebVoyager-style grounding lifts raw-
+    // coordinate accuracy meaningfully — required precondition for
+    // click_at / type_at / scroll_at.
     const screenshot = new Action(async (input: z.infer<typeof screenshotActionSchema.schema>) => {
       const intent = input.intent || 'capture viewport';
+      const gridOverlay = input.gridOverlay === true;
       this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_START, intent);
       try {
         const page = await this.context.browserContext.getCurrentPage();
-        const base64 = await page.takeScreenshot();
+        let base64 = await page.takeScreenshot();
         if (!base64) {
           return new ActionResult({ error: 'screenshot returned no data' });
         }
-        this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_OK, 'screenshot captured');
+        let mime = 'image/jpeg';
+        if (gridOverlay) {
+          const overlaid = await applyCoordinateGrid(base64, mime);
+          if (overlaid) {
+            base64 = overlaid.base64;
+            mime = overlaid.mime;
+          } else {
+            logger.warning('coordinate grid overlay failed; falling back to clean screenshot');
+          }
+        }
+        const summary = gridOverlay ? 'screenshot captured (grid attached)' : 'screenshot captured (image attached)';
+        this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_OK, summary);
         return new ActionResult({
-          extractedContent: 'screenshot captured (image attached)',
+          extractedContent: summary,
           imageBase64: base64,
-          imageMime: 'image/jpeg',
+          imageMime: mime,
           // includeInMemory stays false: classic-mode replay ignores
           // tool images, and unified mode rewinds DOM/screenshot via
           // priorMessages — so persisting the bytes would just bloat
@@ -944,6 +965,70 @@ export class ActionBuilder {
       }
     }, screenshotActionSchema);
     actions.push(screenshot);
+
+    // T2f-coords: coordinate-based mouse/keyboard primitives. Used
+    // by the unified vision agent for non-DOM elements. The Page
+    // wrapper handles DPR conversion (image px → CSS px) and
+    // viewport clamping. Verification of "did anything change?" is
+    // attached as a follow-up signature comparison so a no-op click
+    // surfaces in the trace as `Error: …` instead of silently looping.
+    const clickAt = new Action(async (input: z.infer<typeof clickAtActionSchema.schema>) => {
+      const intent = input.intent || `click_at (${input.x},${input.y})`;
+      this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_START, intent);
+      try {
+        const page = await this.context.browserContext.getCurrentPage();
+        const before = await page.readClickSignature();
+        const m = await page.clickAtImageCoord(input.x, input.y);
+        // Brief settle delay so SPAs have a chance to react.
+        await new Promise(r => setTimeout(r, 200));
+        const after = await page.readClickSignature();
+        const noop = before.url === after.url && before.scrollY === after.scrollY && before.domHash === after.domHash;
+        if (noop) {
+          return new ActionResult({
+            error: `click_at (${input.x},${input.y} → CSS ${m.cssX},${m.cssY}; viewport ${m.vw}×${m.vh}) had no observable effect — DOM/url/scroll unchanged. Re-take a screenshot with gridOverlay=true and verify coordinates, or fall back to a DOM-driven action.`,
+          });
+        }
+        const msg = `clicked at image (${input.x},${input.y}) → css (${m.cssX},${m.cssY})`;
+        this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_OK, msg);
+        return new ActionResult({ extractedContent: msg, includeInMemory: true });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return new ActionResult({ error: `click_at failed: ${message}` });
+      }
+    }, clickAtActionSchema);
+    actions.push(clickAt);
+
+    const typeAt = new Action(async (input: z.infer<typeof typeAtActionSchema.schema>) => {
+      const intent = input.intent || `type_at (${input.x},${input.y})`;
+      this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_START, intent);
+      try {
+        const page = await this.context.browserContext.getCurrentPage();
+        const m = await page.typeAtImageCoord(input.x, input.y, input.text);
+        const msg = `typed at image (${input.x},${input.y}) → css (${m.cssX},${m.cssY})`;
+        this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_OK, msg);
+        return new ActionResult({ extractedContent: msg, includeInMemory: true });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return new ActionResult({ error: `type_at failed: ${message}` });
+      }
+    }, typeAtActionSchema);
+    actions.push(typeAt);
+
+    const scrollAt = new Action(async (input: z.infer<typeof scrollAtActionSchema.schema>) => {
+      const intent = input.intent || `scroll_at (${input.x},${input.y}) dy=${input.dy}`;
+      this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_START, intent);
+      try {
+        const page = await this.context.browserContext.getCurrentPage();
+        const m = await page.scrollAtImageCoord(input.x, input.y, input.dy);
+        const msg = `scrolled at image (${input.x},${input.y}) → css (${m.cssX},${m.cssY}) dy=${input.dy}`;
+        this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_OK, msg);
+        return new ActionResult({ extractedContent: msg, includeInMemory: true });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return new ActionResult({ error: `scroll_at failed: ${message}` });
+      }
+    }, scrollAtActionSchema);
+    actions.push(scrollAt);
 
     const extractMd = new Action(async (input: z.infer<typeof extractPageMarkdownActionSchema.schema>) => {
       const result = await extractActiveTabAsMarkdown({ maxChars: input.maxChars });

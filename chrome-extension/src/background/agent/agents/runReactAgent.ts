@@ -201,12 +201,21 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
   // DEFAULT_TOOL_BUDGETS in langGraphAdapter (NOT via the system
   // prompt — that path is unenforceable, see T2e follow-up 77ea382).
   const counters: Record<string, number> = {};
-  // T2f-3: gate the screenshot tool on visionMode. 'fallback' is the
-  // only mode that wants the agent to take screenshots on its own;
-  // 'always' already attaches them every step and 'off' never. Filter
-  // here so the tool simply does not appear in the LLM tool registry,
-  // which is more reliable than a prompt rule.
-  const filteredActions = actions.filter(a => (visionMode === 'fallback' ? true : a.name() !== 'screenshot'));
+  // T2f-3 / T2f-coords: gate vision-only tools on visionMode.
+  //  - 'screenshot' belongs to 'fallback' only ('always' captures
+  //    via stateModifier, 'off' never).
+  //  - coordinate tools (click_at / type_at / scroll_at) belong to
+  //    'always' and 'fallback' — they need a fresh screenshot to
+  //    reason about, which is exactly what those modes provide.
+  //    Without 'always'/'fallback' the LLM cannot see image pixels
+  //    and would emit hallucinated coordinates.
+  const COORDINATE_TOOLS = new Set(['click_at', 'type_at', 'scroll_at']);
+  const filteredActions = actions.filter(a => {
+    const n = a.name();
+    if (n === 'screenshot') return visionMode === 'fallback';
+    if (COORDINATE_TOOLS.has(n)) return visionMode !== 'off';
+    return true;
+  });
   const tools = actionsToTools(filteredActions, { counters, limits: DEFAULT_TOOL_BUDGETS });
   const checkpointer = new MemorySaver();
   // T2f-1.5: in 'always' mode the agent calls the SAME screenshot
@@ -230,7 +239,15 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
         let screenshotPayload: { base64: string; mime: string } | null = null;
         if (screenshotAction) {
           try {
-            const captureResult = await screenshotAction.call({ intent: 'auto-attach (visionMode=always)' });
+            // T2f-coords: autocapture always carries a coordinate
+            // grid so the agent can fall back to click_at / type_at
+            // / scroll_at without an explicit second screenshot. The
+            // grid is unobtrusive on text-heavy pages and a
+            // significant accuracy lift on canvas / custom UI.
+            const captureResult = await screenshotAction.call({
+              intent: 'auto-attach (visionMode=always)',
+              gridOverlay: true,
+            });
             if (captureResult.imageBase64) {
               screenshotPayload = {
                 base64: captureResult.imageBase64,
