@@ -160,6 +160,30 @@ If a tool returns an Error:
 - After repeated failures on the same approach, finalise with what
   you can confirm rather than looping on variants.
 
+## Anti-automation walls (LinkedIn, Twitter, Cloudflare-protected)
+
+Some sites silently no-op clicks on UI elements when they detect
+automation — most famously LinkedIn's filter buttons, X/Twitter's
+"Show more replies", and any Cloudflare turnstile gate. Symptoms:
+the click runs without throwing, but the page does not change
+between screenshots.
+
+If the same UI element ignores 2 click attempts in a row, STOP
+clicking it. Switch to URL-based navigation:
+- LinkedIn jobs: build \`https://www.linkedin.com/jobs/search/?keywords=...&f_TPR=r86400&location=...\`
+  directly via \`go_to_url\` instead of typing into the search bar
+  and clicking filters.
+- LinkedIn profile: \`https://www.linkedin.com/in/me/\` to land on the
+  authenticated user's profile.
+- Search providers: \`https://duckduckgo.com/?q=...\` /
+  \`https://www.google.com/search?q=...\` instead of clicking through
+  homepage UI.
+
+URL-based access bypasses most antibot UI walls because the page
+is a fresh request, not a synthetic interaction. When that also
+fails, finalise honestly with what you have — do not keep trying
+the same wall.
+
 ## Loop avoidance — strict
 
 NEVER call the same tool with the same arguments twice in a row.

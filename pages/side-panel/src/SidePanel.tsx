@@ -1671,7 +1671,27 @@ const SidePanel = () => {
                       entries={traceEntries}
                       onThumbClick={setLightboxUrl}
                       onExport={() => {
-                        const dump = JSON.stringify(traceEntries, null, 2);
+                        // T2f-final-fix-7: strip the image payloads
+                        // before copying so the JSON the user pastes
+                        // into a debug ticket is small (a 30-step
+                        // session would otherwise be ~3 MB of base64).
+                        const dump = JSON.stringify(
+                          traceEntries.map(e => {
+                            if (e && typeof e === 'object' && 'tool' in e) {
+                              const {
+                                imageThumbBase64: _t,
+                                imageFullBase64: _f,
+                                imageThumbMime: _tm,
+                                imageFullMime: _fm,
+                                ...rest
+                              } = e as unknown as Record<string, unknown>;
+                              return rest;
+                            }
+                            return e;
+                          }),
+                          null,
+                          2,
+                        );
                         navigator.clipboard.writeText(dump).catch(() => {
                           /* clipboard may be unavailable; silently ignore */
                         });

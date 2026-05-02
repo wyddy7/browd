@@ -345,8 +345,11 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
       .describe('updated remaining subgoals (only when decision=continue, omit when finish).'),
     response: z
       .string()
+      .max(2000)
       .optional()
-      .describe('final answer to the user (only when decision=finish, omit when continue).'),
+      .describe(
+        'final answer to the user (only when decision=finish, omit when continue). Keep it under 2000 characters; do NOT repeat sentences.',
+      ),
   });
 
   const planner = llm.withStructuredOutput(planSchema, { name: 'plan' });
@@ -471,6 +474,27 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
     const remaining = state.plan.slice(1);
     const completedBlock = state.pastSteps.map(([s, r]) => `- ${s} → ${r}`).join('\n');
     const remainingBlock = remaining.length ? remaining.join('\n') : '(none)';
+    // T2f-final-fix-7: repeated-failure guard. If the last 3 subgoals
+    // all came back as "failed:", the page is fighting us — force
+    // finish honestly with whatever partial result we have rather
+    // than ask the LLM to keep replanning into the same wall.
+    const tail = state.pastSteps.slice(-3);
+    if (tail.length === 3 && tail.every(([, r]) => r.startsWith('failed:'))) {
+      logger.warning('replanner guard: 3 consecutive failed subgoals — finishing with partial result');
+      const partial = state.pastSteps
+        .filter(([, r]) => !r.startsWith('failed:'))
+        .map(([s, r]) => `- ${s}: ${r}`)
+        .join('\n');
+      const finishedSubgoals = state.pastSteps.filter(([, r]) => !r.startsWith('failed:')).map(([s]) => s);
+      const failedSubgoal = tail[0][0];
+      emitPlanChecklist([
+        ...finishedSubgoals.map(s => ({ text: s, done: true })),
+        { text: `${failedSubgoal} (blocked)`, done: false },
+      ]);
+      return {
+        response: `I made progress on the task but hit a wall on "${failedSubgoal}" — three consecutive attempts failed (likely blocked by the site's anti-automation behaviour, e.g. unresponsive buttons or rate-limiting).\n\nWhat I did manage:\n${partial || '(no completed subgoals)'}\n\nIf you want, I can try a different approach (constructing the URL directly, switching tabs, or simpler manual-style navigation).`,
+      };
+    }
     try {
       const result = (await replanner.invoke([
         new SystemMessage(
