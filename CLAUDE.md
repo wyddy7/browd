@@ -67,6 +67,11 @@ separate `visionMode` toggle:
   demand. Executor degrades to `'off'` at runtime when the
   Navigator model has no vision capability
   (`modelSupportsVision` in `packages/storage/lib/settings/types.ts`).
+- T2f-1.5 contract: vision capture in `'always'` MUST go through
+  the screenshot `Action.call()` so it lands in `globalTracer` and
+  the side-panel TRACE / chat thumbnail. Do not bypass with a
+  direct `getState(useVision=true)` call — the user has explicitly
+  rejected hidden capture paths.
 
 **Live tier state and pending roadmap:**
 
