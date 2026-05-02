@@ -559,6 +559,42 @@ const SidePanel = () => {
               displayProgress = true;
               break;
             case ExecutionState.STEP_OK:
+              // T2f-replan: planner / replanner can emit a JSON
+              // checklist payload as content. Side-panel renders
+              // it as a checkbox list (MessageList ScreenshotThumb
+              // analogue). The same actor+state is reused for the
+              // final user-facing answer too — distinguish by JSON
+              // shape.
+              if (typeof content === 'string' && content.trim().startsWith('{"type":"plan"')) {
+                try {
+                  const parsed = JSON.parse(content) as {
+                    type: string;
+                    items?: { text: string; done: boolean }[];
+                  };
+                  if (parsed.type === 'plan' && Array.isArray(parsed.items)) {
+                    setMessages(prev => {
+                      // Replace the previous plan message in-place so
+                      // the chat shows a single live checklist that
+                      // updates as the agent works through it,
+                      // instead of stacking 5 plan snapshots.
+                      const idx = prev.findIndex(m => m.actor === Actors.PLANNER && Array.isArray(m.planItems));
+                      const updated: Message = {
+                        actor: Actors.PLANNER,
+                        content: 'Plan',
+                        timestamp: Date.now(),
+                        planItems: parsed.items,
+                      };
+                      if (idx === -1) return [...prev, updated];
+                      const next = [...prev];
+                      next[idx] = updated;
+                      return next;
+                    });
+                    return;
+                  }
+                } catch {
+                  // fall through to normal handling
+                }
+              }
               skip = false;
               break;
             case ExecutionState.STEP_FAIL:

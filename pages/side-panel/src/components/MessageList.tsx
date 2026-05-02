@@ -56,15 +56,19 @@ function MessageBlock({ message, isSameActor, onThumbClick }: MessageBlockProps)
         {!isSameActor && <div className="mb-1 text-sm font-semibold text-[var(--browd-text)]">{actor.name}</div>}
 
         <div className="space-y-0.5">
-          <div className="whitespace-pre-wrap break-words text-sm leading-6 text-[var(--browd-muted)]">
-            {isProgress ? (
-              <div className="h-1 overflow-hidden rounded bg-[var(--browd-panel-strong)]">
-                <div className="browd-progress h-full animate-progress" />
-              </div>
-            ) : (
-              message.content
-            )}
-          </div>
+          {Array.isArray(message.planItems) && message.planItems.length > 0 ? (
+            <PlanChecklist items={message.planItems} />
+          ) : (
+            <div className="whitespace-pre-wrap break-words text-sm leading-6 text-[var(--browd-muted)]">
+              {isProgress ? (
+                <div className="h-1 overflow-hidden rounded bg-[var(--browd-panel-strong)]">
+                  <div className="browd-progress h-full animate-progress" />
+                </div>
+              ) : (
+                message.content
+              )}
+            </div>
+          )}
           {message.imageThumbBase64 ? (
             <ScreenshotThumb
               base64={message.imageThumbBase64}
@@ -80,6 +84,37 @@ function MessageBlock({ message, isSameActor, onThumbClick }: MessageBlockProps)
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * T2f-replan: live plan checklist. Each item shows a circular
+ * indicator (done = filled accent / pending = outlined) and the
+ * subgoal text with strikethrough when complete. The list updates
+ * in place as the StateGraph replanner emits new snapshots, so the
+ * user sees the agent's progress against the original plan
+ * instead of a stale text dump.
+ */
+function PlanChecklist({ items }: { items: { text: string; done: boolean }[] }) {
+  return (
+    <ul className="browd-plan-checklist mt-1 space-y-1">
+      {items.map((it, i) => (
+        <li key={i} className={`flex items-start gap-2 text-sm leading-5 ${it.done ? 'opacity-70' : ''}`}>
+          <span
+            aria-hidden="true"
+            className={`mt-1 inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border ${
+              it.done
+                ? 'border-[var(--browd-accent)] bg-[var(--browd-accent)]'
+                : 'border-[var(--browd-border-strong)] bg-transparent'
+            }`}>
+            {it.done ? <span className="text-[10px] leading-none text-[var(--browd-bg)]">✓</span> : null}
+          </span>
+          <span className={it.done ? 'text-[var(--browd-muted)] line-through' : 'text-[var(--browd-text)]'}>
+            {it.text}
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 

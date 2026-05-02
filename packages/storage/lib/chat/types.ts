@@ -23,6 +23,13 @@ export interface Message {
   /** T2f-final-fix: full-resolution screenshot payload for the lightbox. */
   imageFullBase64?: string;
   imageFullMime?: string;
+  /**
+   * T2f-replan: live plan checklist emitted by the planner /
+   * replanner nodes. Side-panel renders as a checkbox list and
+   * updates in place across the chat session. Side-panel-only —
+   * never persisted to chatHistoryStore.
+   */
+  planItems?: { text: string; done: boolean }[];
 }
 
 export interface ChatMessage extends Message {
