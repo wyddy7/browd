@@ -5,6 +5,7 @@ import {
   firewallStore,
   generalSettingsStore,
   llmProviderStore,
+  modelSupportsVision,
   type InterfaceLanguage,
 } from '@extension/storage';
 import { t } from '@extension/i18n';
@@ -341,6 +342,10 @@ async function setupExecutor(
   // Log the provider config being used for the navigator
   const navigatorProviderConfig = providers[navigatorModel.provider];
   const navigatorLLM = createChatModel(navigatorProviderConfig, navigatorModel);
+  // T2f-4: capability flag for vision input. Resolved here once per
+  // task setup; the Executor uses it to degrade visionMode='always'/
+  // 'fallback' to 'off' when the user picked a non-vision Navigator.
+  const navigatorSupportsVision = modelSupportsVision(navigatorModel.provider, navigatorModel.modelName);
 
   let plannerLLM: BaseChatModel | null = null;
   const plannerModel = agentModels[AgentNameEnum.Planner];
@@ -388,8 +393,9 @@ async function setupExecutor(
     generalSettings: generalSettings,
     hitlSendMessage: msg => currentPort?.postMessage(msg),
     // T2h: forward the side-panel's chat-history seed so unified mode
-    // has cross-task memory. Classic mode ignores it.
+    // has cross-task memory. Legacy mode ignores it.
     priorMessages,
+    navigatorSupportsVision,
   });
 
   return executor;

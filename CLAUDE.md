@@ -50,13 +50,23 @@ Production build output is `dist/`.
 
 ## Agent Runtime — read before touching `chrome-extension/src/background/agent/**`
 
-Browd has two agent topologies behind a `agentMode` settings flag:
+Browd has two agent topologies behind the `agentMode` setting and a
+separate `visionMode` toggle:
 
-- `'classic'` (default, safety net) — inherited Planner+Navigator
-  pipeline. `runClassicLoop` in `executor.ts`. Do not refactor.
-- `'unified'` (experimental) — LangGraph.js `createReactAgent`.
-  `runReactAgent` in `agents/runReactAgent.ts`. Tools wrapped via
-  `tools/langGraphAdapter.ts`.
+- `agentMode='unified'` (default since T2f-1) — LangGraph.js
+  `createReactAgent` in `agents/runReactAgent.ts`, tools wrapped
+  through `tools/langGraphAdapter.ts`. T2g enforces tool-call
+  budgets, T2h re-seeds chat history per task.
+- `agentMode='legacy'` (was `'classic'` pre-T2f-1) — inherited
+  Planner+Navigator pipeline. `runClassicLoop` in `executor.ts`.
+  Safety net; do not refactor.
+- `visionMode='off'|'always'|'fallback'` (T2f-1..T2f-4) — independent
+  switch, only honoured under `agentMode='unified'`. `'always'`
+  attaches a fresh JPEG screenshot to every state message;
+  `'fallback'` exposes a `screenshot()` tool the agent calls on
+  demand. Executor degrades to `'off'` at runtime when the
+  Navigator model has no vision capability
+  (`modelSupportsVision` in `packages/storage/lib/settings/types.ts`).
 
 **Live tier state and pending roadmap:**
 

@@ -9,7 +9,8 @@ import { createLogger } from '@src/background/log';
 import MessageManager from './messages/service';
 import type BrowserContext from '../browser/context';
 import { ActionBuilder, type Action } from './actions/builder';
-import { runReactAgent, type PriorMessage } from './agents/runReactAgent';
+import { runReactAgent, type PriorMessage, type RunReactAgentVisionMode } from './agents/runReactAgent';
+import { modelSupportsVision } from '@extension/storage';
 import { EventManager } from './event/manager';
 import { Actors, type EventCallback, EventType, ExecutionState } from './event/types';
 import {
@@ -44,9 +45,18 @@ export interface ExecutorExtraArgs {
    * T2h: prior chat turns of this session (last N user/assistant pairs)
    * forwarded by the side panel from `chatHistoryStore`. Unified mode
    * seeds these into the LangGraph `messages` array so the agent has
-   * cross-task memory; classic mode ignores them.
+   * cross-task memory; legacy mode ignores them.
    */
   priorMessages?: PriorMessage[];
+  /**
+   * T2f-4: capability flag, true if the Navigator model can ingest
+   * images. Computed once in `setupExecutor` from
+   * `modelSupportsVision(provider, modelName)`. Used to degrade
+   * visionMode to 'off' at runtime when the user picked a vision
+   * mode but their Navigator model can't honour it — keeps the agent
+   * working instead of failing the request mid-task.
+   */
+  navigatorSupportsVision?: boolean;
 }
 
 export class Executor {
@@ -72,6 +82,12 @@ export class Executor {
    * the new task.
    */
   private priorMessages: PriorMessage[] = [];
+  /**
+   * T2f-4: effective vision mode resolved at construction time.
+   * `'off'` whenever agentMode is legacy or the Navigator model has
+   * no vision capability; otherwise mirrors generalSettings.visionMode.
+   */
+  private readonly effectiveVisionMode: RunReactAgentVisionMode;
   constructor(
     task: string,
     taskId: string,
@@ -103,6 +119,16 @@ export class Executor {
     // keeps the inherited Planner+Navigator pipeline as a safety net.
     this.unifiedMode = extraArgs?.generalSettings?.agentMode === 'unified';
     this.priorMessages = extraArgs?.priorMessages ?? [];
+    this.effectiveVisionMode = (() => {
+      if (!this.unifiedMode) return 'off';
+      const requested = (extraArgs?.generalSettings?.visionMode ?? 'off') as RunReactAgentVisionMode;
+      if (requested === 'off') return 'off';
+      if (extraArgs?.navigatorSupportsVision) return requested;
+      logger.warning(
+        `visionMode='${requested}' requested but Navigator model lacks vision capability — degrading to 'off'`,
+      );
+      return 'off';
+    })();
     this.navigatorPrompt = new NavigatorPrompt(
       context.options.maxActionsPerStep,
       extraArgs?.agentSystemPrompts?.navigator,
@@ -330,6 +356,7 @@ export class Executor {
       actions: this.unifiedActions,
       task,
       priorMessages: this.priorMessages,
+      visionMode: this.effectiveVisionMode,
     });
     // runReactAgent emits PLANNER/SYSTEM events itself; nothing further
     // to do here. Recursion-limit / abort / error mapping all happen
