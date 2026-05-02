@@ -173,21 +173,34 @@ async function _buildDomTree(
 
     // Get sub-frames info, so that we can run the buildDomTree only on the frames that failed,
     // to avoid double parsing & highlighting on the frames that succeeded.
+    //
+    // T2f-final-fix-3: each chrome.scripting.executeScript can throw
+    // "Frame with ID N is showing error page" when the iframe is in
+    // an error state (cross-origin redirects, blocked third-party
+    // cookies, captcha walls — common on LinkedIn / Twitter). One
+    // bad frame would otherwise reject Promise.all and abort the
+    // whole DOM tree build. Catch per-frame, return null, filter out.
     const frameInfoResultsRaw = await Promise.all(
       subFrames.map(async frame => {
-        const result = await chrome.scripting.executeScript({
-          target: { tabId, frameIds: [frame.frameId] },
-          func: frameId => ({
-            frameId,
-            computedHeight: window.innerHeight,
-            computedWidth: window.innerWidth,
-            href: window.location.href,
-            name: window.name,
-            title: document.title,
-          }),
-          args: [frame.frameId],
-        });
-        return result[0].result;
+        try {
+          const result = await chrome.scripting.executeScript({
+            target: { tabId, frameIds: [frame.frameId] },
+            func: frameId => ({
+              frameId,
+              computedHeight: window.innerHeight,
+              computedWidth: window.innerWidth,
+              href: window.location.href,
+              name: window.name,
+              title: document.title,
+            }),
+            args: [frame.frameId],
+          });
+          return result[0].result;
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          logger.warning(`skipping frame ${frame.frameId}: ${msg}`);
+          return null;
+        }
       }),
     );
     const frameInfoResults = frameInfoResultsRaw.filter(isNotNull);
@@ -239,27 +252,39 @@ async function constructFrameTree(
 
   for (const subFrame of failedLoadingFrames) {
     // Processing one frame at a time, to start from the proper highlightIndex and element id.
-    const subFrameResult = await chrome.scripting.executeScript({
-      target: { tabId, frameIds: [subFrame.frameId] },
-      func: args => {
-        // Access buildDomTree from the window context of the target page
-        return window.buildDomTree({ ...args });
-      },
-      args: [
-        {
-          showHighlightElements,
-          focusHighlightIndex: focusElement,
-          viewportExpansion,
-          startId: maxNodeId + 1,
-          startHighlightIndex: maxHighlightIndex + 1,
-          debugMode,
+    // T2f-final-fix-3: any one frame can land in chrome-error://
+    // (cross-origin redirect, X-Frame-Options block, captcha) and
+    // throw "Frame with ID N is showing error page". Don't let one
+    // bad frame abort the whole tree — skip it and continue.
+    let subFrameResult;
+    try {
+      subFrameResult = await chrome.scripting.executeScript({
+        target: { tabId, frameIds: [subFrame.frameId] },
+        func: args => {
+          // Access buildDomTree from the window context of the target page
+          return window.buildDomTree({ ...args });
         },
-      ],
-    });
+        args: [
+          {
+            showHighlightElements,
+            focusHighlightIndex: focusElement,
+            viewportExpansion,
+            startId: maxNodeId + 1,
+            startHighlightIndex: maxHighlightIndex + 1,
+            debugMode,
+          },
+        ],
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.warning(`skipping subFrame ${subFrame.frameId} during tree build: ${msg}`);
+      continue;
+    }
 
     const subFramePage = subFrameResult[0]?.result as unknown as BuildDomTreeResult;
     if (!subFramePage || !subFramePage.map || !subFramePage.rootId) {
-      throw new Error('Failed to build DOM tree: No result returned or invalid structure');
+      logger.warning(`subFrame ${subFrame.frameId} returned no DOM tree — skipping`);
+      continue;
     }
     if (debugMode && subFramePage.perfMetrics) {
       logger.debug(

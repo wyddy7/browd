@@ -403,51 +403,60 @@ export default class Page {
       }
     }
 
-    try {
-      await this.removeHighlight();
-
-      // Get DOM content (equivalent to dom_service.get_clickable_elements)
-      // This part would need to be implemented based on your DomService logic
-      // showHighlightElements is true if either useVision or displayHighlights is true
-      const displayHighlights = this._config.displayHighlights || useVision;
-      const content = await this.getClickableElements(displayHighlights, focusElement);
-      if (!content) {
-        logger.warning('Failed to get clickable elements');
-        // Return last known good state if available
+    // T2f-final-fix-3: SPA pages (LinkedIn especially) routinely
+    // throw "Frame with ID N is showing error page" while still
+    // loading sub-iframes. The first DOM-tree build then fails and
+    // the agent ends up with a stale / empty selectorMap, which
+    // makes every click_element / input_text bounce off
+    // "Element with index X does not exist". Retry once after a
+    // 500ms settle delay before falling back to the cached state.
+    let lastErr: unknown = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        await this.removeHighlight();
+        const displayHighlights = this._config.displayHighlights || useVision;
+        const content = await this.getClickableElements(displayHighlights, focusElement);
+        if (!content) {
+          logger.warning(`Failed to get clickable elements (attempt ${attempt + 1}/2)`);
+          if (attempt === 0) {
+            await new Promise(r => setTimeout(r, 500));
+            continue;
+          }
+          return this._state;
+        }
+        if (content.selectorMap.size === 0 && attempt === 0) {
+          // Empty tree often means we caught the page mid-navigation.
+          // Wait briefly and try again before accepting an empty state.
+          logger.warning('clickable elements empty on first attempt — retrying after 500ms');
+          await new Promise(r => setTimeout(r, 500));
+          continue;
+        }
+        const screenshot = useVision ? await this.takeScreenshot() : null;
+        const [scrollY, visualViewportHeight, scrollHeight] = await this.getScrollInfo();
+        this._state.elementTree = content.elementTree;
+        this._state.selectorMap = content.selectorMap;
+        this._state.url = this._puppeteerPage?.url() || '';
+        this._state.title = (await this._puppeteerPage?.title()) || '';
+        this._state.screenshot = screenshot;
+        this._state.scrollY = scrollY;
+        this._state.visualViewportHeight = visualViewportHeight;
+        this._state.scrollHeight = scrollHeight;
+        this._state.pageText = await this.getPageText();
+        return this._state;
+      } catch (error) {
+        lastErr = error;
+        const msg = error instanceof Error ? error.message : String(error);
+        if (attempt === 0 && /Frame with ID \d+ is showing error page|Frame is detached|Target closed/.test(msg)) {
+          logger.warning(`updateState transient frame error (attempt 1/2), retrying: ${msg}`);
+          await new Promise(r => setTimeout(r, 500));
+          continue;
+        }
+        logger.error('Failed to update state:', error);
         return this._state;
       }
-      // log the attributes of content object
-      if ('selectorMap' in content) {
-        logger.debug('content.selectorMap:', content.selectorMap.size);
-      } else {
-        logger.debug('content.selectorMap: not found');
-      }
-      if ('elementTree' in content) {
-        logger.debug('content.elementTree:', content.elementTree?.tagName);
-      } else {
-        logger.debug('content.elementTree: not found');
-      }
-
-      // Take screenshot if needed
-      const screenshot = useVision ? await this.takeScreenshot() : null;
-      const [scrollY, visualViewportHeight, scrollHeight] = await this.getScrollInfo();
-
-      // update the state
-      this._state.elementTree = content.elementTree;
-      this._state.selectorMap = content.selectorMap;
-      this._state.url = this._puppeteerPage?.url() || '';
-      this._state.title = (await this._puppeteerPage?.title()) || '';
-      this._state.screenshot = screenshot;
-      this._state.scrollY = scrollY;
-      this._state.visualViewportHeight = visualViewportHeight;
-      this._state.scrollHeight = scrollHeight;
-      this._state.pageText = await this.getPageText();
-      return this._state;
-    } catch (error) {
-      logger.error('Failed to update state:', error);
-      // Return last known good state if available
-      return this._state;
     }
+    if (lastErr) logger.error('updateState exhausted retries:', lastErr);
+    return this._state;
   }
 
   async takeScreenshot(fullPage = false): Promise<string | null> {
@@ -472,12 +481,17 @@ export default class Page {
         }
       });
 
-      // Take the screenshot using JPEG format with 80% quality
+      // T2f-final-fix-3: bumped quality 80→92. The lightbox + 2× hover
+      // preview were rendering noticeably soft on dense LinkedIn /
+      // Pinterest captures because q=80 introduces visible mosquito
+      // noise on text, which then upsamples poorly. The size delta
+      // is only ~30%, well within Anthropic / OpenAI per-message
+      // image limits.
       const screenshot = await this._puppeteerPage.screenshot({
         fullPage: fullPage,
         encoding: 'base64',
         type: 'jpeg',
-        quality: 80, // Good balance between quality and file size
+        quality: 92,
       });
 
       // Clean up the style element

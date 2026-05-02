@@ -212,12 +212,18 @@ code {
   }
 }
 
-/* T2f-final-2 — token-usage ring shown next to the side-panel logo. */
+/* T2f-final-2 / T2f-final-fix-3 — token-usage ring next to the
+   ChatInput paperclip. Minimal: the ring itself is the affordance,
+   numeric breakdown is only revealed on hover/focus through the
+   tooltip span. Scale ~0.9 to match the surrounding 16px iconography. */
 .browd-token-ring {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
   user-select: none;
+  transform: scale(0.9);
+  transform-origin: center;
+  outline: none;
 }
 
 .browd-token-ring-track {
@@ -243,10 +249,32 @@ code {
   stroke: #d8523a;
 }
 
-.browd-token-ring-label {
+.browd-token-ring-tooltip {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%) translateY(2px);
+  background: var(--browd-panel-strong);
+  color: var(--browd-text);
+  border: 1px solid var(--browd-border);
+  border-radius: 6px;
+  padding: 0.25rem 0.5rem;
   font-size: 11px;
-  color: var(--browd-muted);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 140ms ease,
+    transform 160ms ease;
+  box-shadow: 0 6px 14px hsl(var(--browd-shadow) / 0.25);
+  z-index: 10;
+}
+
+.browd-token-ring:hover .browd-token-ring-tooltip,
+.browd-token-ring:focus-visible .browd-token-ring-tooltip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
 }
 
 /* Subtle pulse while the next agent step has not arrived yet. We toggle

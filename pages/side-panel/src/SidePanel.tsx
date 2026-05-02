@@ -622,6 +622,17 @@ const SidePanel = () => {
                     // sessionId so chatHistoryStore is not touched
                     // (the bytes shouldn't bloat the persistent log).
                     if (structured.tool === 'screenshot' && structured.imageThumbBase64) {
+                      // T2f-final-fix-3 diag: log payload sizes so we
+                      // can confirm the full-resolution JPEG actually
+                      // travelled through the runtime port (Chromium
+                      // caps individual messages around 64 MB).
+                      console.log(
+                        '[Browd] screenshot trace',
+                        'thumb=',
+                        structured.imageThumbBase64?.length ?? 0,
+                        'full=',
+                        structured.imageFullBase64?.length ?? 0,
+                      );
                       setScreenshotFlashKey(k => k + 1);
                       setMessages(prev => [
                         ...prev.filter(m => !(m.content === progressMessage && m === prev[prev.length - 1])),

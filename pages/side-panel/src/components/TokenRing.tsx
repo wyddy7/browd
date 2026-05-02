@@ -42,10 +42,13 @@ export const TokenRing = memo(function TokenRing({ used, contextWindow }: TokenR
   const pct = Math.round(progress * 100);
   const colorClass =
     progress < 0.6 ? 'browd-token-ring-ok' : progress < 0.85 ? 'browd-token-ring-warn' : 'browd-token-ring-crit';
-  const title = `${formatTokens(used)} / ${formatTokens(contextWindow)} tokens (${pct}%)`;
+  const tooltipText = `${formatTokens(used)} / ${formatTokens(contextWindow)} (${pct}%)`;
+  // T2f-final-fix-3: minimal — just the ring at 0.9 scale, numbers
+  // surface only on hover via a small floating tooltip. No inline
+  // label, keeps the input row uncluttered.
   return (
-    <div className={`browd-token-ring ${colorClass}`} title={title} aria-label={title}>
-      <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
+    <div className={`browd-token-ring ${colorClass}`} role="img" aria-label={`token usage ${tooltipText}`} tabIndex={0}>
+      <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} aria-hidden="true">
         <circle
           className="browd-token-ring-track"
           cx={SIZE / 2}
@@ -64,11 +67,12 @@ export const TokenRing = memo(function TokenRing({ used, contextWindow }: TokenR
           strokeLinecap="round"
           strokeDasharray={CIRCUMFERENCE}
           strokeDashoffset={dashOffset}
-          // Start at 12 o'clock, fill clockwise.
           transform={`rotate(-90 ${SIZE / 2} ${SIZE / 2})`}
         />
       </svg>
-      <span className="browd-token-ring-label">{formatTokens(used)}</span>
+      <span className="browd-token-ring-tooltip" role="tooltip">
+        {tooltipText}
+      </span>
     </div>
   );
 });
