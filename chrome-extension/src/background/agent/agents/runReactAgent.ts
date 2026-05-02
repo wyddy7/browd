@@ -248,11 +248,18 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
   // so the model can't fall back to fragile DOM indices when it gets
   // stuck. Navigation / read-only / screenshot stay available.
   const DOM_INTERACTION_TOOLS = new Set(['click_element', 'input_text', 'fill_field_by_label']);
+  // T2f-tab-iso-1c: take_over_user_tab only makes sense when the
+  // agent has its own tab pinned (unified mode opens one; legacy
+  // works in the user's active tab so there's no separation to
+  // bridge). We always run unified mode here in this codepath
+  // (legacy goes through runClassicLoop), so the tool is always
+  // available — keep the gate explicit for clarity.
   const filteredActions = actions.filter(a => {
     const n = a.name();
     if (n === 'screenshot') return visionMode === 'fallback';
     if (COORDINATE_TOOLS.has(n)) return visionMode !== 'off';
     if (DOM_INTERACTION_TOOLS.has(n)) return visionMode !== 'always';
+    if (n === 'take_over_user_tab') return true;
     return true;
   });
   const tools = actionsToTools(filteredActions, { counters, limits: DEFAULT_TOOL_BUDGETS }, dupGuard);

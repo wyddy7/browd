@@ -336,6 +336,28 @@ export const typeAtActionSchema: ActionSchema = {
 };
 
 /**
+ * T2f-tab-iso-1c — explicit hand-off from the agent's dedicated
+ * tab to one of the user's existing tabs. Use ONLY when the user
+ * task literally references their open page ("summarise this page",
+ * "what is on the tab I have open", "fill the form I started").
+ * Never invoke for navigation tasks — those should `go_to_url` in
+ * the agent tab instead. After take-over, getCurrentPage() resolves
+ * to the user's tab; the agent reads / acts on it directly.
+ */
+export const takeOverUserTabActionSchema: ActionSchema = {
+  name: 'take_over_user_tab',
+  description:
+    "Pin the agent to one of the user's existing tabs (listed under <user-tabs> in the state message). ONLY use when the user task explicitly refers to their open page (e.g. 'this page', 'the tab I have open'). For navigation tasks ('open X.com'), use go_to_url in your agent tab instead.",
+  schema: z.object({
+    intent: z.string().default('').describe('what the take-over is for'),
+    tabId: z.number().int().describe('id of the user tab listed in <user-tabs> metadata'),
+    reason: z
+      .string()
+      .describe('why the task needs the user tab specifically (e.g. "user said summarise the page they have open")'),
+  }),
+};
+
+/**
  * T2f-handover — escape hatch for hard antibot walls (LinkedIn /jobs
  * filters, Cloudflare turnstile, X "Show more replies"). Every CDP /
  * extension click generates `MouseEvent.isTrusted = false`; sites

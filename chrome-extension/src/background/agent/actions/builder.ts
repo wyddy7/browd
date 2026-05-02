@@ -34,6 +34,7 @@ import {
   scrollAtActionSchema,
   hitlClickAtActionSchema,
   dragAtActionSchema,
+  takeOverUserTabActionSchema,
 } from './schemas';
 import { webFetchMarkdown, webSearch, extractActiveTabAsMarkdown } from '../tools/webTools';
 import { findFieldByLabel } from '@src/background/browser/dom/fieldFinder';
@@ -1094,6 +1095,31 @@ export class ActionBuilder {
 
     // T2f-drag: drag gesture for canvas / whiteboard shape drawing.
     // Same registry gating as click_at (see runReactAgent).
+    // T2f-tab-iso-1c: explicit hand-off to a user tab. Sets the
+    // BrowserContext's pinned agent tab to the requested user tab
+    // — subsequent DOM tools / screenshots / state-messages all
+    // resolve to that tab. The action does NOT navigate or click;
+    // the LLM has to do that as a follow-up.
+    const takeOverUserTab = new Action(async (input: z.infer<typeof takeOverUserTabActionSchema.schema>) => {
+      const intent = input.intent || `take over user tab ${input.tabId}`;
+      this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_START, intent);
+      try {
+        // Sanity: confirm the tab exists and is open.
+        const tab = await chrome.tabs.get(input.tabId);
+        if (!tab?.id) {
+          return new ActionResult({ error: `take_over_user_tab: tab ${input.tabId} not found` });
+        }
+        this.context.browserContext.takeOverTab(input.tabId);
+        const msg = `agent now operates in tab ${input.tabId} (${tab.url ?? 'unknown url'}); reason: ${input.reason}`;
+        this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_OK, msg);
+        return new ActionResult({ extractedContent: msg, includeInMemory: true });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return new ActionResult({ error: `take_over_user_tab failed: ${message}` });
+      }
+    }, takeOverUserTabActionSchema);
+    actions.push(takeOverUserTab);
+
     const dragAt = new Action(async (input: z.infer<typeof dragAtActionSchema.schema>) => {
       const intent = input.intent || `drag_at (${input.fromX},${input.fromY}) → (${input.toX},${input.toY})`;
       this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_START, intent);
