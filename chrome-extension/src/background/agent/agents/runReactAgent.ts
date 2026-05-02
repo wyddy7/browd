@@ -37,6 +37,7 @@ import type { AgentContext } from '../types';
 import type { Action } from '../actions/builder';
 import { actionsToTools, DEFAULT_TOOL_BUDGETS } from '../tools/langGraphAdapter';
 import { reactSystemPromptTemplate } from '../prompts/react';
+import { buildReactVisionPrompt } from '../prompts/reactVision';
 import { extractForms, formatFormsForPrompt } from '@src/background/browser/dom/forms';
 import { wrapUntrustedContent } from '../messages/utils';
 import { Actors, ExecutionState } from '../event/types';
@@ -80,6 +81,14 @@ export function priorMessagesToBaseMessages(prior: PriorMessage[]): BaseMessage[
   return out;
 }
 
+/**
+ * T2f-3: vision routing. Independent of agentMode — only honoured when
+ * agentMode='unified' (legacy ignores it). Executor is responsible for
+ * runtime degradation when the chosen Navigator model has no vision
+ * capability.
+ */
+export type RunReactAgentVisionMode = 'off' | 'always' | 'fallback';
+
 export interface RunReactAgentInput {
   context: AgentContext;
   llm: BaseChatModel;
@@ -87,6 +96,13 @@ export interface RunReactAgentInput {
   task: string;
   /** Conversation up to (but not including) the current task. Empty for the very first turn of a session. */
   priorMessages?: PriorMessage[];
+  /**
+   * Vision mode. 'off' (default) is the pre-T2f behaviour. 'always'
+   * attaches a fresh screenshot to every state message. 'fallback'
+   * leaves state messages text-only but exposes the screenshot()
+   * tool so the agent can capture a frame when DOM is insufficient.
+   */
+  visionMode?: RunReactAgentVisionMode;
 }
 
 export interface RunReactAgentResult {
@@ -98,9 +114,17 @@ export interface RunReactAgentResult {
  * Build a fresh "Page state" HumanMessage from the live browser. Called
  * by stateModifier on every agent step so the LLM always sees current
  * DOM/forms/page text rather than a stale snapshot from task start.
+ *
+ * T2f-3: when `attachScreenshot` is true (visionMode='always'), the
+ * message becomes multimodal — DOM text + image_url part — so the LLM
+ * can use vision as a tiebreaker. We still pass the DOM listing as
+ * the primary signal; the screenshot is hybrid backup.
  */
-async function buildBrowserStateMessage(context: AgentContext): Promise<HumanMessage> {
-  const browserState = await context.browserContext.getState(context.options.useVision);
+async function buildBrowserStateMessage(context: AgentContext, attachScreenshot: boolean): Promise<HumanMessage> {
+  // getState(useVision=true) populates browserState.screenshot via
+  // puppeteer JPEG capture. We pipe attachScreenshot through so we
+  // don't pay screenshot latency when visionMode='off' / 'fallback'.
+  const browserState = await context.browserContext.getState(attachScreenshot);
   const elementsText = browserState.elementTree.clickableElementsToString(context.options.includeAttributes);
   const forms = extractForms(browserState);
   const formsSection = formatFormsForPrompt(forms);
@@ -122,6 +146,15 @@ ${wrapped || '(empty page)'}
 ${formsSection ? `\n${formsSection}\n` : ''}
 Current date: ${timeStr}
 `;
+
+  if (attachScreenshot && browserState.screenshot) {
+    return new HumanMessage({
+      content: [
+        { type: 'text', text },
+        { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${browserState.screenshot}` } },
+      ],
+    });
+  }
   return new HumanMessage(text);
 }
 
@@ -152,6 +185,7 @@ function extractFinalAnswer(messages: BaseMessage[]): string | null {
 
 export async function runReactAgent(input: RunReactAgentInput): Promise<RunReactAgentResult> {
   const { context, llm, actions, task, priorMessages } = input;
+  const visionMode: RunReactAgentVisionMode = input.visionMode ?? 'off';
   // T2g: per-task tool-call budgets. Counter map lives in this closure
   // so it resets to {} on every runReactAgent invocation; tools wrappers
   // increment before dispatch. Past the configured limit the wrapper
@@ -161,8 +195,16 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
   // DEFAULT_TOOL_BUDGETS in langGraphAdapter (NOT via the system
   // prompt — that path is unenforceable, see T2e follow-up 77ea382).
   const counters: Record<string, number> = {};
-  const tools = actionsToTools(actions, { counters, limits: DEFAULT_TOOL_BUDGETS });
+  // T2f-3: gate the screenshot tool on visionMode. 'fallback' is the
+  // only mode that wants the agent to take screenshots on its own;
+  // 'always' already attaches them every step and 'off' never. Filter
+  // here so the tool simply does not appear in the LLM tool registry,
+  // which is more reliable than a prompt rule.
+  const filteredActions = actions.filter(a => (visionMode === 'fallback' ? true : a.name() !== 'screenshot'));
+  const tools = actionsToTools(filteredActions, { counters, limits: DEFAULT_TOOL_BUDGETS });
   const checkpointer = new MemorySaver();
+  const attachScreenshot = visionMode === 'always';
+  const systemPromptText = visionMode === 'off' ? reactSystemPromptTemplate : buildReactVisionPrompt(visionMode);
 
   const agent = createReactAgent({
     llm,
@@ -173,11 +215,11 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
     // carries live page state. Prior conversation messages stay intact.
     stateModifier: async (state: { messages: BaseMessage[] }) => {
       try {
-        const fresh = await buildBrowserStateMessage(context);
-        return [new SystemMessage(reactSystemPromptTemplate), ...state.messages, fresh];
+        const fresh = await buildBrowserStateMessage(context, attachScreenshot);
+        return [new SystemMessage(systemPromptText), ...state.messages, fresh];
       } catch (err) {
         logger.warning('buildBrowserStateMessage failed; running without fresh state', err);
-        return [new SystemMessage(reactSystemPromptTemplate), ...state.messages];
+        return [new SystemMessage(systemPromptText), ...state.messages];
       }
     },
   });
@@ -198,6 +240,7 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
   if (seededHistory.length > 0) {
     logger.info(`seeded ${seededHistory.length} prior message(s) from chat history`);
   }
+  logger.info(`runReactAgent visionMode=${visionMode} (tools=${tools.length})`);
 
   try {
     const result = await agent.invoke(
