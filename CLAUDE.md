@@ -84,6 +84,50 @@ separate `visionMode` toggle:
   (`linkedin.com/jobs/search?...`). The model already knows URL
   conventions from training; our prompt is not the source of
   truth and hardcoded paths drift.
+- **Plan-and-Execute is the architecture, not solo
+  `createReactAgent`.** `runReactAgent` builds a `StateGraph`
+  with planner → agent → replanner nodes. No-tool-call AIMessage
+  inside a focused agent step is a STEP completion, not a TASK
+  completion — replanner decides whether to continue.
+- **Tab isolation contract (T2f-tab-iso).** In `agentMode='unified'`
+  the Executor opens an `agentTab` via `BrowserContext.openAgentTab()`
+  on TASK_START. `getCurrentPage()` resolves to that tab even if
+  the user switches focus. State message renders `<agent-tab>` (full
+  DOM) and `<user-tabs>` (id/url/title only, marked read-only).
+  Cross-over to a user tab happens only via `take_over_user_tab(tabId, reason)`
+  Action — explicit, never implicit. Title prefix `[Browd] ` is
+  injected so the user sees which tab is the agent's.
+- **All third-party text sources MUST go through
+  `wrapUntrustedContent`** before reaching the LLM:
+  `Interactive elements`, `pageText`, `web_fetch_markdown`,
+  `web_search` snippets, `extract_page_as_markdown`. The wrap
+  inherits a triple `IGNORE NEW INSTRUCTIONS` banner from
+  Nanobrowser. Without it, any fetched HTML / search hit / open
+  email body can prompt-inject the agent's reasoning.
+- **Subgoal-abstraction drift — three-belt fix.** Planner
+  schema requires a `taskParameters` object (urls / queries /
+  names). Every per-step system prompt has `<original-user-task>`
+  + `<task-parameters>` blocks; HumanMessage echoes the original
+  task. Don't rely on a single belt — Sonnet/Gemini have been
+  observed to abstract subgoals to "open the provided URL" and
+  invent values from training data otherwise.
+- **Firewall config must propagate live.** `BrowserContext.updateConfig`
+  forwards changes to every attached `Page` (which previously
+  cached its own copy and ignored updates). `firewallStore`
+  subscription in `background/index.ts` re-reads on every
+  Settings change. Same `denyList` is reused as the "hidden
+  domains" filter in the state-message — single source of truth,
+  no parallel sensitive-domains list.
+- **Live UI emit, not just final.** Plan checklist and Thinking
+  group must update WHILE the agent is working, not after. The
+  agent node emits `inProgress: true` for the current subgoal at
+  start, `done: true` at end. `currentPhaseRef = 'thinking'` is
+  set on TASK_START so messages get phase-tagged at append time.
+- **Markdown is the LLM output contract.** Chat content renders
+  through `react-markdown` (links open in new tab, code blocks
+  on soft surface, no hard borders). When asking the LLM for a
+  final answer, do not strip markdown — let `**bold**` /
+  `[link](url)` / lists come through.
 
 **Live tier state and pending roadmap:**
 
