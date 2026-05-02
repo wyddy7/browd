@@ -57,6 +57,13 @@ export interface ExecutorExtraArgs {
    * working instead of failing the request mid-task.
    */
   navigatorSupportsVision?: boolean;
+  /**
+   * T2f-final-2: Navigator model's context window in tokens. Computed
+   * in `setupExecutor` via `getModelContextWindow`. Forwarded into
+   * `runReactAgent` so the TASK_USAGE telemetry that drives the
+   * side-panel token ring carries an accurate denominator.
+   */
+  navigatorContextWindow?: number;
 }
 
 export class Executor {
@@ -88,6 +95,8 @@ export class Executor {
    * no vision capability; otherwise mirrors generalSettings.visionMode.
    */
   private readonly effectiveVisionMode: RunReactAgentVisionMode;
+  /** T2f-final-2: Navigator model context window for the token ring. */
+  private readonly navigatorContextWindow: number;
   constructor(
     task: string,
     taskId: string,
@@ -129,6 +138,7 @@ export class Executor {
       );
       return 'off';
     })();
+    this.navigatorContextWindow = extraArgs?.navigatorContextWindow ?? 100_000;
     this.navigatorPrompt = new NavigatorPrompt(
       context.options.maxActionsPerStep,
       extraArgs?.agentSystemPrompts?.navigator,
@@ -357,6 +367,7 @@ export class Executor {
       task,
       priorMessages: this.priorMessages,
       visionMode: this.effectiveVisionMode,
+      contextWindow: this.navigatorContextWindow,
     });
     // runReactAgent emits PLANNER/SYSTEM events itself; nothing further
     // to do here. Recursion-limit / abort / error mapping all happen

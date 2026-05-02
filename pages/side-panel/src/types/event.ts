@@ -47,6 +47,9 @@ export enum ExecutionState {
 
   // Trace states
   STEP_TRACE = 'step.trace',
+
+  // T2f-final-2 — cumulative token telemetry per agent invoke.
+  TASK_USAGE = 'task.usage',
 }
 
 export interface EventData {

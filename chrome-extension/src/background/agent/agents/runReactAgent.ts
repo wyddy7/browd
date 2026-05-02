@@ -103,6 +103,13 @@ export interface RunReactAgentInput {
    * tool so the agent can capture a frame when DOM is insufficient.
    */
   visionMode?: RunReactAgentVisionMode;
+  /**
+   * T2f-final-2 — total context window of the Navigator model in
+   * tokens. Forwarded into TASK_USAGE telemetry so the side panel
+   * can render the live token ring against an accurate maximum.
+   * Default 100_000 if omitted.
+   */
+  contextWindow?: number;
 }
 
 export interface RunReactAgentResult {
@@ -292,6 +299,30 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
       },
       config,
     );
+    // T2f-final-2: pull token-usage out of every AIMessage that came
+    // back from this invoke. priorMessages we seeded ourselves carry
+    // no usage_metadata, so summing across all AIMessages is safe —
+    // only freshly-generated turns contribute.
+    let inputTokens = 0;
+    let outputTokens = 0;
+    for (const msg of result.messages) {
+      const usage = (msg as { usage_metadata?: { input_tokens?: number; output_tokens?: number } }).usage_metadata;
+      if (usage) {
+        inputTokens += usage.input_tokens ?? 0;
+        outputTokens += usage.output_tokens ?? 0;
+      }
+    }
+    if (inputTokens || outputTokens) {
+      context.emitEvent(
+        Actors.SYSTEM,
+        ExecutionState.TASK_USAGE,
+        JSON.stringify({
+          inputTokens,
+          outputTokens,
+          contextWindow: input.contextWindow ?? 100_000,
+        }),
+      );
+    }
     const finalAnswer = extractFinalAnswer(result.messages);
     if (finalAnswer) {
       context.finalAnswer = finalAnswer;

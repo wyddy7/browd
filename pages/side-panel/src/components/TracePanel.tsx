@@ -33,6 +33,12 @@ interface TracePanelProps {
   entries: TraceEntry[];
   /** Called when the user clicks the export button. */
   onExport?: () => void;
+  /**
+   * T2f-final-3 — invoked when the user clicks an inline thumbnail in
+   * a structured trace entry. SidePanel hosts the lightbox modal so
+   * one overlay serves both MessageList and TracePanel previews.
+   */
+  onThumbClick?: (url: string) => void;
 }
 
 function isStructured(entry: TraceEntry): entry is StructuredTraceEntry {
@@ -45,7 +51,7 @@ const KIND_BADGE: Record<NonNullable<StructuredTraceEntry['kind']>, string> = {
   meta: 'text-amber-400',
 };
 
-export function TracePanel({ entries, onExport }: TracePanelProps) {
+export function TracePanel({ entries, onExport, onThumbClick }: TracePanelProps) {
   if (entries.length === 0) return null;
 
   return (
@@ -91,10 +97,10 @@ export function TracePanel({ entries, onExport }: TracePanelProps) {
               {thumb ? (
                 <button
                   type="button"
-                  onClick={() => window.open(thumb, '_blank', 'noopener,noreferrer')}
+                  onClick={() => onThumbClick?.(thumb)}
                   className="rounded border border-[var(--browd-border)] overflow-hidden hover:opacity-80 transition-opacity"
-                  title="open screenshot in new tab"
-                  aria-label="open screenshot in new tab">
+                  title="click to enlarge"
+                  aria-label="open screenshot preview">
                   <img src={thumb} alt="screenshot" className="block h-5 w-auto" />
                 </button>
               ) : null}

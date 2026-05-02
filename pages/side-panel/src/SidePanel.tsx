@@ -22,6 +22,7 @@ import {
 import favoritesStorage, { type FavoritePrompt } from '@extension/storage/lib/prompt/favorites';
 import { t } from '@extension/i18n';
 import MessageList from './components/MessageList';
+import { TokenRing } from './components/TokenRing';
 import { buildPriorMessagesForAgent } from './utils';
 import ChatInput, { type ChatInputContentController } from './components/ChatInput';
 import ChatHistoryList from './components/ChatHistoryList';
@@ -181,6 +182,22 @@ const SidePanel = () => {
   // flash overlay div re-mounts and replays its CSS animation. Value
   // doesn't otherwise matter — the key is only for animation re-trigger.
   const [screenshotFlashKey, setScreenshotFlashKey] = useState(0);
+  // T2f-final-2: cumulative token usage for the current chat session.
+  // Reset on new chat / history-load. Each TASK_USAGE event from the
+  // agent runtime bumps the running totals.
+  const [tokenUsage, setTokenUsage] = useState<{ input: number; output: number; contextWindow: number } | null>(null);
+  // T2f-final-3 — single shared screenshot lightbox URL. Both
+  // MessageList thumbnails and TracePanel previews open this; window.open
+  // with a data: URL is blocked in Chromium so we render in-panel.
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!lightboxUrl) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setLightboxUrl(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [lightboxUrl]);
   const sessionIdRef = useRef<string | null>(null);
   const isReplayingRef = useRef<boolean>(false);
   const portRef = useRef<chrome.runtime.Port | null>(null);
@@ -506,6 +523,26 @@ const SidePanel = () => {
               break;
             case ExecutionState.TASK_RESUME:
               break;
+            case ExecutionState.TASK_USAGE: {
+              // T2f-final-2: parse the cumulative token totals for
+              // this invoke and add them to the session running total.
+              try {
+                const parsed = JSON.parse(content ?? '{}') as {
+                  inputTokens?: number;
+                  outputTokens?: number;
+                  contextWindow?: number;
+                };
+                const cw = parsed.contextWindow ?? 100_000;
+                setTokenUsage(prev => ({
+                  input: (prev?.input ?? 0) + (parsed.inputTokens ?? 0),
+                  output: (prev?.output ?? 0) + (parsed.outputTokens ?? 0),
+                  contextWindow: cw,
+                }));
+              } catch {
+                // ignore — telemetry is non-critical
+              }
+              return;
+            }
             default:
               console.error('Invalid task state', state);
               return;
@@ -1060,6 +1097,8 @@ const SidePanel = () => {
     setShowStopButton(false);
     setIsFollowUpMode(false);
     setIsHistoricalSession(false);
+    setTokenUsage(null);
+    setTraceEntries([]);
 
     // Disconnect any existing connection
     stopConnection();
@@ -1414,6 +1453,9 @@ const SidePanel = () => {
             ) : (
               <img src={brandLogoSrc} alt="Browd logo" className="size-7" />
             )}
+            {!showHistory && tokenUsage && (
+              <TokenRing used={tokenUsage.input + tokenUsage.output} contextWindow={tokenUsage.contextWindow} />
+            )}
           </div>
           <div className="header-icons">
             {!showHistory && (
@@ -1559,7 +1601,7 @@ const SidePanel = () => {
                 )}
                 {messages.length > 0 && (
                   <div className="scrollbar-gutter-stable relative flex-1 overflow-x-hidden overflow-y-scroll bg-[var(--browd-bg)]/60 p-3 scroll-smooth">
-                    <MessageList messages={messages} isDarkMode={isDarkMode} />
+                    <MessageList messages={messages} isDarkMode={isDarkMode} onThumbClick={setLightboxUrl} />
                     <div ref={messagesEndRef} />
                     {screenshotFlashKey > 0 && (
                       <div
@@ -1575,6 +1617,7 @@ const SidePanel = () => {
                   <div className="border-t border-[var(--browd-border)] bg-[var(--browd-surface)]/80 p-2 backdrop-blur">
                     <TracePanel
                       entries={traceEntries}
+                      onThumbClick={setLightboxUrl}
                       onExport={() => {
                         const dump = JSON.stringify(traceEntries, null, 2);
                         navigator.clipboard.writeText(dump).catch(() => {
@@ -1613,6 +1656,26 @@ const SidePanel = () => {
             )}
           </>
         )}
+        {lightboxUrl ? (
+          <div
+            className="browd-screenshot-lightbox"
+            role="dialog"
+            aria-modal="true"
+            aria-label="screenshot preview"
+            onClick={() => setLightboxUrl(null)}>
+            <img src={lightboxUrl} alt="agent screenshot full" className="browd-screenshot-lightbox-img" />
+            <button
+              type="button"
+              className="browd-screenshot-lightbox-close"
+              onClick={e => {
+                e.stopPropagation();
+                setLightboxUrl(null);
+              }}
+              aria-label="close preview">
+              ×
+            </button>
+          </div>
+        ) : null}
       </div>
     </div>
   );

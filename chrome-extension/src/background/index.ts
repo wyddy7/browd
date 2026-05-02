@@ -6,6 +6,7 @@ import {
   generalSettingsStore,
   llmProviderStore,
   modelSupportsVision,
+  getModelContextWindow,
   type InterfaceLanguage,
 } from '@extension/storage';
 import { t } from '@extension/i18n';
@@ -346,6 +347,8 @@ async function setupExecutor(
   // task setup; the Executor uses it to degrade visionMode='always'/
   // 'fallback' to 'off' when the user picked a non-vision Navigator.
   const navigatorSupportsVision = modelSupportsVision(navigatorModel.provider, navigatorModel.modelName);
+  // T2f-final-2: model context window for the side-panel token ring.
+  const navigatorContextWindow = getModelContextWindow(navigatorModel.provider, navigatorModel.modelName);
 
   let plannerLLM: BaseChatModel | null = null;
   const plannerModel = agentModels[AgentNameEnum.Planner];
@@ -396,6 +399,7 @@ async function setupExecutor(
     // has cross-task memory. Legacy mode ignores it.
     priorMessages,
     navigatorSupportsVision,
+    navigatorContextWindow,
   });
 
   return executor;

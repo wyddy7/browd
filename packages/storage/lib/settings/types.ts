@@ -56,6 +56,55 @@ const VISION_CAPABLE_HINTS = [
 
 const NEVER_VISION_PROVIDERS = new Set<string>(['deepseek', 'groq', 'cerebras']);
 
+/**
+ * T2f-final-2 — coarse context-window estimate for the live token-usage
+ * ring in the side-panel header. The numbers below match the public
+ * specs on each model family as of 2026-Q2; the matcher is hint-based
+ * because OpenRouter / CustomOpenAI users pass arbitrary model strings.
+ *
+ * Conservative-bias on unknowns: when nothing matches we return
+ * 100_000, which is below every model in this list. The ring will read
+ * "fuller than reality" rather than overestimating headroom — that's
+ * the safer failure mode for a UI hint.
+ */
+const MODEL_CONTEXT_WINDOW_HINTS: ReadonlyArray<{ pattern: string; window: number }> = [
+  // OpenAI
+  { pattern: 'gpt-4.1', window: 1_000_000 },
+  { pattern: 'gpt-5', window: 256_000 },
+  { pattern: 'gpt-4o', window: 128_000 },
+  // Anthropic
+  { pattern: 'claude-opus-4', window: 200_000 },
+  { pattern: 'claude-sonnet-4', window: 200_000 },
+  { pattern: 'claude-haiku-4', window: 200_000 },
+  { pattern: 'claude-3', window: 200_000 },
+  // Google Gemini
+  { pattern: 'gemini-3', window: 2_000_000 },
+  { pattern: 'gemini-2.5', window: 1_000_000 },
+  { pattern: 'gemini', window: 1_000_000 },
+  // xAI Grok
+  { pattern: 'grok-4', window: 256_000 },
+  { pattern: 'grok-3', window: 131_000 },
+  // DeepSeek
+  { pattern: 'deepseek', window: 128_000 },
+  // Meta Llama
+  { pattern: 'llama-4', window: 256_000 },
+  { pattern: 'llama-3', window: 128_000 },
+  // Misc
+  { pattern: 'qwen', window: 128_000 },
+  { pattern: 'pixtral', window: 128_000 },
+  { pattern: 'granite', window: 128_000 },
+  { pattern: 'mistral', window: 128_000 },
+];
+
+export function getModelContextWindow(provider: string, modelName: string): number {
+  if (!modelName) return 100_000;
+  const m = modelName.toLowerCase();
+  for (const hint of MODEL_CONTEXT_WINDOW_HINTS) {
+    if (m.includes(hint.pattern)) return hint.window;
+  }
+  return 100_000;
+}
+
 export function modelSupportsVision(provider: string, modelName: string): boolean {
   if (!modelName) return false;
   if (NEVER_VISION_PROVIDERS.has(provider)) return false;

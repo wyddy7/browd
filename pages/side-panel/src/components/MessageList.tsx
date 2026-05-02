@@ -5,9 +5,11 @@ import { memo } from 'react';
 interface MessageListProps {
   messages: Message[];
   isDarkMode?: boolean;
+  /** T2f-final-3 — open the in-panel screenshot lightbox. SidePanel hosts the actual modal. */
+  onThumbClick?: (url: string) => void;
 }
 
-export default memo(function MessageList({ messages }: MessageListProps) {
+export default memo(function MessageList({ messages, onThumbClick }: MessageListProps) {
   return (
     <div className="max-w-full space-y-4">
       {messages.map((message, index) => (
@@ -15,6 +17,7 @@ export default memo(function MessageList({ messages }: MessageListProps) {
           key={`${message.actor}-${message.timestamp}-${index}`}
           message={message}
           isSameActor={index > 0 ? messages[index - 1].actor === message.actor : false}
+          onThumbClick={onThumbClick}
         />
       ))}
     </div>
@@ -24,9 +27,10 @@ export default memo(function MessageList({ messages }: MessageListProps) {
 interface MessageBlockProps {
   message: Message;
   isSameActor: boolean;
+  onThumbClick?: (url: string) => void;
 }
 
-function MessageBlock({ message, isSameActor }: MessageBlockProps) {
+function MessageBlock({ message, isSameActor, onThumbClick }: MessageBlockProps) {
   if (!message.actor) {
     console.error('No actor found');
     return <div />;
@@ -62,7 +66,11 @@ function MessageBlock({ message, isSameActor }: MessageBlockProps) {
             )}
           </div>
           {message.imageThumbBase64 ? (
-            <ScreenshotThumb base64={message.imageThumbBase64} mime={message.imageThumbMime ?? 'image/jpeg'} />
+            <ScreenshotThumb
+              base64={message.imageThumbBase64}
+              mime={message.imageThumbMime ?? 'image/jpeg'}
+              onOpen={onThumbClick}
+            />
           ) : null}
           {!isProgress && (
             <div className="text-right text-xs text-[var(--browd-faint)]">{formatTimestamp(message.timestamp)}</div>
@@ -74,23 +82,31 @@ function MessageBlock({ message, isSameActor }: MessageBlockProps) {
 }
 
 /**
- * T2f-1.5: inline screenshot preview in the chat. Slide-in animation
- * matches the iOS / macOS screenshot capture feel — the image fades up
- * from below while the parent flash overlay (ScreenshotFlash) blinks
- * once. Click → opens the same thumbnail full-size in a new tab via
- * a `data:` URL (no full-resolution payload travels through chat).
+ * T2f-1.5 / T2f-final-3 — inline screenshot preview in the chat.
+ *
+ * - Slide-in entrance matches the iOS / macOS capture feel.
+ * - Click opens an in-panel lightbox (window.open(data:URL) is blocked
+ *   in modern Chromium, so we render a modal overlay instead).
+ * - 2× hover preview floats next to the thumb so the user can read
+ *   details without committing to the lightbox. Pure CSS — no JS
+ *   listeners, no layout shift on the rest of the chat.
  */
-function ScreenshotThumb({ base64, mime }: { base64: string; mime: string }) {
+function ScreenshotThumb({ base64, mime, onOpen }: { base64: string; mime: string; onOpen?: (url: string) => void }) {
   const url = `data:${mime};base64,${base64}`;
   return (
-    <button
-      type="button"
-      onClick={() => window.open(url, '_blank', 'noopener,noreferrer')}
-      className="browd-screenshot-thumb mt-1 block overflow-hidden rounded-md border border-[var(--browd-border)] bg-[var(--browd-panel-strong)] hover:opacity-90 transition-opacity"
-      aria-label="open screenshot in new tab"
-      title="open screenshot in new tab">
-      <img src={url} alt="agent screenshot" className="block max-h-40 w-auto" />
-    </button>
+    <div className="browd-screenshot-thumb-wrap relative mt-1">
+      <button
+        type="button"
+        onClick={() => onOpen?.(url)}
+        className="browd-screenshot-thumb block overflow-hidden rounded-md border border-[var(--browd-border)] bg-[var(--browd-panel-strong)] hover:opacity-95 transition-opacity"
+        aria-label="open screenshot preview"
+        title="click to enlarge — hover for quick preview">
+        <img src={url} alt="agent screenshot" className="block max-h-40 w-auto" />
+      </button>
+      <div className="browd-screenshot-thumb-hover" aria-hidden="true">
+        <img src={url} alt="" className="block w-full" />
+      </div>
+    </div>
   );
 }
 
