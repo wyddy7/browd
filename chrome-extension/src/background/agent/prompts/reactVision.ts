@@ -20,52 +20,72 @@
 import { reactBaseSystemBody } from './react';
 
 const VISION_ALWAYS_RULES = `
-# Vision (visionMode = always)
+# Vision (visionMode = always) — coordinates are your primary path
+
+> THIS SECTION OVERRIDES the "For INTERACTIVE flows" rule in the
+> base prompt. In always mode coordinate tools win by default.
 
 A fresh screenshot of the current viewport is attached to every state
 message you receive. It carries a 10×10 coordinate grid overlay —
 each cell shows its centre image-pixel coordinate (e.g. \`(64,40)\`)
-in the upper-left, with a small cross at the centre. Use the grid
-only when you need to act on something the DOM cannot reach.
+in the upper-left, with a small cross at the centre. The user
+turned this mode on to act through pixels, not through DOM
+indices. Treat coordinates as the primary interaction path.
 
-- DOM is primary for actions. Use \`click_element\`,
-  \`fill_field_by_label\`, etc. with element indices from the state
-  message — those are accurate and cheap. The grid is for fallback
-  use, not the default tool.
-- The screenshot disambiguates. Use it to confirm which DOM index
-  to click when labels are ambiguous, to read text rendered in
-  images / canvas, to spot a modal that the DOM listing doesn't
-  flag, or to verify that an action visibly took effect.
-- Do not transcribe the screenshot in your reasoning. You already
-  see it; describing every pixel wastes tokens.
+## Default tools in this mode
 
-## Coordinate-based actions (canvas / video / custom widgets only)
+Prefer the coordinate tools whenever you can pinpoint the target
+visually:
 
-When the DOM listing has NO index for the element you need to
-interact with (canvas, custom widget, closed shadow DOM,
-cross-origin iframe, video player UI), use the coordinate tools:
-
-- \`click_at(x, y)\` — click at image-pixel coordinates.
-- \`type_at(x, y, text)\` — focus a custom input then type.
-- \`scroll_at(x, y, dy)\` — scroll a nested container under
+- \`click_at(x, y, intent)\` — click at image-pixel coordinates.
+- \`type_at(x, y, text, intent)\` — click first then type into the
+  focused input.
+- \`scroll_at(x, y, dy, intent)\` — scroll a nested container under
   coordinates by dy CSS pixels.
 
-How to derive coordinates: read the labels at the centre of each
-grid cell, snap to the cell whose centre is on top of the target,
+How to derive coordinates: find the cell whose centre is on top of
+the target, read the centre coordinate from its upper-left label,
 then offset within the cell using the grid spacing as a ruler.
 The runtime converts image pixels to CSS pixels via
 \`window.devicePixelRatio\` so retina displays work transparently.
 
-Strict rules:
-- NEVER use coordinate tools when a DOM index is available — they
-  are less accurate.
+## When DOM tools still help
+
+DOM-driven tools (\`click_element\`, \`input_text\`,
+\`fill_field_by_label\`) remain available as a backup. Use them
+ONLY when:
+- the Interactive-elements listing has a clear unambiguous index
+  for a textual control (e.g. a labelled input field), AND
+- the page has settled (no recent navigation in the previous step), AND
+- coordinate targeting would be obviously fragile (tiny checkbox,
+  dense menu).
+
+If the Interactive-elements listing is empty or has \`(empty page)\`,
+the DOM extraction failed for this step — DO NOT pick numeric
+indices out of memory. Use \`click_at\` / \`type_at\` from the
+screenshot instead.
+
+## Failure handling — strict
+
+If a DOM-driven tool returns
+\`Error: Element with index N does not exist\` or
+\`... had no observable effect\`, the DOM has shifted under you.
+Switch to the coordinate tools on the very next step — re-read the
+fresh screenshot in the next state message and act through
+\`click_at\` / \`type_at\` / \`scroll_at\` instead. Do NOT retry the
+same DOM index, do NOT pick a different DOM index from memory of
+an earlier turn.
+
+## Other rules
+
+- Do not transcribe the screenshot in your reasoning. You see it;
+  describing every pixel wastes tokens.
 - After \`click_at\`, the runtime checks whether url / scrollY /
   DOM hash actually changed. If they didn't, you'll get an
-  \`Error: ... had no observable effect\` back — re-read the next
-  state message, the screenshot will be fresh, and pick a different
-  cell. Do not loop on the same coordinates.
+  \`Error: ... had no observable effect\` back — pick a different
+  cell on the next step. Do not loop on the same coordinates.
 - Coordinate tools are not a substitute for navigation. Don't
-  click_at the URL bar to "go to" a site — use \`go_to_url\`.
+  \`click_at\` the URL bar to "go to" a site — use \`go_to_url\`.
 `;
 
 const VISION_FALLBACK_RULES = `
