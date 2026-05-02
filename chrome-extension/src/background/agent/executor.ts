@@ -244,6 +244,20 @@ export class Executor {
 
     try {
       this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_START, this.context.taskId);
+      // T2f-tab-iso-1a — unified mode opens its own tab so the agent
+      // never reads or modifies the user's existing tabs without an
+      // explicit take-over signal. Legacy mode keeps the historical
+      // "work in active tab" behaviour for back-compat. Open BEFORE
+      // the agent starts so the very first state-message resolves
+      // to the agent tab, not whatever the user happened to have
+      // focused.
+      if (this.unifiedMode) {
+        try {
+          await this.context.browserContext.openAgentTab();
+        } catch (err) {
+          logger.warning('openAgentTab failed; falling back to active tab', err);
+        }
+      }
       if (this.unifiedMode) {
         await this.runUnifiedLoop();
       } else {
