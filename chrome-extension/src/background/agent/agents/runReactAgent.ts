@@ -153,8 +153,22 @@ async function buildBrowserStateMessage(
   // browserState IS the agent tab; everything else is user space.
   // In legacy mode the active tab is the user's, so we render the
   // legacy "Current tab" / "Other tabs" sections for back-compat.
+  //
+  // T2f-tab-iso-1d — sensitive-domain hide: reuse the firewall
+  // denyList as the single source of truth for "tabs the agent
+  // must not see". Any URL that matches a deny entry is filtered
+  // out of <user-tabs> entirely (not even metadata leaks). This
+  // also keeps the user from having to maintain a second list.
+  const cfg = context.browserContext.getConfig();
+  const denyList: string[] = (cfg.deniedUrls ?? []) as string[];
+  const isHidden = (url: string) => {
+    if (!url) return false;
+    const u = url.toLowerCase();
+    return denyList.some(entry => entry && u.includes(entry.toLowerCase()));
+  };
   const userTabsList = browserState.tabs
     .filter(t => t.id !== browserState.tabId)
+    .filter(t => !isHidden(t.url ?? ''))
     .map(t => `- {id: ${t.id}, url: ${t.url}, title: ${t.title}}`);
   const userTabsBlock = userTabsList.length
     ? `<user-tabs note="The user has these tabs open. You may NOT navigate / click / read them without first calling take_over_user_tab(tabId) — doing so disrupts the user's parallel work.">\n${userTabsList.join('\n')}\n</user-tabs>`

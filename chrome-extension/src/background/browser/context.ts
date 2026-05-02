@@ -23,6 +23,12 @@ export default class BrowserContext {
    * blank tab) or pinned to an existing one via `takeOverTab()`.
    */
   private _agentTabId: number | null = null;
+  /**
+   * T2f-tab-iso-1d — listener for re-applying the [Browd] title
+   * prefix after navigation in the agent tab. Lives between
+   * openAgentTab() and cleanup().
+   */
+  private _onTabUpdatedHandler: ((tabId: number, info: chrome.tabs.TabChangeInfo) => void) | null = null;
 
   constructor(config: Partial<BrowserContextConfig>) {
     this._config = { ...DEFAULT_BROWSER_CONTEXT_CONFIG, ...config };
@@ -70,6 +76,10 @@ export default class BrowserContext {
     this._attachedPages.clear();
     this._currentTabId = null;
     this._agentTabId = null;
+    if (this._onTabUpdatedHandler) {
+      chrome.tabs.onUpdated.removeListener(this._onTabUpdatedHandler);
+      this._onTabUpdatedHandler = null;
+    }
   }
 
   /**
@@ -92,7 +102,52 @@ export default class BrowserContext {
     this._agentTabId = tab.id;
     this._currentTabId = tab.id;
     logger.info(`openAgentTab: created agent tab ${tab.id} (${initialUrl})`);
+    // T2f-tab-iso-1d — visual feedback. Inject a content script to
+    // prefix the document title with "[Browd] " so the user can see
+    // at a glance which tab in their tab strip is the agent's. Best-
+    // effort: about:blank has no scripting permission, but as soon
+    // as the agent navigates somewhere the prefix gets re-applied.
+    void this._applyAgentTabBadge(tab.id);
+    // Re-apply on every navigation in the agent tab — a fresh
+    // page.complete clobbers the prefix until our injection runs again.
+    if (!this._onTabUpdatedHandler) {
+      this._onTabUpdatedHandler = (updatedTabId, info) => {
+        if (updatedTabId === this._agentTabId && info.status === 'complete') {
+          void this._applyAgentTabBadge(updatedTabId);
+        }
+      };
+      chrome.tabs.onUpdated.addListener(this._onTabUpdatedHandler);
+    }
     return tab.id;
+  }
+
+  private async _applyAgentTabBadge(tabId: number): Promise<void> {
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        func: () => {
+          const PREFIX = '[Browd] ';
+          if (document.title && !document.title.startsWith(PREFIX)) {
+            document.title = PREFIX + document.title;
+          }
+          // Re-apply on every title change so SPAs that overwrite
+          // document.title don't strip the badge mid-task.
+          // Use a MutationObserver scoped to the title element.
+          const titleEl = document.querySelector('title');
+          if (titleEl && !(window as any).__browdTitleObserver) {
+            const obs = new MutationObserver(() => {
+              if (document.title && !document.title.startsWith(PREFIX)) {
+                document.title = PREFIX + document.title;
+              }
+            });
+            obs.observe(titleEl, { childList: true });
+            (window as any).__browdTitleObserver = obs;
+          }
+        },
+      });
+    } catch (err) {
+      logger.warning(`agent tab badge injection failed (likely chrome:// or about:blank)`, err);
+    }
   }
 
   /**
