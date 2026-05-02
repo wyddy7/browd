@@ -61,12 +61,36 @@ function MessageBlock({ message, isSameActor }: MessageBlockProps) {
               message.content
             )}
           </div>
+          {message.imageThumbBase64 ? (
+            <ScreenshotThumb base64={message.imageThumbBase64} mime={message.imageThumbMime ?? 'image/jpeg'} />
+          ) : null}
           {!isProgress && (
             <div className="text-right text-xs text-[var(--browd-faint)]">{formatTimestamp(message.timestamp)}</div>
           )}
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * T2f-1.5: inline screenshot preview in the chat. Slide-in animation
+ * matches the iOS / macOS screenshot capture feel — the image fades up
+ * from below while the parent flash overlay (ScreenshotFlash) blinks
+ * once. Click → opens the same thumbnail full-size in a new tab via
+ * a `data:` URL (no full-resolution payload travels through chat).
+ */
+function ScreenshotThumb({ base64, mime }: { base64: string; mime: string }) {
+  const url = `data:${mime};base64,${base64}`;
+  return (
+    <button
+      type="button"
+      onClick={() => window.open(url, '_blank', 'noopener,noreferrer')}
+      className="browd-screenshot-thumb mt-1 block overflow-hidden rounded-md border border-[var(--browd-border)] bg-[var(--browd-panel-strong)] hover:opacity-90 transition-opacity"
+      aria-label="open screenshot in new tab"
+      title="open screenshot in new tab">
+      <img src={url} alt="agent screenshot" className="block max-h-40 w-auto" />
+    </button>
   );
 }
 

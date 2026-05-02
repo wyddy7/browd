@@ -161,3 +161,71 @@ code {
 .browd-quick-start-enter {
   animation: browd-quick-start-enter 180ms ease-out;
 }
+
+/* T2f-1.5 — iOS / macOS-style screenshot capture animation.
+   Two layers cooperate:
+   1. .browd-screenshot-flash overlays the chat area for ~250ms with a
+      single white pulse so the user gets the same physical "snap"
+      feeling as Cmd+Shift+5 / iOS volume-up screenshot.
+   2. .browd-screenshot-thumb (rendered inline in the chat) slides up
+      from below while the flash decays, so the captured frame appears
+      to drop into the conversation. */
+
+.browd-screenshot-flash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: #ffffff;
+  opacity: 0;
+  z-index: 40;
+  border-radius: inherit;
+  animation: browd-screenshot-flash 280ms ease-out;
+  mix-blend-mode: screen;
+}
+
+@keyframes browd-screenshot-flash {
+  0% {
+    opacity: 0;
+  }
+  18% {
+    opacity: 0.55;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.browd-screenshot-thumb {
+  animation: browd-screenshot-thumb-enter 320ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  box-shadow: 0 6px 18px hsl(var(--browd-shadow) / 0.25);
+}
+
+@keyframes browd-screenshot-thumb-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Subtle pulse while the next agent step has not arrived yet. We toggle
+   the class via React when the most recent screenshot is also the most
+   recent agent message. */
+.browd-screenshot-thumb.is-pending {
+  animation:
+    browd-screenshot-thumb-enter 320ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    browd-screenshot-thumb-pulse 1800ms ease-in-out 320ms infinite;
+}
+
+@keyframes browd-screenshot-thumb-pulse {
+  0%,
+  100% {
+    box-shadow: 0 6px 18px hsl(var(--browd-shadow) / 0.25);
+  }
+  50% {
+    box-shadow: 0 6px 22px hsl(var(--browd-accent) / 0.45);
+  }
+}

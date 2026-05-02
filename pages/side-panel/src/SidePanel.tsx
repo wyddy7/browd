@@ -177,6 +177,10 @@ const SidePanel = () => {
   const [replayEnabled, setReplayEnabled] = useState(false);
   const [hitlRequest, setHitlRequest] = useState<HITLRequest | null>(null);
   const [traceEntries, setTraceEntries] = useState<TraceEntry[]>([]);
+  // T2f-1.5: bumped each time a screenshot trace event arrives so the
+  // flash overlay div re-mounts and replays its CSS animation. Value
+  // doesn't otherwise matter — the key is only for animation re-trigger.
+  const [screenshotFlashKey, setScreenshotFlashKey] = useState(0);
   const sessionIdRef = useRef<string | null>(null);
   const isReplayingRef = useRef<boolean>(false);
   const portRef = useRef<chrome.runtime.Port | null>(null);
@@ -562,7 +566,32 @@ const SidePanel = () => {
                 try {
                   const parsed = JSON.parse(raw) as { structured?: unknown };
                   if (parsed.structured && typeof parsed.structured === 'object') {
-                    setTraceEntries(prev => [...prev.slice(-19), parsed.structured as TraceEntry]);
+                    const structured = parsed.structured as TraceEntry & {
+                      tool?: string;
+                      imageThumbBase64?: string;
+                      imageThumbMime?: string;
+                    };
+                    setTraceEntries(prev => [...prev.slice(-19), structured as TraceEntry]);
+                    // T2f-1.5: when the screenshot tool fires, also drop
+                    // an inline preview into the chat (Navigator actor)
+                    // and bump the flash-overlay key so the iOS-style
+                    // capture animation replays. This message is
+                    // ephemeral — we deliberately do NOT pass a
+                    // sessionId so chatHistoryStore is not touched
+                    // (the bytes shouldn't bloat the persistent log).
+                    if (structured.tool === 'screenshot' && structured.imageThumbBase64) {
+                      setScreenshotFlashKey(k => k + 1);
+                      setMessages(prev => [
+                        ...prev.filter(m => !(m.content === progressMessage && m === prev[prev.length - 1])),
+                        {
+                          actor: Actors.NAVIGATOR,
+                          content: 'Captured screenshot',
+                          timestamp: Date.now(),
+                          imageThumbBase64: structured.imageThumbBase64,
+                          imageThumbMime: structured.imageThumbMime,
+                        },
+                      ]);
+                    }
                     return;
                   }
                 } catch {
@@ -1529,9 +1558,17 @@ const SidePanel = () => {
                   </>
                 )}
                 {messages.length > 0 && (
-                  <div className="scrollbar-gutter-stable flex-1 overflow-x-hidden overflow-y-scroll bg-[var(--browd-bg)]/60 p-3 scroll-smooth">
+                  <div className="scrollbar-gutter-stable relative flex-1 overflow-x-hidden overflow-y-scroll bg-[var(--browd-bg)]/60 p-3 scroll-smooth">
                     <MessageList messages={messages} isDarkMode={isDarkMode} />
                     <div ref={messagesEndRef} />
+                    {screenshotFlashKey > 0 && (
+                      <div
+                        key={screenshotFlashKey}
+                        className="browd-screenshot-flash"
+                        aria-hidden="true"
+                        onAnimationEnd={undefined}
+                      />
+                    )}
                   </div>
                 )}
                 {messages.length > 0 && (

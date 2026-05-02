@@ -35,6 +35,16 @@ export interface TraceEntry {
   ts: number;
   /** Optional sub-categorisation for trace UI rendering. */
   kind?: 'browser' | 'web' | 'meta';
+  /**
+   * T2f-1.5: optional downscaled image payload (base64 JPEG, ≈ 256×144,
+   * q=0.6, ~5-10 KB). Set by the screenshot tool. Side panel renders
+   * it inline as a chat thumbnail and clicking opens the same
+   * thumbnail in a new tab via `data:` URL. Persisting in the trace
+   * ring buffer is intentional — the user's whole reason for asking
+   * was self-hosted observability of every captured frame.
+   */
+  imageThumbBase64?: string;
+  imageThumbMime?: string;
 }
 
 export interface TraceStorage {
@@ -163,6 +173,9 @@ export class Tracer {
     ok: boolean;
     durationMs: number;
     kind?: TraceEntry['kind'];
+    /** T2f-1.5: optional thumbnail base64 attached to the entry. */
+    imageThumbBase64?: string;
+    imageThumbMime?: string;
   }): void {
     if (!this.activeTaskId) {
       // Drop silently — nothing to attribute it to. Caller forgot setContext.
@@ -179,6 +192,8 @@ export class Tracer {
       durationMs: Math.max(0, Math.round(input.durationMs)),
       ts: Date.now(),
       kind: input.kind,
+      imageThumbBase64: input.imageThumbBase64,
+      imageThumbMime: input.imageThumbMime,
     };
     this.buffer.push(entry);
     if (this.buffer.length > MAX_ENTRIES_PER_TASK) {

@@ -115,16 +115,22 @@ export interface RunReactAgentResult {
  * by stateModifier on every agent step so the LLM always sees current
  * DOM/forms/page text rather than a stale snapshot from task start.
  *
- * T2f-3: when `attachScreenshot` is true (visionMode='always'), the
- * message becomes multimodal — DOM text + image_url part — so the LLM
- * can use vision as a tiebreaker. We still pass the DOM listing as
- * the primary signal; the screenshot is hybrid backup.
+ * T2f-1.5: vision capture is now decoupled from `getState`. The caller
+ * passes a pre-captured screenshot payload (from `screenshotAction.call()`)
+ * when visionMode='always'. That keeps the screenshot on the Action.call
+ * path so `globalTracer` sees it as a normal `screenshot` tool entry,
+ * matching how `'fallback'` already worked. No separate event channel,
+ * no second-class observability.
  */
-async function buildBrowserStateMessage(context: AgentContext, attachScreenshot: boolean): Promise<HumanMessage> {
-  // getState(useVision=true) populates browserState.screenshot via
-  // puppeteer JPEG capture. We pipe attachScreenshot through so we
-  // don't pay screenshot latency when visionMode='off' / 'fallback'.
-  const browserState = await context.browserContext.getState(attachScreenshot);
+async function buildBrowserStateMessage(
+  context: AgentContext,
+  screenshot: { base64: string; mime: string } | null,
+): Promise<HumanMessage> {
+  // Always pass useVision=false here — we either capture independently
+  // through the screenshot Action (for visionMode='always') or skip
+  // capture entirely (for 'off' / 'fallback'). Doing it both places
+  // would double-pay the puppeteer screenshot cost.
+  const browserState = await context.browserContext.getState(false);
   const elementsText = browserState.elementTree.clickableElementsToString(context.options.includeAttributes);
   const forms = extractForms(browserState);
   const formsSection = formatFormsForPrompt(forms);
@@ -147,11 +153,11 @@ ${formsSection ? `\n${formsSection}\n` : ''}
 Current date: ${timeStr}
 `;
 
-  if (attachScreenshot && browserState.screenshot) {
+  if (screenshot) {
     return new HumanMessage({
       content: [
         { type: 'text', text },
-        { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${browserState.screenshot}` } },
+        { type: 'image_url', image_url: { url: `data:${screenshot.mime};base64,${screenshot.base64}` } },
       ],
     });
   }
@@ -203,7 +209,13 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
   const filteredActions = actions.filter(a => (visionMode === 'fallback' ? true : a.name() !== 'screenshot'));
   const tools = actionsToTools(filteredActions, { counters, limits: DEFAULT_TOOL_BUDGETS });
   const checkpointer = new MemorySaver();
-  const attachScreenshot = visionMode === 'always';
+  // T2f-1.5: in 'always' mode the agent calls the SAME screenshot
+  // Action that 'fallback' exposes — just on its own behalf, every
+  // step, before the LLM is invoked. Using Action.call keeps the
+  // capture inside the regular tracer pipeline (one entry per step
+  // in the trace UI, identical shape to a regular tool call,
+  // thumbnail attached automatically).
+  const screenshotAction = visionMode === 'always' ? actions.find(a => a.name() === 'screenshot') : undefined;
   const systemPromptText = visionMode === 'off' ? reactSystemPromptTemplate : buildReactVisionPrompt(visionMode);
 
   const agent = createReactAgent({
@@ -215,7 +227,21 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
     // carries live page state. Prior conversation messages stay intact.
     stateModifier: async (state: { messages: BaseMessage[] }) => {
       try {
-        const fresh = await buildBrowserStateMessage(context, attachScreenshot);
+        let screenshotPayload: { base64: string; mime: string } | null = null;
+        if (screenshotAction) {
+          try {
+            const captureResult = await screenshotAction.call({ intent: 'auto-attach (visionMode=always)' });
+            if (captureResult.imageBase64) {
+              screenshotPayload = {
+                base64: captureResult.imageBase64,
+                mime: captureResult.imageMime ?? 'image/jpeg',
+              };
+            }
+          } catch (err) {
+            logger.warning('auto screenshot capture failed; continuing without image', err);
+          }
+        }
+        const fresh = await buildBrowserStateMessage(context, screenshotPayload);
         return [new SystemMessage(systemPromptText), ...state.messages, fresh];
       } catch (err) {
         logger.warning('buildBrowserStateMessage failed; running without fresh state', err);

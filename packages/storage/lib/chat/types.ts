@@ -10,6 +10,15 @@ export interface Message {
   actor: Actors;
   content: string;
   timestamp: number; // Unix timestamp in milliseconds
+  /**
+   * T2f-1.5: optional inline thumbnail (base64, ~256×144 JPEG q=0.6)
+   * shown when a screenshot tool fires. Side-panel-only — never
+   * persisted to chatHistoryStore (storage entries leave this
+   * undefined). Click on the rendered image opens the same payload
+   * as a `data:` URL in a new tab.
+   */
+  imageThumbBase64?: string;
+  imageThumbMime?: string;
 }
 
 export interface ChatMessage extends Message {

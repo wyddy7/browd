@@ -40,6 +40,7 @@ import { ExecutionState, Actors } from '../event/types';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { wrapUntrustedContent } from '../messages/utils';
 import { globalTracer } from '../tracing';
+import { downscaleJpegToThumb } from '../imageUtils';
 
 const logger = createLogger('Action');
 
@@ -89,14 +90,7 @@ export class Action {
     try {
       if (isEmptySchema) {
         const result = await this.handler({});
-        globalTracer.record({
-          tool: toolName,
-          args: {},
-          result: result.error ?? result.extractedContent ?? 'ok',
-          ok: !result.error,
-          durationMs: Date.now() - start,
-          kind,
-        });
+        await this.recordTrace(toolName, {}, result, start, kind);
         return result;
       }
 
@@ -115,14 +109,7 @@ export class Action {
       }
       resolvedInput = parsedArgs.data;
       const result = await this.handler(parsedArgs.data);
-      globalTracer.record({
-        tool: toolName,
-        args: parsedArgs.data,
-        result: result.error ?? result.extractedContent ?? 'ok',
-        ok: !result.error,
-        durationMs: Date.now() - start,
-        kind,
-      });
+      await this.recordTrace(toolName, parsedArgs.data, result, start, kind);
       return result;
     } catch (error) {
       // Re-throw — Action callers (navigator) handle errors. Tracer must
@@ -139,6 +126,43 @@ export class Action {
       }
       throw error;
     }
+  }
+
+  /**
+   * T2f-1.5b: shared trace-write helper. The screenshot tool's
+   * ActionResult carries `imageBase64`; we downscale it to a small
+   * JPEG thumbnail and attach it to the trace entry so the side panel
+   * renders an inline preview without needing a separate event
+   * channel. Other tools take this path too — for them
+   * imageThumbBase64 stays undefined and the record looks identical
+   * to the pre-T2f-1.5 one.
+   */
+  private async recordTrace(
+    toolName: string,
+    args: unknown,
+    result: ActionResult,
+    start: number,
+    kind: 'browser' | 'web' | 'meta',
+  ): Promise<void> {
+    let imageThumbBase64: string | undefined;
+    let imageThumbMime: string | undefined;
+    if (toolName === 'screenshot' && result.imageBase64) {
+      const thumb = await downscaleJpegToThumb(result.imageBase64, result.imageMime ?? 'image/jpeg');
+      if (thumb) {
+        imageThumbBase64 = thumb.base64;
+        imageThumbMime = thumb.mime;
+      }
+    }
+    globalTracer.record({
+      tool: toolName,
+      args,
+      result: result.error ?? result.extractedContent ?? 'ok',
+      ok: !result.error,
+      durationMs: Date.now() - start,
+      kind,
+      imageThumbBase64,
+      imageThumbMime,
+    });
   }
 
   name() {

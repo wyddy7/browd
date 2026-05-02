@@ -22,6 +22,9 @@ export interface StructuredTraceEntry {
   resultSummary: string;
   kind?: 'browser' | 'web' | 'meta';
   stepNumber?: number;
+  /** T2f-1.5: inline thumbnail for the screenshot tool. */
+  imageThumbBase64?: string;
+  imageThumbMime?: string;
 }
 
 export type TraceEntry = LegacyTraceEntry | StructuredTraceEntry;
@@ -78,10 +81,23 @@ export function TracePanel({ entries, onExport }: TracePanelProps) {
           const okIcon = entry.ok ? '✓' : '✗';
           const okColor = entry.ok ? 'text-emerald-400' : 'text-red-400';
           const kindColor = entry.kind ? KIND_BADGE[entry.kind] : 'text-[var(--browd-muted)]';
+          const thumb = entry.imageThumbBase64
+            ? `data:${entry.imageThumbMime ?? 'image/jpeg'};base64,${entry.imageThumbBase64}`
+            : null;
           return (
-            <div key={i} className="leading-snug flex gap-2 items-baseline">
+            <div key={i} className="leading-snug flex gap-2 items-center">
               <span className={okColor}>{okIcon}</span>
               <span className={`${kindColor} font-semibold`}>{entry.tool}</span>
+              {thumb ? (
+                <button
+                  type="button"
+                  onClick={() => window.open(thumb, '_blank', 'noopener,noreferrer')}
+                  className="rounded border border-[var(--browd-border)] overflow-hidden hover:opacity-80 transition-opacity"
+                  title="open screenshot in new tab"
+                  aria-label="open screenshot in new tab">
+                  <img src={thumb} alt="screenshot" className="block h-5 w-auto" />
+                </button>
+              ) : null}
               <span className="text-[var(--browd-muted)]/60 truncate">{entry.args}</span>
               <span className="text-[var(--browd-muted)]/60 ml-auto whitespace-nowrap">{entry.durationMs}ms</span>
             </div>
