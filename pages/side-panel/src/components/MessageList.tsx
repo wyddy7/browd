@@ -47,14 +47,14 @@ export default memo(function MessageList({ messages, onThumbClick }: MessageList
           // group so the avatar grouping still feels right when
           // expanded.
           return (
-            <details
-              key={`thinking-${gi}-${g.items[0].index}`}
-              className="browd-thinking-group rounded-md border border-[var(--browd-border)] bg-[var(--browd-panel)]/60 px-3 py-2 text-sm">
-              <summary className="cursor-pointer select-none list-none text-[var(--browd-muted)] hover:text-[var(--browd-text)] transition-colors">
-                <span className="mr-2">⌄</span>
-                Thinking — {g.items.length} step{g.items.length === 1 ? '' : 's'}
+            <details key={`thinking-${gi}-${g.items[0].index}`} className="browd-thinking-group text-sm">
+              <summary className="browd-thinking-summary flex cursor-pointer select-none items-center gap-2 text-[var(--browd-muted)] hover:text-[var(--browd-text)] transition-colors">
+                <span className="browd-thinking-chevron">⌄</span>
+                <span>
+                  Thinking — {g.items.length} step{g.items.length === 1 ? '' : 's'}
+                </span>
               </summary>
-              <div className="mt-2 space-y-3 opacity-95">
+              <div className="browd-thinking-body mt-2 space-y-3 pl-3">
                 {g.items.map((it, idx) => (
                   <MessageBlock
                     key={`t-${it.msg.actor}-${it.msg.timestamp}-${it.index}`}

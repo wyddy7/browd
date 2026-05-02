@@ -197,11 +197,13 @@ const SidePanel = () => {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [lightboxUrl]);
-  // T2f-thinking-split: tracks the start index of the current
-  // agent run so TASK_OK / TASK_FAIL can mark the slice
-  // [runStartIdx..end-1] as 'thinking' and the last message as
-  // 'final'. Null between runs.
+  // T2f-thinking-split / T2f-thinking-live: tracks the start index of
+  // the current agent run so TASK_OK / TASK_FAIL can mark the LAST
+  // message as 'final'. The intermediate ones are tagged 'thinking'
+  // at appendMessage time via currentPhaseRef so the collapsible
+  // group renders LIVE, not only after the run finishes.
   const runStartIdxRef = useRef<number | null>(null);
+  const currentPhaseRef = useRef<'thinking' | null>(null);
   const sessionIdRef = useRef<string | null>(null);
   const isReplayingRef = useRef<boolean>(false);
   const portRef = useRef<chrome.runtime.Port | null>(null);
@@ -470,9 +472,20 @@ const SidePanel = () => {
     // Don't save progress messages
     const isProgressMessage = newMessage.content === progressMessage;
 
+    // T2f-thinking-live: tag agent-emitted messages as 'thinking'
+    // immediately while a run is in flight (currentPhaseRef set on
+    // TASK_START, cleared on TASK_OK/FAIL/CANCEL). User-input
+    // messages stay phase-undefined so they render outside the
+    // collapsible group. Already-tagged messages (e.g. final
+    // override) are kept as is.
+    let staged = newMessage;
+    if (!staged.phase && staged.actor !== Actors.USER && !isProgressMessage && currentPhaseRef.current === 'thinking') {
+      staged = { ...staged, phase: 'thinking' };
+    }
+
     setMessages(prev => {
       const filteredMessages = prev.filter((msg, idx) => !(msg.content === progressMessage && idx === prev.length - 1));
-      return [...filteredMessages, newMessage];
+      return [...filteredMessages, staged];
     });
 
     // Use provided sessionId if available, otherwise fall back to sessionIdRef.current
@@ -482,6 +495,8 @@ const SidePanel = () => {
 
     // Save message to storage if we have a session and it's not a progress message
     if (effectiveSessionId && !isProgressMessage) {
+      // Persist the original message (without phase) — phase is a
+      // runtime UI concern only.
       chatHistoryStore
         .addMessage(effectiveSessionId, newMessage)
         .catch(err => console.error('Failed to save message to history:', err));
@@ -502,24 +517,25 @@ const SidePanel = () => {
               // Reset historical session flag and trace when a new task starts
               setIsHistoricalSession(false);
               setTraceEntries([]);
-              // T2f-thinking-split: anchor the run start so we can
-              // mark all subsequent messages until TASK_OK/FAIL/CANCEL
-              // as 'thinking' (last one of the slice gets 'final').
+              // T2f-thinking-live: open the live thinking phase so
+              // every appendMessage during this run gets phase
+              // 'thinking' immediately (collapsible visible while
+              // the agent is still working).
               setMessages(prev => {
                 runStartIdxRef.current = prev.length;
                 return prev;
               });
+              currentPhaseRef.current = 'thinking';
               break;
             case ExecutionState.TASK_OK:
               setIsFollowUpMode(true);
               setInputEnabled(true);
               setShowStopButton(false);
               setIsReplaying(false);
-              // T2f-thinking-split: mark the run slice. Final = last
-              // message (the answer), thinking = everything before it
-              // in the slice. Slight quirk: TASK_OK fires AFTER the
-              // final Planner STEP_OK with the answer, so the answer
-              // is already in messages at this point.
+              // T2f-thinking-live: thinking is already tagged
+              // live; here we only need to lift the LAST run message
+              // out of the collapsible (it's the final answer).
+              currentPhaseRef.current = null;
               setMessages(prev => {
                 const start = runStartIdxRef.current;
                 if (start === null || start >= prev.length) return prev;
@@ -527,7 +543,7 @@ const SidePanel = () => {
                 return prev.map((m, i) => {
                   if (i < start) return m;
                   if (i === prev.length - 1) return { ...m, phase: 'final' as const };
-                  return { ...m, phase: 'thinking' as const };
+                  return m;
                 });
               });
               break;
@@ -537,16 +553,15 @@ const SidePanel = () => {
               setShowStopButton(false);
               setIsReplaying(false);
               skip = false;
+              currentPhaseRef.current = null;
               setMessages(prev => {
                 const start = runStartIdxRef.current;
                 if (start === null || start >= prev.length) return prev;
                 runStartIdxRef.current = null;
-                // On fail the last message IS the failure reason —
-                // keep it as final so the user sees "what broke".
                 return prev.map((m, i) => {
                   if (i < start) return m;
                   if (i === prev.length - 1) return { ...m, phase: 'final' as const };
-                  return { ...m, phase: 'thinking' as const };
+                  return m;
                 });
               });
               break;
@@ -556,15 +571,12 @@ const SidePanel = () => {
               setShowStopButton(false);
               setIsReplaying(false);
               skip = false;
-              setMessages(prev => {
-                const start = runStartIdxRef.current;
-                if (start === null || start >= prev.length) return prev;
-                runStartIdxRef.current = null;
-                return prev.map((m, i) => {
-                  if (i < start) return m;
-                  return { ...m, phase: 'thinking' as const };
-                });
-              });
+              currentPhaseRef.current = null;
+              // On cancel everything in the slice stays 'thinking'
+              // (no final answer was produced). runStartIdxRef
+              // already null because thinking is set live; we just
+              // close the run.
+              runStartIdxRef.current = null;
               break;
             case ExecutionState.TASK_PAUSE:
               break;
@@ -728,6 +740,10 @@ const SidePanel = () => {
                           imageThumbMime: structured.imageThumbMime,
                           imageFullBase64: structured.imageFullBase64,
                           imageFullMime: structured.imageFullMime,
+                          // T2f-thinking-live: tag screenshot
+                          // entries the same way appendMessage does
+                          // so they fold into the live group too.
+                          phase: currentPhaseRef.current === 'thinking' ? 'thinking' : undefined,
                         },
                       ]);
                     }

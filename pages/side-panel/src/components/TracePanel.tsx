@@ -57,20 +57,37 @@ const KIND_BADGE: Record<NonNullable<StructuredTraceEntry['kind']>, string> = {
 export function TracePanel({ entries, onExport, onThumbClick }: TracePanelProps) {
   if (entries.length === 0) return null;
 
+  // T2f-thinking-live: collapsible trace. Summary shows last action
+  // tool + total count so the user can glance at "what just
+  // happened" without expanding the whole list. Anthropic-style:
+  // no border, no card — only a left-rule accent + muted text.
+  const lastEntry = entries[entries.length - 1];
+  const lastSummary = lastEntry
+    ? 'tool' in lastEntry
+      ? `last: ${(lastEntry as StructuredTraceEntry).tool}`
+      : `last: ${(lastEntry as LegacyTraceEntry).label.slice(0, 40)}`
+    : '';
+
   return (
-    <div className="border-b border-[var(--browd-border)] text-xs font-mono text-[var(--browd-muted)]">
-      {onExport ? (
-        <div className="flex items-center justify-between px-3 pt-1.5">
-          <span className="text-[10px] uppercase tracking-wider text-[var(--browd-muted)]/60">trace</span>
+    <details className="browd-trace-group text-xs font-mono text-[var(--browd-muted)]">
+      <summary className="browd-trace-summary flex cursor-pointer select-none list-none items-center gap-2 px-3 py-1.5 hover:text-[var(--browd-text)] transition-colors">
+        <span className="browd-trace-chevron">⌄</span>
+        <span className="text-[10px] uppercase tracking-wider opacity-70">trace · {entries.length}</span>
+        <span className="truncate text-[var(--browd-faint)]">{lastSummary}</span>
+        {onExport ? (
           <button
             type="button"
-            onClick={onExport}
-            className="text-[10px] uppercase tracking-wider text-[var(--browd-muted)]/60 hover:text-[var(--browd-text)] transition-colors">
+            onClick={e => {
+              e.preventDefault();
+              e.stopPropagation();
+              onExport();
+            }}
+            className="ml-auto text-[10px] uppercase tracking-wider text-[var(--browd-muted)]/60 hover:text-[var(--browd-text)] transition-colors">
             copy json
           </button>
-        </div>
-      ) : null}
-      <div className="px-3 py-1.5 max-h-32 overflow-y-auto">
+        ) : null}
+      </summary>
+      <div className="px-3 py-1.5 max-h-48 overflow-y-auto border-l-2 border-[var(--browd-border)] ml-3">
         {entries.map((entry, i) => {
           if (!isStructured(entry)) {
             return (
@@ -119,6 +136,6 @@ export function TracePanel({ entries, onExport, onThumbClick }: TracePanelProps)
           );
         })}
       </div>
-    </div>
+    </details>
   );
 }

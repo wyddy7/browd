@@ -420,33 +420,70 @@ code {
   }
 }
 
-/* T2f-thinking-split — agent process work folded into a collapsible
-   <details>. Same calm panel surface as the rest of the chat;
-   summary acts as the affordance. Open state animates a subtle slide. */
+/* T2f-thinking-split / T2f-thinking-live — agent process work folded
+   into a collapsible group. Anthropic-style: no border, no card,
+   no panel background. Summary is muted-color text with a chevron;
+   expanded body inherits the surrounding chat surface and adds a
+   subtle left-rule accent so the user knows what belongs to the
+   reasoning trail. */
+.browd-thinking-group {
+  /* The group is just an inline container — visual rhythm comes from
+     the rest of the chat. No padding, no border, no background. */
+}
+
 .browd-thinking-group summary::-webkit-details-marker {
   display: none;
 }
 
-.browd-thinking-group[open] {
-  background: var(--browd-panel);
+.browd-thinking-summary {
+  /* Compact summary, slightly faded so the final answer below has
+     visual priority. */
+  font-size: 13px;
+  opacity: 0.85;
+  padding: 0.15rem 0;
 }
 
-.browd-thinking-group[open] > summary > span:first-child {
+.browd-thinking-chevron {
   display: inline-block;
+  transform: rotate(0deg);
+  transition: transform 180ms ease;
+}
+
+.browd-thinking-group[open] .browd-thinking-chevron {
   transform: rotate(180deg);
 }
 
-.browd-thinking-group > div {
+.browd-thinking-body {
+  /* Subtle left-rule keeps reasoning content visually associated
+     with the group without a hard card border. */
+  border-left: 2px solid var(--browd-border);
+  margin-left: 0.4rem;
   animation: browd-thinking-reveal 220ms ease-out;
 }
 
 @keyframes browd-thinking-reveal {
   from {
     opacity: 0;
-    transform: translateY(-4px);
+    transform: translateY(-2px);
   }
   to {
-    opacity: 0.95;
+    opacity: 0.92;
     transform: translateY(0);
   }
+}
+
+/* T2f-thinking-live — TracePanel mirrors the same visual treatment
+   so the chat shows two consistent collapsibles (thinking and
+   trace) instead of a card and a strip. */
+.browd-trace-group summary::-webkit-details-marker {
+  display: none;
+}
+
+.browd-trace-chevron {
+  display: inline-block;
+  transition: transform 180ms ease;
+}
+
+.browd-trace-group[open] .browd-trace-chevron {
+  transform: rotate(180deg);
 }
