@@ -72,6 +72,18 @@ separate `visionMode` toggle:
   the side-panel TRACE / chat thumbnail. Do not bypass with a
   direct `getState(useVision=true)` call — the user has explicitly
   rejected hidden capture paths.
+- **`MouseEvent.isTrusted` ceiling**: every CDP / extension click
+  generates `isTrusted=false` events. Hard antibot
+  (LinkedIn `/jobs` filters, some Cloudflare gates) silently
+  no-ops these. No coord-precision / jitter / DOM-fallback fixes
+  this — the flag is read-only and set only by OS HID. Mitigation
+  for individual blocked buttons is `hitl_click_at` (T2f-handover,
+  pending). Long postmortem in `../docs/browd-lessons-learned.md`.
+- T2f system prompt is the "spine of execution" — keep it
+  generic. NEVER hardcode site-specific URL templates
+  (`linkedin.com/jobs/search?...`). The model already knows URL
+  conventions from training; our prompt is not the source of
+  truth and hardcoded paths drift.
 
 **Live tier state and pending roadmap:**
 
