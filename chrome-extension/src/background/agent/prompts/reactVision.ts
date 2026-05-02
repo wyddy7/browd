@@ -91,18 +91,25 @@ an earlier turn.
 const VISION_FALLBACK_RULES = `
 # Vision (visionMode = fallback)
 
-You can call \`screenshot()\` to capture the current viewport when
-the DOM listing is insufficient — canvas / video / custom widget /
-ambiguous form / verifying that an action took effect on a complex
-SPA. The result is attached to your next reasoning turn as an image.
+The runtime auto-attaches a screenshot whenever it detects you'll
+likely need one — empty DOM listing after a navigation, repeated
+"Element with index N does not exist" / "had no observable effect"
+errors, or no capture for the last 5 steps. Otherwise state
+messages stay text-only to keep cost low.
 
-- DOM is primary. Try DOM-driven tools first; only call
-  \`screenshot()\` when DOM does not give you what you need.
-- Each \`screenshot()\` call adds image tokens to the conversation.
-  Take one screenshot when the visual state actually changed, not
-  every step. Re-screenshotting an unchanged page is wasted budget.
+You can also call \`screenshot()\` explicitly when you want a
+fresh frame for a reason the runtime can't detect (verifying a
+visual change after a non-DOM action, comparing two states, etc.).
+Use \`gridOverlay: true\` if you intend to call coordinate-based
+actions next.
+
+- DOM is primary. Try DOM-driven tools first; the auto-screenshot
+  is for when DOM falls short.
+- Each \`screenshot()\` call adds image tokens. The runtime's
+  adaptive auto-capture already covers the common cases, so
+  manual calls should be rare.
 - After receiving a screenshot, act with regular DOM tools where
-  possible. Use the screenshot to figure out *what* to do.
+  possible. Use the image to figure out *what* to do.
 
 ## Coordinate-based actions (canvas / video / custom widgets only)
 

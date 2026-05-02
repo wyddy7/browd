@@ -244,7 +244,22 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
   // capture inside the regular tracer pipeline (one entry per step
   // in the trace UI, identical shape to a regular tool call,
   // thumbnail attached automatically).
-  const screenshotAction = visionMode === 'always' ? actions.find(a => a.name() === 'screenshot') : undefined;
+  // The screenshot Action handle is needed in two cases now:
+  //   - visionMode='always': autocapture every step (T2f-1.5).
+  //   - visionMode='fallback': adaptive auto-trigger on empty DOM /
+  //     url change / tool error / no-capture-for-N-steps
+  //     (T2f-fallback-smart). The Action is also still exposed in
+  //     the LLM tool registry under 'fallback' so the model can ask
+  //     for an explicit capture too.
+  const screenshotAction =
+    visionMode === 'always' || visionMode === 'fallback' ? actions.find(a => a.name() === 'screenshot') : undefined;
+  // T2f-fallback-smart — trackers for adaptive triggers. Stateful
+  // across all per-step ReAct invocations within this task.
+  const fallbackTriggerState = {
+    lastCapturedUrl: '' as string,
+    stepsSinceCapture: 0,
+  };
+  const FALLBACK_AUTO_CAPTURE_EVERY = 5;
   const baseSystemPrompt = visionMode === 'off' ? reactSystemPromptTemplate : buildReactVisionPrompt(visionMode);
 
   // T2f-plan — minimal Plan-and-Execute pattern from LangGraph docs
@@ -387,11 +402,46 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
       checkpointSaver: new MemorySaver(),
       stateModifier: async (state: { messages: BaseMessage[] }) => {
         try {
+          // T2f-fallback-smart: decide whether to capture a screenshot
+          // for this state message.
+          //   - 'always': always.
+          //   - 'fallback': adaptive — capture when DOM extraction is
+          //     empty, URL has changed since the last capture, the
+          //     previous tool message looks like a DOM-fault error,
+          //     or N steps elapsed without a capture.
+          //   - 'off': never.
+          let shouldCapture = visionMode === 'always';
+          let captureIntent = 'auto-attach (visionMode=always)';
+          if (visionMode === 'fallback' && screenshotAction) {
+            const browserStateForTriggers = await context.browserContext.getState(false).catch(() => null);
+            const currentUrl = browserStateForTriggers?.url ?? '';
+            const domEmpty = (browserStateForTriggers?.selectorMap?.size ?? 0) === 0;
+            const urlChanged = currentUrl !== '' && currentUrl !== fallbackTriggerState.lastCapturedUrl;
+            const lastToolMsg = [...state.messages].reverse().find(m => m.constructor?.name === 'ToolMessage');
+            const lastContent =
+              typeof (lastToolMsg as { content?: unknown })?.content === 'string'
+                ? (lastToolMsg as { content: string }).content
+                : '';
+            const lastWasDomFault = /Element with index \d+ does not exist|had no observable effect/.test(lastContent);
+            const stepsExpired = fallbackTriggerState.stepsSinceCapture >= FALLBACK_AUTO_CAPTURE_EVERY;
+            if (domEmpty || urlChanged || lastWasDomFault || stepsExpired) {
+              shouldCapture = true;
+              captureIntent = `fallback auto-capture (${[
+                domEmpty && 'dom-empty',
+                urlChanged && 'url-changed',
+                lastWasDomFault && 'dom-fault',
+                stepsExpired && 'steps-expired',
+              ]
+                .filter(Boolean)
+                .join(',')})`;
+            }
+          }
+
           let screenshotPayload: { base64: string; mime: string } | null = null;
-          if (screenshotAction) {
+          if (shouldCapture && screenshotAction) {
             try {
               const captureResult = await screenshotAction.call({
-                intent: 'auto-attach (visionMode=always)',
+                intent: captureIntent,
                 gridOverlay: true,
               });
               if (captureResult.imageBase64) {
@@ -399,11 +449,19 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
                   base64: captureResult.imageBase64,
                   mime: captureResult.imageMime ?? 'image/jpeg',
                 };
+                if (visionMode === 'fallback') {
+                  const url = (await context.browserContext.getCurrentPage().catch(() => null))?.url() ?? '';
+                  fallbackTriggerState.lastCapturedUrl = url;
+                  fallbackTriggerState.stepsSinceCapture = 0;
+                }
               }
             } catch (err) {
               logger.warning('auto screenshot capture failed; continuing without image', err);
             }
+          } else if (visionMode === 'fallback') {
+            fallbackTriggerState.stepsSinceCapture += 1;
           }
+
           const fresh = await buildBrowserStateMessage(context, screenshotPayload);
           return [new SystemMessage(stepSystemPrompt), ...state.messages, fresh];
         } catch (err) {
