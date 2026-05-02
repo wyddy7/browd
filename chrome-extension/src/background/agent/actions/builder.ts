@@ -28,6 +28,7 @@ import {
   webFetchMarkdownActionSchema,
   webSearchActionSchema,
   extractPageMarkdownActionSchema,
+  screenshotActionSchema,
 } from './schemas';
 import { webFetchMarkdown, webSearch, extractActiveTabAsMarkdown } from '../tools/webTools';
 import { findFieldByLabel } from '@src/background/browser/dom/fieldFinder';
@@ -48,6 +49,7 @@ const logger = createLogger('Action');
 function classifyTool(name: string): 'browser' | 'web' | 'meta' {
   if (name.startsWith('web_') || name === 'extract_page_as_markdown') return 'web';
   if (name === 'replan' || name === 'remember' || name === 'ask_user' || name === 'done') return 'meta';
+  // `screenshot` is browser-side (puppeteer captures the active tab).
   return 'browser';
 }
 
@@ -885,6 +887,39 @@ export class ActionBuilder {
       });
     }, webSearchActionSchema);
     actions.push(wSearch);
+
+    // T2f-2: explicit screenshot tool. The action runs the existing
+    // puppeteer JPEG capture and surfaces the bytes via ActionResult's
+    // imageBase64/imageMime fields; the langGraph adapter (T2f-3)
+    // converts them into a multimodal ToolMessage. Registry-side
+    // gating happens in T2f-4 — this Action is created here so it's
+    // available when the Executor decides to opt in.
+    const screenshot = new Action(async (input: z.infer<typeof screenshotActionSchema.schema>) => {
+      const intent = input.intent || 'capture viewport';
+      this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_START, intent);
+      try {
+        const page = await this.context.browserContext.getCurrentPage();
+        const base64 = await page.takeScreenshot();
+        if (!base64) {
+          return new ActionResult({ error: 'screenshot returned no data' });
+        }
+        this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_OK, 'screenshot captured');
+        return new ActionResult({
+          extractedContent: 'screenshot captured (image attached)',
+          imageBase64: base64,
+          imageMime: 'image/jpeg',
+          // includeInMemory stays false: classic-mode replay ignores
+          // tool images, and unified mode rewinds DOM/screenshot via
+          // priorMessages — so persisting the bytes would just bloat
+          // chat history storage.
+          includeInMemory: false,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return new ActionResult({ error: `screenshot failed: ${message}` });
+      }
+    }, screenshotActionSchema);
+    actions.push(screenshot);
 
     const extractMd = new Action(async (input: z.infer<typeof extractPageMarkdownActionSchema.schema>) => {
       const result = await extractActiveTabAsMarkdown({ maxChars: input.maxChars });

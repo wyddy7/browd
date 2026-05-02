@@ -78,6 +78,43 @@ describe('langGraphAdapter', () => {
     expect(tools.map(t => t.name)).toEqual(['a', 'b', 'c', 'e']);
   });
 
+  describe('T2f-2 screenshot multimodal output', () => {
+    it('renders ActionResult.imageBase64 as a multimodal text+image array', async () => {
+      const action = makeAction('screenshot', async () => {
+        return new ActionResult({
+          extractedContent: 'screenshot captured',
+          imageBase64: 'AAAA',
+          imageMime: 'image/jpeg',
+        });
+      });
+      const t = actionToTool(action);
+      const result = await t.invoke({ value: 'x' });
+      expect(Array.isArray(result)).toBe(true);
+      const arr = result as Array<{ type: string; text?: string; image_url?: { url: string } }>;
+      expect(arr).toHaveLength(2);
+      expect(arr[0]).toEqual({ type: 'text', text: 'screenshot captured' });
+      expect(arr[1].type).toBe('image_url');
+      expect(arr[1].image_url?.url).toBe('data:image/jpeg;base64,AAAA');
+    });
+
+    it('falls back to image/jpeg when imageMime is missing', async () => {
+      const action = makeAction('screenshot', async () => {
+        return new ActionResult({ imageBase64: 'BBBB' });
+      });
+      const t = actionToTool(action);
+      const result = await t.invoke({ value: 'x' });
+      const arr = result as Array<{ type: string; text?: string; image_url?: { url: string } }>;
+      expect(arr[1].image_url?.url).toBe('data:image/jpeg;base64,BBBB');
+    });
+
+    it('plain string result is unchanged when no image payload is present', async () => {
+      const action = makeAction('plain', async () => new ActionResult({ extractedContent: 'hi' }));
+      const t = actionToTool(action);
+      const result = await t.invoke({ value: 'x' });
+      expect(result).toBe('hi');
+    });
+  });
+
   describe('T2g per-task tool-call budgets', () => {
     it('exposes default budgets matching the production trace fix', () => {
       expect(DEFAULT_TOOL_BUDGETS).toMatchObject({

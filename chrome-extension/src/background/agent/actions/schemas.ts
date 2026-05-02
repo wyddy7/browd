@@ -278,6 +278,22 @@ export const webSearchActionSchema: ActionSchema = {
   }),
 };
 
+/**
+ * T2f-2 — explicit screenshot tool, registered only when
+ * visionMode='fallback'. With visionMode='always' the agent's state
+ * message already carries a fresh screenshot every step, so this tool
+ * is redundant and is omitted from the registry. With 'off' it is
+ * also omitted.
+ */
+export const screenshotActionSchema: ActionSchema = {
+  name: 'screenshot',
+  description:
+    'Capture the current viewport as a JPEG and attach it to the next reasoning turn. Use only when the DOM listing is insufficient (canvas, video, custom widgets, ambiguous form). Each call adds image tokens — call once when the visual state actually changed, not every step.',
+  schema: z.object({
+    intent: z.string().default('').describe('why a screenshot is needed right now'),
+  }),
+};
+
 export const extractPageMarkdownActionSchema: ActionSchema = {
   name: 'extract_page_as_markdown',
   description:

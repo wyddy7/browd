@@ -60,15 +60,31 @@ export interface ToolBudgetOptions {
 }
 
 /**
- * Render an ActionResult into a string the LLM can read on the next turn.
- * Errors propagate as the result text so the model can reason about them
- * (LangGraph wraps errors into ToolMessage(content)). Non-empty
- * `extractedContent` becomes the canonical observation; otherwise a
- * neutral acknowledgement.
+ * Render an ActionResult into a value the LLM can read on the next
+ * turn. Errors propagate as the result text so the model can reason
+ * about them (LangGraph wraps errors into ToolMessage(content)).
+ * Non-empty `extractedContent` becomes the canonical observation;
+ * otherwise a neutral acknowledgement.
+ *
+ * T2f-2: when the result carries an `imageBase64` payload (screenshot
+ * tool), return a multimodal content array — text caption plus an
+ * `image_url` part — so the next reasoning turn sees the captured
+ * pixels, not a base64 blob in text. Anthropic / OpenAI / Gemini all
+ * accept this shape inside ToolMessage content via @langchain/core.
  */
-function renderResult(result: ActionResult): string {
+type ToolReturn = string | Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }>;
+
+function renderResult(result: ActionResult): ToolReturn {
   if (result.error) {
     return `Error: ${result.error}`;
+  }
+  if (result.imageBase64) {
+    const mime = result.imageMime ?? 'image/jpeg';
+    const caption = result.extractedContent ?? 'screenshot captured';
+    return [
+      { type: 'text', text: caption },
+      { type: 'image_url', image_url: { url: `data:${mime};base64,${result.imageBase64}` } },
+    ];
   }
   if (result.extractedContent) {
     return result.extractedContent;

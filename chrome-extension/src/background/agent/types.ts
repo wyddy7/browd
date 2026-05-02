@@ -124,6 +124,15 @@ export class ActionResult {
   error: string | null;
   includeInMemory: boolean;
   interactedElement: DOMHistoryElement | null;
+  /**
+   * T2f-2: optional base64-encoded screenshot payload. When set, the
+   * langGraph adapter returns the tool result as a multimodal
+   * ToolMessage (text caption + image_url part) so the next LLM turn
+   * can actually look at the page. Today only the `screenshot` tool
+   * produces it; classic mode ignores the field.
+   */
+  imageBase64: string | null;
+  imageMime: string | null;
 
   constructor(params: Partial<ActionResult> = {}) {
     this.isDone = params.isDone ?? false;
@@ -132,6 +141,8 @@ export class ActionResult {
     this.extractedContent = params.extractedContent ?? null;
     this.error = params.error ?? null;
     this.includeInMemory = params.includeInMemory ?? false;
+    this.imageBase64 = params.imageBase64 ?? null;
+    this.imageMime = params.imageMime ?? null;
   }
 }
 
