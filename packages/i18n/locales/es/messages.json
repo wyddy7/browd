@@ -1079,5 +1079,29 @@
   },
   "options_models_reasoning_minimal": {
     "message": "Mínimo"
+  },
+  "options_general_agentMode_unified": {
+    "message": "Unified"
+  },
+  "options_general_agentMode_legacy": {
+    "message": "Legacy"
+  },
+  "options_general_visionMode": {
+    "message": "Vision mode"
+  },
+  "options_general_visionMode_desc": {
+    "message": "Always: a fresh screenshot is attached to every step (slower, higher accuracy). Fallback: the agent only takes a screenshot when it explicitly asks for one. Off: no screenshots."
+  },
+  "options_general_visionMode_off": {
+    "message": "Off"
+  },
+  "options_general_visionMode_always": {
+    "message": "Always"
+  },
+  "options_general_visionMode_fallback": {
+    "message": "Fallback"
+  },
+  "options_general_visionMode_warning": {
+    "message": "Selected Navigator model has no vision support — vision is inactive at runtime. Pick a vision-capable model to enable."
   }
 }

@@ -98,9 +98,9 @@ export class Executor {
       context.hitlController = this._hitlController;
     }
     this.tasks.push(task);
-    // agentMode='unified' uses LangGraph.js createReactAgent (T2d).
-    // agentMode='classic' is the inherited Planner+Navigator pipeline.
-    // Default 'classic' until T3 evals promote 'unified' to default.
+    // agentMode='unified' (default since T2f-1) uses LangGraph.js
+    // createReactAgent. agentMode='legacy' (was 'classic' pre-T2f-1)
+    // keeps the inherited Planner+Navigator pipeline as a safety net.
     this.unifiedMode = extraArgs?.generalSettings?.agentMode === 'unified';
     this.priorMessages = extraArgs?.priorMessages ?? [];
     this.navigatorPrompt = new NavigatorPrompt(
@@ -191,7 +191,7 @@ export class Executor {
    */
   async execute(): Promise<void> {
     logger.info(
-      `🚀 Executing task (mode=${this.unifiedMode ? 'unified' : 'classic'}): ${this.tasks[this.tasks.length - 1]}`,
+      `🚀 Executing task (mode=${this.unifiedMode ? 'unified' : 'legacy'}): ${this.tasks[this.tasks.length - 1]}`,
     );
     const context = this.context;
     context.nSteps = 0;

@@ -1079,5 +1079,29 @@
   },
   "options_models_reasoning_minimal": {
     "message": "Минимальный"
+  },
+  "options_general_agentMode_unified": {
+    "message": "Унифицированный"
+  },
+  "options_general_agentMode_legacy": {
+    "message": "Legacy"
+  },
+  "options_general_visionMode": {
+    "message": "Vision-режим"
+  },
+  "options_general_visionMode_desc": {
+    "message": "Always: на каждом шаге к контексту прикрепляется свежий скриншот (медленнее, точнее). Fallback: агент сам зовёт инструмент screenshot когда нужно. Off: без скриншотов."
+  },
+  "options_general_visionMode_off": {
+    "message": "Выкл."
+  },
+  "options_general_visionMode_always": {
+    "message": "Всегда"
+  },
+  "options_general_visionMode_fallback": {
+    "message": "По запросу"
+  },
+  "options_general_visionMode_warning": {
+    "message": "Выбранная Navigator-модель не поддерживает vision — режим неактивен. Выберите модель с поддержкой изображений."
   }
 }

@@ -22,6 +22,51 @@ export enum ProviderTypeEnum {
   CustomOpenAI = 'custom_openai',
 }
 
+/**
+ * T2f-1 — coarse capability check for vision (image input) support
+ * keyed off `(provider, modelName)`. Used by the Settings UI to gate
+ * the Vision Mode toggle and by the Executor to degrade to
+ * `visionMode='off'` at runtime when the user's chosen Navigator model
+ * cannot ingest images.
+ *
+ * The list is intentionally hint-based rather than exhaustive: model
+ * IDs in OpenRouter / CustomOpenAI are user-supplied strings, so a
+ * pattern match on well-known family tokens (gpt-4o, claude, gemini,
+ * llama-4, qwen-vl, …) catches the long tail without us maintaining
+ * a per-version registry. False positives surface only as a wasted
+ * image upload that the provider will reject; we log and degrade.
+ */
+const VISION_CAPABLE_HINTS = [
+  'gpt-4o',
+  'gpt-4.1',
+  'gpt-5',
+  'claude-3',
+  'claude-haiku-4',
+  'claude-sonnet-4',
+  'claude-opus-4',
+  'gemini',
+  'grok-4',
+  'llama-4',
+  'pixtral',
+  '-vl-',
+  '-vl:',
+  'multimodal',
+  'llava',
+];
+
+const NEVER_VISION_PROVIDERS = new Set<string>(['deepseek', 'groq', 'cerebras']);
+
+export function modelSupportsVision(provider: string, modelName: string): boolean {
+  if (!modelName) return false;
+  if (NEVER_VISION_PROVIDERS.has(provider)) return false;
+  const m = modelName.toLowerCase();
+  if (provider === 'ollama') {
+    // Local Ollama needs explicit multimodal weights (llava, qwen-vl, …).
+    return m.includes('llava') || m.includes('-vl') || m.includes('multimodal');
+  }
+  return VISION_CAPABLE_HINTS.some(h => m.includes(h));
+}
+
 // Default supported models for each built-in provider
 export const llmProviderModelNames = {
   [ProviderTypeEnum.OpenAI]: [
