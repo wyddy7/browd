@@ -128,6 +128,36 @@ separate `visionMode` toggle:
   on soft surface, no hard borders). When asking the LLM for a
   final answer, do not strip markdown — let `**bold**` /
   `[link](url)` / lists come through.
+- **Caskad halt rule (added 2026-05-05).** If `runReactAgent.ts`
+  has grown past ~800 lines OR you would add a fourth interacting
+  guard (streaming abort, schema gate, content-narrative detector,
+  stagnation circuit-breaker, runtime verifier, output-token cap,
+  `FORBIDDEN PATTERNS` prompt block, ...) — STOP and refactor
+  before adding. Removal precedes addition. The previous round
+  shipped seven guards in one file together; combined they
+  suffocated the model and were reverted as a unit. Any new
+  guard must come with a clear interface AND a test that
+  exercises its interaction with at least one existing guard.
+- **Prompt rules are last resort (added 2026-05-05).** Before
+  writing «don't do X» / «NEVER do Y» / explicit FORBIDDEN
+  PATTERNS into a system prompt, try in order: (1) API-level cap
+  — `maxTokens` / `frequencyPenalty` at chat-model construction,
+  (2) schema constraint — required fields, `.max(N)`, ordered
+  fields that force commitment, (3) runtime guard — programmatic
+  detector + truncate / abort. The prompt is a contract, not a
+  patch surface. A `FORBIDDEN PATTERNS` block was stripped on
+  2026-05-05 because it was treating a runtime symptom at the
+  wrong layer.
+- **Screenshot triggers in `visionMode='fallback'` are an open
+  question (2026-05-05).** Auto-capture currently fires on
+  `domEmpty || domFault || stepsExpired` and is known to miss
+  overlay-blocking-real-content (cookie banners) and to fire
+  prematurely on still-loading pages. Do not tweak the heuristics
+  ad-hoc until peer-agent research and a sample dataset of
+  good/bad/missed captures has been collected. Industry consensus
+  in browser-agents (browser-use, computer-use class, stagehand)
+  is to screenshot every step; Browd's adaptive choice is exotic
+  and may not be worth preserving.
 
 **Live tier state and pending roadmap:**
 
