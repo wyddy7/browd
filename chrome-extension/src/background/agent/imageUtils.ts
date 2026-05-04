@@ -49,25 +49,31 @@ async function blobToBase64(blob: Blob): Promise<string> {
  * general-purpose VLM (Sonnet 4.x, Gemini 2.5, GPT-4o) needs to
  * report click coordinates on a screenshot. Without explicit visual
  * anchors raw-coordinate accuracy collapses below 60% on dense UI.
- * Drawing a labelled 10×10 grid lifts it to ~75-85% on common
- * benchmarks (WebVoyager / SeeAct / VisualWebArena).
  *
- * Layout: 10 columns × 10 rows over the source image. Each cell
- * shows its centre image-pixel coordinate, e.g. `(64,40)` in the
- * upper-left of the cell, plus a thin axis-aligned cross at the
- * cell centre. Lines are semi-transparent so the underlying UI
- * stays readable.
+ * Layout: 20 columns × 20 rows over the source image (was 10×10 —
+ * bumped 2026-05-05 because Gmail / LinkedIn rows ≈ 30-40 px tall
+ * and the old 128×80 px cells were ~3× larger than the smallest
+ * targets, causing "grandma click" misses). On a 1280×800 screenshot
+ * each cell is now 64×40 px — roughly the target size of dense
+ * webmail rows and small toolbar icons. Each cell shows its centre
+ * image-pixel coordinate, e.g. `(640,400)`, in the upper-left, plus
+ * a thin axis-aligned cross at the cell centre. Lines are
+ * semi-transparent so the underlying UI stays readable.
  *
- * The image returned is JPEG q=0.85 (close to lossless for the line
- * overlay; the source already came in as JPEG q=0.8) so accuracy
- * does not regress. Always uses image-pixel coordinates — DPR
- * conversion happens at click_at execution time.
+ * Trade-off vs. 10×10: 4× more labels on the screenshot. Labels stay
+ * 10 px monospace because at 20×20 they still fit (max label
+ * "(1280,800)" ≈ 54 px wide vs. cell width 64 px). If the model
+ * starts confusing dense labels, drop label font to 8 px or skip
+ * every other label (effective 20×20 click grid + 10×10 label grid).
+ *
+ * The image returned is JPEG q=0.85. Always uses image-pixel
+ * coordinates — DPR conversion happens at click_at execution time.
  */
 export async function applyCoordinateGrid(
   base64: string,
   mime = 'image/jpeg',
-  cols = 10,
-  rows = 10,
+  cols = 20,
+  rows = 20,
 ): Promise<{ base64: string; mime: string; width: number; height: number } | null> {
   try {
     const blob = base64ToBlob(base64, mime);
