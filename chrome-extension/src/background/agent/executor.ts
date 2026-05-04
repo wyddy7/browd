@@ -253,7 +253,18 @@ export class Executor {
       // focused.
       if (this.unifiedMode) {
         try {
-          await this.context.browserContext.openAgentTab();
+          // T2f-tab-iso-init-url (2026-05-05) — instead of opening the
+          // agent tab at about:blank and then navigating away on the
+          // first agent step (visible double-transition: blank-titled
+          // tab appears, then a few seconds later it loads gmail.com),
+          // try to extract the first URL from the user's task and open
+          // the agent tab AT THAT URL directly. The user sees one
+          // transition, no blank flash. Falls back to about:blank when
+          // no URL is detectable (e.g. "find me jobs" with no link).
+          const lastTask = this.tasks[this.tasks.length - 1] ?? '';
+          const urlMatch = lastTask.match(/https?:\/\/[^\s<>"'`]+/);
+          const initialUrl = urlMatch ? urlMatch[0].replace(/[.,;:!?)]+$/, '') : 'about:blank';
+          await this.context.browserContext.openAgentTab(initialUrl);
         } catch (err) {
           logger.warning('openAgentTab failed; falling back to active tab', err);
         }
