@@ -1056,6 +1056,48 @@
   "chat_input_models_role": {
     "message": "Роль"
   },
+  "chat_input_role_planner_tip": {
+    "message": "Планировщик — раскладывает твою задачу в план из 1–7 шагов, по которому пойдёт Навигатор."
+  },
+  "chat_input_role_navigator_tip": {
+    "message": "Навигатор — исполнитель. Выбирает браузерные инструменты (клик, ввод, скролл, fetch) по одному действию за шаг и решает когда задача готова."
+  },
+  "chat_input_role_stt_tip": {
+    "message": "STT — распознавание речи. Используется кнопкой микрофона: голос превращается в текст в инпуте."
+  },
+  "chat_input_role_judge_tip": {
+    "message": "Judge — оценщик для эвалов. Нужен только для запуска тест-сьюта (pnpm test:eval) — оценивает выход агента по rubric. Опционально; если не выбран, эвалы возьмут модель Навигатора."
+  },
+  "chat_input_role_label_short_planner": {
+    "message": "Plan"
+  },
+  "chat_input_role_label_short_navigator": {
+    "message": "Nav"
+  },
+  "chat_input_role_label_short_stt": {
+    "message": "STT"
+  },
+  "chat_input_role_label_short_judge": {
+    "message": "Judge"
+  },
+  "chat_input_role_group_agents": {
+    "message": "Агенты"
+  },
+  "chat_input_role_group_services": {
+    "message": "Сервисы"
+  },
+  "chat_input_tabFocus_background_label": {
+    "message": "Агент работает в фоне (сейчас)"
+  },
+  "chat_input_tabFocus_foreground_label": {
+    "message": "Агент-вкладка показывается на старте (сейчас)"
+  },
+  "chat_input_tabFocus_background_tip": {
+    "message": "Агент работает в отдельной вкладке в фоне, твой фокус не сбивается. Клик — переключить: показывать агент-вкладку при старте задачи."
+  },
+  "chat_input_tabFocus_foreground_tip": {
+    "message": "Агент-вкладка выводится на передний план при старте задачи — можно следить за процессом. Клик — переключить: вернуть в фон (безопаснее по умолчанию)."
+  },
   "chat_input_placeholder_with_files": {
     "message": "Добавить сообщение (необязательно)..."
   },
@@ -1103,5 +1145,20 @@
   },
   "options_general_visionMode_warning": {
     "message": "Выбранная Navigator-модель не поддерживает vision — режим неактивен. Выберите модель с поддержкой изображений."
+  },
+  "options_models_judge_header": {
+    "message": "Judge"
+  },
+  "options_models_judge_desc": {
+    "message": "Опциональный оценщик. Используется runtime-верификатором (добавляет к финальному ответу пометку с замечаниями) и тест-сьютом (pnpm test:eval). +1 LLM call на каждый финиш когда верификатор включён."
+  },
+  "options_models_judge_runtime_mode_label": {
+    "message": "Runtime-верификатор"
+  },
+  "options_models_judge_runtime_mode_off": {
+    "message": "Выкл. (без верификатора)"
+  },
+  "options_models_judge_runtime_mode_verify_once": {
+    "message": "Проверить один раз (пометка замечаний)"
   }
 }

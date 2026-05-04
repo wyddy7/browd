@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { FaMicrophone } from 'react-icons/fa';
+import { FaMicrophone, FaEye, FaEyeSlash } from 'react-icons/fa';
 import { AiOutlineLoading3Quarters } from 'react-icons/ai';
 import { FiPaperclip } from 'react-icons/fi';
 import { t } from '@extension/i18n';
@@ -7,6 +7,10 @@ import { chatInputDraftStorage } from '@extension/storage';
 import { TokenRing } from './TokenRing';
 
 type QuickAgent = 'planner' | 'navigator';
+// T2f-clean-finish-3 — Judge is a service config (used by runtime
+// verifier and eval grader), not something the user picks per chat.
+// Picker exposes only the roles the user actively switches: agent
+// brains + STT mic. Judge lives in Settings → Models.
 type QuickModelRole = QuickAgent | 'stt';
 
 interface ModelOption {
@@ -32,6 +36,14 @@ interface ChatInputProps {
   onActiveAgentChange?: (agent: QuickAgent) => void;
   onModelChange?: (agent: QuickAgent, modelValue: string) => void;
   onSpeechToTextModelChange?: (modelValue: string) => void;
+  /**
+   * T2f-tab-iso-2 — agent-tab focus mode. 'background' (default, safe)
+   * = agent works in a separate tab, user keeps focus on theirs.
+   * 'foreground' = bring agent tab to front on TASK_START so user can
+   * watch the agent work. Toggle via the eye button next to the mic.
+   */
+  agentTabFocusMode?: 'background' | 'foreground';
+  onAgentTabFocusToggle?: () => void;
   preferredModelMenuDirection?: 'up' | 'down';
   isRecording?: boolean;
   isProcessingSpeech?: boolean;
@@ -70,6 +82,8 @@ export default function ChatInput({
   onActiveAgentChange,
   onModelChange,
   onSpeechToTextModelChange,
+  agentTabFocusMode = 'background',
+  onAgentTabFocusToggle,
   preferredModelMenuDirection = 'up',
   isRecording = false,
   isProcessingSpeech = false,
@@ -531,9 +545,15 @@ export default function ChatInput({
                       style={{ width: `${menuWidth}px` }}>
                       <div className="px-4 pb-2 pt-1">
                         <div className="mb-2 text-sm text-[var(--browd-faint)]">{t('chat_input_models_role')}</div>
-                        <div className="flex gap-4">
+                        {/* T2f-clean-finish-3 — single row of three roles the
+                            user actively switches in chat: Planner, Navigator,
+                            STT. Judge is a service config (Settings → Models)
+                            because it's used by runtime verifier / eval grader,
+                            not directly during chat. Tooltip explanations live
+                            in Settings, not here — keep the picker minimal. */}
+                        <div className="flex flex-wrap items-center gap-4">
                           {(['planner', 'navigator', 'stt'] as const).map(role => {
-                            const isSelected = role === activeAgent;
+                            const isSelected = role === activeModelRole;
                             const label =
                               role === 'planner'
                                 ? t('options_models_agents_planner_name')
@@ -607,6 +627,35 @@ export default function ChatInput({
                     </div>
                   )}
                 </div>
+              )}
+              {onAgentTabFocusToggle && !historicalSessionId && (
+                <button
+                  type="button"
+                  onClick={onAgentTabFocusToggle}
+                  disabled={disabled}
+                  aria-label={
+                    agentTabFocusMode === 'foreground'
+                      ? t('chat_input_tabFocus_foreground_label')
+                      : t('chat_input_tabFocus_background_label')
+                  }
+                  title={
+                    agentTabFocusMode === 'foreground'
+                      ? t('chat_input_tabFocus_foreground_tip')
+                      : t('chat_input_tabFocus_background_tip')
+                  }
+                  className={`rounded-md p-1.5 transition-colors ${
+                    disabled
+                      ? 'cursor-not-allowed opacity-50'
+                      : agentTabFocusMode === 'foreground'
+                        ? 'bg-[var(--browd-accent)]/15 text-[var(--browd-accent)] hover:bg-[var(--browd-accent)]/25'
+                        : 'browd-icon-button'
+                  }`}>
+                  {agentTabFocusMode === 'foreground' ? (
+                    <FaEye className="size-4" />
+                  ) : (
+                    <FaEyeSlash className="size-4" />
+                  )}
+                </button>
               )}
               {onMicClick && !historicalSessionId && (
                 <button

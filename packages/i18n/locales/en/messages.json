@@ -1080,6 +1080,48 @@
   "chat_input_models_role": {
     "message": "Role"
   },
+  "chat_input_role_planner_tip": {
+    "message": "Planner — decomposes your task into a focused 1–7 step plan that the Navigator will walk."
+  },
+  "chat_input_role_navigator_tip": {
+    "message": "Navigator — the executor. Picks browser tools (click, type, scroll, web fetch) one step at a time and decides when the task is done."
+  },
+  "chat_input_role_stt_tip": {
+    "message": "STT — speech-to-text. Used by the microphone button to transcribe your voice into the chat input."
+  },
+  "chat_input_role_judge_tip": {
+    "message": "Judge — eval-time grader. Used only by the eval suite (pnpm test:eval) to score scenario outputs against a rubric. Optional; defaults to your Navigator model when unset."
+  },
+  "chat_input_role_label_short_planner": {
+    "message": "Plan"
+  },
+  "chat_input_role_label_short_navigator": {
+    "message": "Nav"
+  },
+  "chat_input_role_label_short_stt": {
+    "message": "STT"
+  },
+  "chat_input_role_label_short_judge": {
+    "message": "Judge"
+  },
+  "chat_input_role_group_agents": {
+    "message": "Agents"
+  },
+  "chat_input_role_group_services": {
+    "message": "Services"
+  },
+  "chat_input_tabFocus_background_label": {
+    "message": "Run agent in background tab (current)"
+  },
+  "chat_input_tabFocus_foreground_label": {
+    "message": "Show agent tab when it works (current)"
+  },
+  "chat_input_tabFocus_background_tip": {
+    "message": "Agent works in a separate tab in the background. Click to switch: bring the agent tab to the foreground at task start."
+  },
+  "chat_input_tabFocus_foreground_tip": {
+    "message": "Agent tab is brought to the foreground at task start so you can watch. Click to switch: keep agent tab in the background (safer default)."
+  },
   "chat_input_placeholder_with_files": {
     "message": "Add a message (optional)..."
   },
@@ -1103,5 +1145,20 @@
   },
   "options_models_reasoning_minimal": {
     "message": "Minimal"
+  },
+  "options_models_judge_header": {
+    "message": "Judge"
+  },
+  "options_models_judge_desc": {
+    "message": "Optional grader. Used by the runtime verifier (annotates final answers with quality concerns) and the eval suite (pnpm test:eval). Costs +1 LLM call per finish when verifier is on."
+  },
+  "options_models_judge_runtime_mode_label": {
+    "message": "Runtime verifier"
+  },
+  "options_models_judge_runtime_mode_off": {
+    "message": "Off (no verifier)"
+  },
+  "options_models_judge_runtime_mode_verify_once": {
+    "message": "Verify once (annotate concerns)"
   }
 }

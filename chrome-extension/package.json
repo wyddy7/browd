@@ -10,6 +10,8 @@
     "build": "vite build",
     "dev": "cross-env __DEV__=true vite build --mode development",
     "test": "pnpm vitest run",
+    "test:eval": "RUN_EVALS=1 pnpm vitest run src/background/agent/__evals__/runEvals.test.ts",
+    "test:eval:integration": "echo 'Integration eval Playwright runner — see auto-docs/browd-t3-scope.md' && exit 1",
     "lint": "eslint ./ --ext .ts,.js,.tsx,.jsx",
     "lint:fix": "pnpm lint --fix",
     "prettier": "prettier . --write --ignore-path ../.prettierignore",

@@ -461,6 +461,31 @@ code {
   animation: browd-thinking-reveal 220ms ease-out;
 }
 
+/* T2f-clean-finish — the final answer of a run gets visual priority.
+   Subtle accent left-rule + slightly stronger text. We don't use a
+   panel background or hard border (would clash with the calm chat
+   surface); just a 3px accent rule that says "this is the answer". */
+.browd-final-answer {
+  border-left: 3px solid var(--browd-accent);
+  padding-left: 0.6rem;
+  margin-left: -0.6rem;
+}
+
+.browd-final-answer .browd-markdown {
+  /* Stronger text, more line-height — answer should read like the
+     terminal point of the run, not another piece of the thinking. */
+  color: var(--browd-text);
+  line-height: 1.55;
+}
+
+.browd-final-badge {
+  display: inline-block;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: var(--browd-accent);
+  color: var(--browd-bg);
+}
+
 @keyframes browd-thinking-reveal {
   from {
     opacity: 0;

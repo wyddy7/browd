@@ -1,6 +1,6 @@
 import type { Message } from '@extension/storage';
 import { ACTOR_PROFILES } from '../types/message';
-import { memo } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 
 interface MessageListProps {
@@ -8,6 +8,17 @@ interface MessageListProps {
   isDarkMode?: boolean;
   /** T2f-final-3 — open the in-panel screenshot lightbox. SidePanel hosts the actual modal. */
   onThumbClick?: (url: string) => void;
+  /**
+   * T2f-clean-finish — index of the first message in the currently-running
+   * task's slice. Thinking groups whose first item index >= this value are
+   * the LIVE run and start expanded so the user sees progress; older groups
+   * are historical and stay collapsed.
+   * `null` = no live run (task finished or not started). Used together with
+   * `collapseSignal`: every TASK_OK / TASK_FAIL / TASK_CANCEL increments the
+   * signal so live thinking groups auto-collapse on completion.
+   */
+  liveRunStartIdx?: number | null;
+  collapseSignal?: number;
 }
 
 // T2f-thinking-split: group consecutive 'thinking' messages into a
@@ -38,34 +49,27 @@ function groupMessages(messages: Message[]): Group[] {
   return out;
 }
 
-export default memo(function MessageList({ messages, onThumbClick }: MessageListProps) {
+export default memo(function MessageList({
+  messages,
+  onThumbClick,
+  liveRunStartIdx = null,
+  collapseSignal = 0,
+}: MessageListProps) {
   const groups = groupMessages(messages);
   return (
     <div className="max-w-full space-y-4">
       {groups.map((g, gi) => {
         if (g.kind === 'thinking') {
-          // We rebuild a "previous-actor" flag inside the collapsed
-          // group so the avatar grouping still feels right when
-          // expanded.
+          const groupFirstIdx = g.items[0].index;
+          const isLive = liveRunStartIdx !== null && groupFirstIdx >= liveRunStartIdx;
           return (
-            <details key={`thinking-${gi}-${g.items[0].index}`} className="browd-thinking-group text-sm">
-              <summary className="browd-thinking-summary flex cursor-pointer select-none items-center gap-2 text-[var(--browd-muted)] hover:text-[var(--browd-text)] transition-colors">
-                <span className="browd-thinking-chevron">⌄</span>
-                <span>
-                  Thinking — {g.items.length} step{g.items.length === 1 ? '' : 's'}
-                </span>
-              </summary>
-              <div className="browd-thinking-body mt-2 space-y-3 pl-3">
-                {g.items.map((it, idx) => (
-                  <MessageBlock
-                    key={`t-${it.msg.actor}-${it.msg.timestamp}-${it.index}`}
-                    message={it.msg}
-                    isSameActor={idx > 0 ? g.items[idx - 1].msg.actor === it.msg.actor : false}
-                    onThumbClick={onThumbClick}
-                  />
-                ))}
-              </div>
-            </details>
+            <ThinkingGroup
+              key={`thinking-${gi}-${groupFirstIdx}`}
+              items={g.items}
+              isLive={isLive}
+              collapseSignal={collapseSignal}
+              onThumbClick={onThumbClick}
+            />
           );
         }
         const prev = g.index > 0 ? messages[g.index - 1] : null;
@@ -83,6 +87,70 @@ export default memo(function MessageList({ messages, onThumbClick }: MessageList
   );
 });
 
+/**
+ * T2f-clean-finish — collapsible thinking group with live/historical
+ * states. Live groups (current run) start expanded so the user can
+ * watch progress; on TASK_OK the parent increments `collapseSignal`
+ * which triggers an auto-close. Historical groups (previous runs)
+ * default closed. User can always toggle manually after the initial
+ * mount; the auto-close fires once per signal change.
+ */
+function ThinkingGroup({
+  items,
+  isLive,
+  collapseSignal,
+  onThumbClick,
+}: {
+  items: Array<{ msg: Message; index: number }>;
+  isLive: boolean;
+  collapseSignal: number;
+  onThumbClick?: (url: string) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(isLive);
+  const lastSignalRef = useRef(collapseSignal);
+
+  // Sync open-state when group transitions from historical→live (rare,
+  // happens if a brand new run reuses an existing thinking key).
+  useEffect(() => {
+    if (isLive) setIsOpen(true);
+  }, [isLive]);
+
+  // Auto-collapse on every TASK_OK / TASK_FAIL / TASK_CANCEL — the
+  // parent increments collapseSignal. We only act when the signal
+  // changes (not on first mount with the same value).
+  useEffect(() => {
+    if (collapseSignal !== lastSignalRef.current) {
+      lastSignalRef.current = collapseSignal;
+      setIsOpen(false);
+    }
+  }, [collapseSignal]);
+
+  const handleToggle = (e: React.SyntheticEvent<HTMLDetailsElement>) => {
+    setIsOpen(e.currentTarget.open);
+  };
+
+  return (
+    <details className="browd-thinking-group text-sm" open={isOpen} onToggle={handleToggle}>
+      <summary className="browd-thinking-summary flex cursor-pointer select-none items-center gap-2 text-[var(--browd-muted)] hover:text-[var(--browd-text)] transition-colors">
+        <span className="browd-thinking-chevron">⌄</span>
+        <span>
+          Thinking — {items.length} step{items.length === 1 ? '' : 's'}
+        </span>
+      </summary>
+      <div className="browd-thinking-body mt-2 space-y-3 pl-3">
+        {items.map((it, idx) => (
+          <MessageBlock
+            key={`t-${it.msg.actor}-${it.msg.timestamp}-${it.index}`}
+            message={it.msg}
+            isSameActor={idx > 0 ? items[idx - 1].msg.actor === it.msg.actor : false}
+            onThumbClick={onThumbClick}
+          />
+        ))}
+      </div>
+    </details>
+  );
+}
+
 interface MessageBlockProps {
   message: Message;
   isSameActor: boolean;
@@ -96,12 +164,13 @@ function MessageBlock({ message, isSameActor, onThumbClick }: MessageBlockProps)
   }
   const actor = ACTOR_PROFILES[message.actor as keyof typeof ACTOR_PROFILES];
   const isProgress = message.content === 'Showing progress...';
+  const isFinal = message.phase === 'final';
 
   return (
     <div
       className={`flex max-w-full gap-3 ${
         !isSameActor ? 'mt-4 border-t border-[var(--browd-border)] pt-4 first:mt-0 first:border-t-0 first:pt-0' : ''
-      }`}>
+      } ${isFinal ? 'browd-final-answer' : ''}`}>
       {!isSameActor && (
         <div
           className="flex size-8 shrink-0 items-center justify-center rounded-full"
@@ -112,13 +181,25 @@ function MessageBlock({ message, isSameActor, onThumbClick }: MessageBlockProps)
       {isSameActor && <div className="w-8" />}
 
       <div className="min-w-0 flex-1">
-        {!isSameActor && <div className="mb-1 text-sm font-semibold text-[var(--browd-text)]">{actor.name}</div>}
+        {!isSameActor && (
+          <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-[var(--browd-text)]">
+            <span>{actor.name}</span>
+            {isFinal && (
+              <span className="browd-final-badge text-[10px] font-medium uppercase tracking-wider opacity-80">
+                Answer
+              </span>
+            )}
+          </div>
+        )}
 
         <div className="space-y-0.5">
           {Array.isArray(message.planItems) && message.planItems.length > 0 ? (
             <PlanChecklist items={message.planItems} />
           ) : (
-            <div className="browd-markdown break-words text-sm leading-6 text-[var(--browd-muted)]">
+            <div
+              className={`browd-markdown break-words leading-6 ${
+                isFinal ? 'text-[15px] text-[var(--browd-text)]' : 'text-sm text-[var(--browd-muted)]'
+              }`}>
               {isProgress ? (
                 <div className="h-1 overflow-hidden rounded bg-[var(--browd-panel-strong)]">
                   <div className="browd-progress h-full animate-progress" />

@@ -14,10 +14,14 @@ import {
   llmProviderStore,
   llmProviderModelNames,
   getSpeechToTextOptions,
+  getJudgeOptions,
   getDefaultAgentModelParams,
   AgentNameEnum,
   ProviderTypeEnum,
   speechToTextModelStore,
+  judgeModelStore,
+  agentTabFocusStore,
+  type AgentTabFocusMode,
 } from '@extension/storage';
 import favoritesStorage, { type FavoritePrompt } from '@extension/storage/lib/prompt/favorites';
 import { t } from '@extension/i18n';
@@ -166,11 +170,15 @@ const SidePanel = () => {
   const [hasConfiguredModels, setHasConfiguredModels] = useState<boolean | null>(null); // null = loading, false = no models, true = has models
   const [availableModels, setAvailableModels] = useState<ModelOption[]>([]);
   const [availableSpeechToTextModels, setAvailableSpeechToTextModels] = useState<ModelOption[]>([]);
+  const [availableJudgeModels, setAvailableJudgeModels] = useState<ModelOption[]>([]);
   const [selectedAgentModels, setSelectedAgentModels] = useState<Record<QuickAgent, string>>({
     planner: '',
     navigator: '',
   });
   const [selectedSpeechToTextModel, setSelectedSpeechToTextModel] = useState('');
+  const [selectedJudgeModel, setSelectedJudgeModel] = useState('');
+  // T2f-tab-iso-2 — agent-tab focus mode. Persisted in storage; live-updated.
+  const [agentTabFocusMode, setAgentTabFocusMode] = useState<AgentTabFocusMode>('foreground');
   const [activeQuickAgent, setActiveQuickAgent] = useState<QuickAgent>('navigator');
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessingSpeech, setIsProcessingSpeech] = useState(false);
@@ -209,6 +217,13 @@ const SidePanel = () => {
   // group renders LIVE, not only after the run finishes.
   const runStartIdxRef = useRef<number | null>(null);
   const currentPhaseRef = useRef<'thinking' | null>(null);
+  // T2f-clean-finish — state mirrors of the refs above so MessageList
+  // re-renders when a run starts / ends. Refs alone don't trigger
+  // re-render. liveRunStartIdx tells thinking-groups whether they are
+  // the live run (start expanded). collapseSignal increments on every
+  // TASK_OK/FAIL/CANCEL so the live group auto-collapses.
+  const [liveRunStartIdx, setLiveRunStartIdx] = useState<number | null>(null);
+  const [collapseSignal, setCollapseSignal] = useState(0);
   const sessionIdRef = useRef<string | null>(null);
   const isReplayingRef = useRef<boolean>(false);
   const portRef = useRef<chrome.runtime.Port | null>(null);
@@ -337,10 +352,20 @@ const SidePanel = () => {
       }
 
       setAvailableSpeechToTextModels(speechToTextOptions);
+      // T3-judge — judge options share the same shape as planner/navigator
+      // available models. Keep separate list so user can pick a cheap
+      // grader independent of agent runtime models.
+      const judgeOptions = getJudgeOptions(providers).map(option => ({
+        provider: option.provider,
+        providerName: option.providerName,
+        model: option.modelName,
+      }));
+      setAvailableJudgeModels(judgeOptions);
     } catch (error) {
       console.error('Error loading available models:', error);
       setAvailableModels([]);
       setAvailableSpeechToTextModels([]);
+      setAvailableJudgeModels([]);
     }
   }, []);
 
@@ -349,6 +374,8 @@ const SidePanel = () => {
       const plannerConfig = await agentModelStore.getAgentModel(AgentNameEnum.Planner);
       const navigatorConfig = await agentModelStore.getAgentModel(AgentNameEnum.Navigator);
       const speechToTextConfig = await speechToTextModelStore.getSpeechToTextModel();
+      const judgeConfig = await judgeModelStore.getJudgeModel();
+      const tabFocusMode = await agentTabFocusStore.getMode();
       setSelectedAgentModels({
         planner: plannerConfig ? `${plannerConfig.provider}>${plannerConfig.modelName}` : '',
         navigator: navigatorConfig ? `${navigatorConfig.provider}>${navigatorConfig.modelName}` : '',
@@ -356,10 +383,14 @@ const SidePanel = () => {
       setSelectedSpeechToTextModel(
         speechToTextConfig ? `${speechToTextConfig.provider}>${speechToTextConfig.modelName}` : '',
       );
+      setSelectedJudgeModel(judgeConfig ? `${judgeConfig.provider}>${judgeConfig.modelName}` : '');
+      setAgentTabFocusMode(tabFocusMode);
     } catch (error) {
       console.error('Error loading agent models:', error);
       setSelectedAgentModels({ planner: '', navigator: '' });
       setSelectedSpeechToTextModel('');
+      setSelectedJudgeModel('');
+      setAgentTabFocusMode('foreground');
     }
   }, []);
 
@@ -465,6 +496,32 @@ const SidePanel = () => {
     }
   }, []);
 
+  // T2f-tab-iso-2 — toggle agent-tab focus. Persists to storage; the
+  // background SW reads it on next openAgentTab() (i.e. next TASK_START).
+  const handleAgentTabFocusToggle = useCallback(() => {
+    setAgentTabFocusMode(prev => {
+      const next: AgentTabFocusMode = prev === 'foreground' ? 'background' : 'foreground';
+      void agentTabFocusStore.setMode(next);
+      return next;
+    });
+  }, []);
+
+  // T3-judge — handler mirrors STT. Persists eval grader choice.
+  const handleJudgeModelChange = useCallback(async (modelValue: string) => {
+    setSelectedJudgeModel(modelValue);
+    try {
+      if (!modelValue) {
+        await judgeModelStore.resetJudgeModel();
+        return;
+      }
+      const [provider, modelName] = modelValue.split('>');
+      if (!provider || !modelName) return;
+      await judgeModelStore.setJudgeModel({ provider, modelName });
+    } catch (error) {
+      console.error('Error saving judge model:', error);
+    }
+  }, []);
+
   useEffect(() => {
     sessionIdRef.current = currentSessionId;
   }, [currentSessionId]);
@@ -528,6 +585,7 @@ const SidePanel = () => {
               // the agent is still working).
               setMessages(prev => {
                 runStartIdxRef.current = prev.length;
+                setLiveRunStartIdx(prev.length);
                 return prev;
               });
               currentPhaseRef.current = 'thinking';
@@ -541,16 +599,24 @@ const SidePanel = () => {
               // live; here we only need to lift the LAST run message
               // out of the collapsible (it's the final answer).
               currentPhaseRef.current = null;
-              setMessages(prev => {
-                const start = runStartIdxRef.current;
-                if (start === null || start >= prev.length) return prev;
+              // T2f-clean-finish — clear ref UNCONDITIONALLY so it
+              // can never drift from state (liveRunStartIdx). Edge
+              // case: TASK_OK with empty run (start >= prev.length)
+              // used to leave the ref pointing at an old slice.
+              {
+                const startedAt = runStartIdxRef.current;
                 runStartIdxRef.current = null;
-                return prev.map((m, i) => {
-                  if (i < start) return m;
-                  if (i === prev.length - 1) return { ...m, phase: 'final' as const };
-                  return m;
+                setMessages(prev => {
+                  if (startedAt === null || startedAt >= prev.length) return prev;
+                  return prev.map((m, i) => {
+                    if (i < startedAt) return m;
+                    if (i === prev.length - 1) return { ...m, phase: 'final' as const };
+                    return m;
+                  });
                 });
-              });
+              }
+              setLiveRunStartIdx(null);
+              setCollapseSignal(s => s + 1);
               break;
             case ExecutionState.TASK_FAIL:
               setIsFollowUpMode(true);
@@ -559,16 +625,21 @@ const SidePanel = () => {
               setIsReplaying(false);
               skip = false;
               currentPhaseRef.current = null;
-              setMessages(prev => {
-                const start = runStartIdxRef.current;
-                if (start === null || start >= prev.length) return prev;
+              // T2f-clean-finish — clear ref unconditionally (see TASK_OK).
+              {
+                const startedAt = runStartIdxRef.current;
                 runStartIdxRef.current = null;
-                return prev.map((m, i) => {
-                  if (i < start) return m;
-                  if (i === prev.length - 1) return { ...m, phase: 'final' as const };
-                  return m;
+                setMessages(prev => {
+                  if (startedAt === null || startedAt >= prev.length) return prev;
+                  return prev.map((m, i) => {
+                    if (i < startedAt) return m;
+                    if (i === prev.length - 1) return { ...m, phase: 'final' as const };
+                    return m;
+                  });
                 });
-              });
+              }
+              setLiveRunStartIdx(null);
+              setCollapseSignal(s => s + 1);
               break;
             case ExecutionState.TASK_CANCEL:
               setIsFollowUpMode(false);
@@ -582,6 +653,8 @@ const SidePanel = () => {
               // already null because thinking is set live; we just
               // close the run.
               runStartIdxRef.current = null;
+              setLiveRunStartIdx(null);
+              setCollapseSignal(s => s + 1);
               break;
             case ExecutionState.TASK_PAUSE:
               break;
@@ -1681,6 +1754,8 @@ const SidePanel = () => {
                         onActiveAgentChange={setActiveQuickAgent}
                         onModelChange={handleAgentModelChange}
                         onSpeechToTextModelChange={handleSpeechToTextModelChange}
+                        agentTabFocusMode={agentTabFocusMode}
+                        onAgentTabFocusToggle={handleAgentTabFocusToggle}
                         preferredModelMenuDirection="down"
                         isRecording={isRecording}
                         isProcessingSpeech={isProcessingSpeech}
@@ -1716,7 +1791,13 @@ const SidePanel = () => {
                 )}
                 {messages.length > 0 && (
                   <div className="scrollbar-gutter-stable relative flex-1 overflow-x-hidden overflow-y-scroll bg-[var(--browd-bg)]/60 p-3 scroll-smooth">
-                    <MessageList messages={messages} isDarkMode={isDarkMode} onThumbClick={setLightboxUrl} />
+                    <MessageList
+                      messages={messages}
+                      isDarkMode={isDarkMode}
+                      onThumbClick={setLightboxUrl}
+                      liveRunStartIdx={liveRunStartIdx}
+                      collapseSignal={collapseSignal}
+                    />
                     <div ref={messagesEndRef} />
                     {screenshotFlashKey > 0 && (
                       <div
@@ -1773,6 +1854,8 @@ const SidePanel = () => {
                       onActiveAgentChange={setActiveQuickAgent}
                       onModelChange={handleAgentModelChange}
                       onSpeechToTextModelChange={handleSpeechToTextModelChange}
+                      agentTabFocusMode={agentTabFocusMode}
+                      onAgentTabFocusToggle={handleAgentTabFocusToggle}
                       preferredModelMenuDirection="up"
                       isRecording={isRecording}
                       isProcessingSpeech={isProcessingSpeech}
