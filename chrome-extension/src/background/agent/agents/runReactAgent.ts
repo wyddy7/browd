@@ -667,13 +667,17 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
     const remaining = state.plan.slice(1);
     const completedBlock = state.pastSteps.map(([s, r]) => `- ${s} → ${r}`).join('\n');
     const remainingBlock = remaining.length ? remaining.join('\n') : '(none)';
-    // T2f-final-fix-7: repeated-failure guard. If the last 3 subgoals
-    // all came back as "failed:", the page is fighting us — force
-    // finish honestly with whatever partial result we have rather
-    // than ask the LLM to keep replanning into the same wall.
-    const tail = state.pastSteps.slice(-3);
-    if (tail.length === 3 && tail.every(([, r]) => r.startsWith('failed:'))) {
-      logger.warning('replanner guard: 3 consecutive failed subgoals — finishing with partial result');
+    // T2f-final-fix-7 + T2i-fix1.5: repeated-failure guard. If the
+    // last N subgoals all came back as "failed:", finish honestly with
+    // partial result rather than replan into the same wall. N is
+    // user-configurable via Options → General → Max Failures (was a
+    // legacy-mode-only setting before T2i-fix1.5; now also gates the
+    // unified replanner). Lower bound 2 to keep at least minimal
+    // resilience; upper bound enforced by the user-input clamp.
+    const failuresCap = Math.max(2, context.options.maxFailures ?? 3);
+    const tail = state.pastSteps.slice(-failuresCap);
+    if (tail.length === failuresCap && tail.every(([, r]) => r.startsWith('failed:'))) {
+      logger.warning(`replanner guard: ${failuresCap} consecutive failed subgoals — finishing with partial result`);
       const partial = state.pastSteps
         .filter(([, r]) => !r.startsWith('failed:'))
         .map(([s, r]) => `- ${s}: ${r}`)
