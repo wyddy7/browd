@@ -422,14 +422,14 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
     plan: z
       .array(z.string().min(3))
       .max(7)
-      .optional()
-      .describe('updated remaining subgoals (only when decision=continue, omit when finish).'),
+      .nullable()
+      .describe('updated remaining subgoals (only when decision=continue, null when finish).'),
     response: z
       .string()
       .max(2000)
-      .optional()
+      .nullable()
       .describe(
-        'final answer to the user (only when decision=finish, omit when continue). Keep it under 2000 characters; do NOT repeat sentences.',
+        'final answer to the user (only when decision=finish, null when continue). Keep it under 2000 characters; do NOT repeat sentences.',
       ),
   });
 
