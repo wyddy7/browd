@@ -60,26 +60,105 @@ export interface ToolBudgetOptions {
 }
 
 /**
- * T2f-final-fix — consecutive-duplicate guard.
+ * T2f-final-fix → T2i-fix1 — duplicate-action guard.
  *
- * Production trace 2026-05-02 (LinkedIn): the agent called
- * `input_text({index:181, text:'AI Engineer'})` five times in a row
- * because the underlying click silently failed each time. T2g budgets
- * caught nothing — `input_text` is not a research tool. recursionLimit
- * eventually fires, but only after 30 wasted nodes.
+ * Production trace 2026-05-02 (LinkedIn): agent called `input_text`
+ * with same args 5× because the click silently failed. Fix shipped
+ * as a consecutive-3 guard. test1.md/test2.md (2026-05-06) showed
+ * the next failure mode it doesn't catch:
  *
- * Mitigation: track the last tool call. If the same `tool + args`
- * fires three times back-to-back, return a forcing error and block
- * the action. Three is the smallest threshold that still allows
- * legitimate retry-after-state-change patterns (e.g. click_element
- * after a page reload reuses the same index).
+ *   click_at "Click on the first image result" (467,235) → fail
+ *   screenshot
+ *   click_at "Click on the first image result" (156,235) → fail
+ *   screenshot, screenshot
+ *   click_at "Click on the first image result" (467,892) → fail
+ *
+ * Same logical action, three different coordinates, intent text
+ * varies in JSON.stringify keys — guard never trips. Root cause is
+ * isTrusted=false antibot block (Google Images, LinkedIn, CF), not
+ * coordinate aim.
+ *
+ * T2i-fix1 changes:
+ *  - Key by *logical action* per tool family, not raw args:
+ *    click-class (click_at/drag_at/type_at/hitl_click_at/click_element/send_keys)
+ *      → key on `intent` text only (the LLM's plan).
+ *    others → strip `intent`, JSON.stringify the rest.
+ *  - Widen window from "consecutive 3" to "3 in last 5" — survives
+ *    interleaved screenshots (already exempt from key tracking) AND
+ *    one-off corrective clicks between repeated bad ones.
+ *  - Tool-family error messages (click → suggest hitl_click_at,
+ *    go_back → suggest navigate, fill → suggest fresh state).
+ *  - Screenshot still exempt (auto-attach repeats are normal).
  */
 export interface DuplicateGuardState {
-  lastKey: string | null;
-  consecutive: number;
+  recentKeys: string[];
 }
 
+const DUPLICATE_WINDOW = 5;
 const DUPLICATE_THRESHOLD = 3;
+
+const CLICK_CLASS_TOOLS = new Set(['click_at', 'drag_at', 'type_at', 'hitl_click_at', 'click_element', 'send_keys']);
+
+const FILL_CLASS_TOOLS = new Set(['fill_field_by_label', 'input_text', 'select_dropdown_option']);
+
+function canonicaliseArgsForGuard(name: string, input: unknown): string {
+  if (input === null || typeof input !== 'object') {
+    try {
+      return JSON.stringify(input ?? {});
+    } catch {
+      return '<unserialisable>';
+    }
+  }
+  const obj = input as Record<string, unknown>;
+  if (CLICK_CLASS_TOOLS.has(name)) {
+    // The LLM's `intent` text is the plan; nudging coords ±N px is
+    // the same plan being retried. Key on intent only.
+    const intent = typeof obj.intent === 'string' ? obj.intent.trim() : '';
+    return `intent=${intent}`;
+  }
+  // Default: strip intent, stringify the rest.
+  const { intent: _intent, ...rest } = obj;
+  try {
+    return JSON.stringify(rest);
+  } catch {
+    return '<unserialisable>';
+  }
+}
+
+function dupGuardErrorMessage(name: string, count: number): string {
+  if (CLICK_CLASS_TOOLS.has(name)) {
+    return (
+      `Error: ${name} has been attempted ${count} times for the same logical action with no useful state change. ` +
+      `On modern sites this is usually the isTrusted=false antibot block — CDP-driven clicks are silently ignored ` +
+      `on Google Images, LinkedIn /jobs filters, Cloudflare-protected pages, and similar. ` +
+      `Choose ONE of: ` +
+      `(a) call hitl_click_at to ask the user to perform the click; ` +
+      `(b) navigate(url) directly to a page that achieves the same goal; ` +
+      `(c) finalise with what you have. ` +
+      `Do NOT retry ${name} on this region.`
+    );
+  }
+  if (name === 'go_back') {
+    return (
+      `Error: go_back called ${count} times — the tab's history is unavailable or the back action is not advancing. ` +
+      `Use navigate(url) to a known URL instead. Do NOT call go_back again.`
+    );
+  }
+  if (FILL_CLASS_TOOLS.has(name)) {
+    return (
+      `Error: ${name} called ${count} times for the same field with no observable progress. ` +
+      `The field may have moved, the page may have re-rendered, or the value may not be accepted. ` +
+      `Either: (a) call screenshot or extract_page_as_markdown to refresh state, ` +
+      `(b) try a different field index/label, ` +
+      `(c) finalise with what you have. ` +
+      `Do NOT retry the same fill.`
+    );
+  }
+  return (
+    `Error: ${name} has been called ${count} times in a 5-call window with similar arguments and made no observable progress. ` +
+    `Pick a different approach, switch tools, or finalise with what you have.`
+  );
+}
 
 /**
  * Render an ActionResult into a value the LLM can read on the next
@@ -143,28 +222,22 @@ export function actionToTool(action: Action, budget?: ToolBudgetOptions, dupGuar
           return `Error: budget exhausted for ${name} (${next - 1}/${limit}). Stop calling this tool. Write a final answer with what you have.`;
         }
       }
-      // T2f-final-fix: consecutive-duplicate guard. The autocapture
-      // `screenshot` Action runs every step regardless of LLM choices
-      // (visionMode='always'), so we explicitly skip it here — repeats
-      // are normal and expected.
+      // T2i-fix1: tool-family-aware duplicate guard, 3-in-last-5 window.
+      // The autocapture `screenshot` Action runs every step regardless of
+      // LLM choices (visionMode='always'), so we explicitly skip it —
+      // repeats are normal and expected.
       if (dupGuard && name !== 'screenshot') {
-        const argsKey = (() => {
-          try {
-            return JSON.stringify(input ?? {});
-          } catch {
-            return '<unserialisable>';
-          }
-        })();
-        const key = `${name}:${argsKey}`;
-        if (key === dupGuard.lastKey) {
-          dupGuard.consecutive += 1;
-        } else {
-          dupGuard.lastKey = key;
-          dupGuard.consecutive = 1;
+        const key = `${name}:${canonicaliseArgsForGuard(name, input)}`;
+        dupGuard.recentKeys.push(key);
+        if (dupGuard.recentKeys.length > DUPLICATE_WINDOW) {
+          dupGuard.recentKeys.shift();
         }
-        if (dupGuard.consecutive >= DUPLICATE_THRESHOLD) {
-          logger.warning(`tool ${name} called ${dupGuard.consecutive}× with identical args — blocking`);
-          return `Error: ${name} has been called ${dupGuard.consecutive} times in a row with identical arguments. The previous attempts did not produce the change you wanted. Do NOT retry with the same arguments. Either pick a different element index from the latest state message, switch to a different tool (e.g. fill_field_by_label, send_keys, click_at), or finalise with what you have.`;
+        const count = dupGuard.recentKeys.filter(k => k === key).length;
+        if (count >= DUPLICATE_THRESHOLD) {
+          logger.warning(
+            `tool ${name} called ${count}× in last ${dupGuard.recentKeys.length} (key=${key.slice(0, 80)}…) — blocking`,
+          );
+          return dupGuardErrorMessage(name, count);
         }
       }
       try {

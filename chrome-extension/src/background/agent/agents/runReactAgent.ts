@@ -249,7 +249,7 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
   const counters: Record<string, number> = {};
   // T2f-final-fix: consecutive-duplicate guard shared across all
   // tool wrappers — see langGraphAdapter for the threshold logic.
-  const dupGuard = { lastKey: null as string | null, consecutive: 0 };
+  const dupGuard = { recentKeys: [] as string[] };
   // T2f-3 / T2f-coords: gate vision-only tools on visionMode.
   //  - 'screenshot' belongs to 'fallback' only ('always' captures
   //    via stateModifier, 'off' never).
