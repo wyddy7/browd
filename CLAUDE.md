@@ -78,7 +78,7 @@ separate `visionMode` toggle:
   no-ops these. No coord-precision / jitter / DOM-fallback fixes
   this — the flag is read-only and set only by OS HID. Mitigation
   for individual blocked buttons is `hitl_click_at` (T2f-handover,
-  pending). Long postmortem in `../docs/browd-lessons-learned.md`.
+  pending).
 - T2f system prompt is the "spine of execution" — keep it
   generic. NEVER hardcode site-specific URL templates
   (`linkedin.com/jobs/search?...`). The model already knows URL
@@ -159,15 +159,6 @@ separate `visionMode` toggle:
   is to screenshot every step; Browd's adaptive choice is exotic
   and may not be worth preserving.
 
-**Live tier state and pending roadmap:**
-
-- `../auto-docs/browd-agent-evolution.md` — current shipped state +
-  next blocker. Read on every resume.
-- `../auto-docs/browd-tier-pending.md` — full plans for unshipped
-  tiers (T2g, T3, T2f).
-- `../docs/browd-lessons-learned.md` — postmortems and workflow
-  rules. Read once for context, then on demand.
-
 ## MV3 Service Worker Gotchas
 
 These fail at runtime even when build passes. happy-dom in tests
@@ -187,9 +178,6 @@ provides them; the actual SW does not.
   Node-API-touching code must have a manual smoke test under the
   actual extension before claiming shipped. Acceptance for those
   files is "tests + manual reload + actual invocation".
-
-Reusable form of these notes (for any Chrome extension project) is
-in `../docs/lessons-learned.md`.
 
 ## Repository Shape
 
