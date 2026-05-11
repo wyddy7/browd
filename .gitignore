@@ -30,3 +30,8 @@ chrome-extension/public/manifest.json
 .vscode
 .cursor
 *.py
+
+# local test-run captures: side-panel chat / console logs the user
+# captures while testing the extension. Useful as iteration artifacts
+# but contain real task content; never push.
+test-runs/
