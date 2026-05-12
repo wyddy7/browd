@@ -72,6 +72,7 @@ These are the constraints currently shipping. They are documented up front rathe
 - **Hard `isTrusted=false` antibot walls.** Any CDP / extension-driven click generates `isTrusted=false` MouseEvents. Hard-gated sites (LinkedIn `/jobs` filters, some Cloudflare gates, Google Images result tiles) silently no-op those clicks. Browd detects the loop within three attempts and offers `hitl_click_at` — the agent pauses and asks you to click the blocked element yourself, then continues.
 - **Visible freeze during heavy-vision steps.** Between LLM calls the side panel can sit idle for 20–30 s while the model processes the screenshot + state message. The agent is working; the UI just doesn't paint progress until the next tool call returns.
 - **Not a research tool.** Browd is a *browser-resident agent* for concrete tasks on concrete pages, not a Deep Research / scraper substitute. For "synthesise information across N sites" Tavily + Playwright on the backend is typically cheaper and better. The positioning matters — using Browd for ten consecutive web searches is the expensive way to get a mediocre answer.
+- **Modal overlays on first page load.** Cookie banners and sign-in prompts that cover fresh content can stall progress for a turn or two before the agent decides to dismiss them. The replanner usually recovers by trying a different URL or invoking a direct nav, but for first-impression sites it can add latency.
 
 ## Contributing
 
