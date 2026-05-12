@@ -4,7 +4,7 @@ All notable changes to Browd are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.13] — 2026-05-12
+## [0.1.13] — 2026-05-13
 
 First tagged public release. Consolidates a multi-month refactor of the agent
 runtime inherited from Nanobrowser into a LangGraph.js Plan-and-Execute
@@ -72,6 +72,30 @@ affordances.
 - **Repository layout** moved local-development and contributor
   documentation out of `README.md` into [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
+### Fixed (release-eve stability pass)
+
+- **Tab follow on `target="_blank"` clicks.** When an agent click opens
+  a new tab, the agent now correctly switches its attention to the new
+  tab — both the Chrome focus and the internal "current page" tracker
+  move together. Previously the visible Chrome tab moved but the agent's
+  state-message kept building from the old tab, looping until the step
+  budget exhausted.
+- **Force screenshot on tab settle.** After navigation or tab switch, a
+  fresh screenshot is captured for the next state message even when the
+  legacy fallback heuristic would have stayed silent. Cookie banners,
+  sign-in modals, and other overlays that appear on first paint are now
+  visible to the agent and dismissable via the click tool. The per-step
+  prompt was nudged with one sentence: dismiss modal overlays before
+  attempting to extract data.
+- **LLM call lifecycle observability.** Side-panel TRACE row now shows
+  every LLM call's runId, model, message count, response time, and
+  tool-call outcome — plus chain-boundary entries for planner / agent /
+  replanner. HTTP errors, timeouts, and silent retries that previously
+  produced no log output now surface immediately. A 90-second per-call
+  timeout (down from effectively unbounded) bounds the worst-case
+  silent-hang window; `maxRetries: 0` removes the silent two-retry
+  loop that LangChain defaults to.
+
 ### Removed
 
 - Default community / sponsor surfaces (Discord, Twitter, Chrome Web
@@ -82,10 +106,12 @@ affordances.
 
 - Cost: 400–700k input tokens on non-trivial multi-site research tasks
   under `visionMode='always'`.
-- The side panel can sit visibly idle for 20–30 s between heavy-vision
-  steps while the model processes the screenshot and state message.
 - Hard `isTrusted=false` antibot walls (LinkedIn `/jobs` filters, some
   Cloudflare gates) cannot be defeated by any CDP-driven click; the
   mitigation is `hitl_click_at`.
+- Modal overlays on first paint (cookie banners, sign-in prompts) can
+  stall progress for a turn or two before the agent decides to dismiss
+  them. The replanner usually recovers by trying a different URL or
+  invoking a direct nav.
 
 [0.1.13]: https://github.com/wyddy7/browd/releases/tag/v0.1.13
