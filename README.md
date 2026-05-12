@@ -1,165 +1,117 @@
-# Browd
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./chrome-extension/public/browd-logo-dark.svg">
+    <img src="./chrome-extension/public/browd-logo.svg" alt="Browd" width="180">
+  </picture>
+</h1>
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="./chrome-extension/public/browd-logo-dark.svg">
-  <img src="./chrome-extension/public/browd-logo.svg" alt="Browd logo" width="120">
-</picture>
+<p align="center">
+  <strong>Browser-resident AI agent.</strong> Lives in your Chromium side panel, uses your real session — not a headless cloud VM.
+</p>
 
-Browd is a fork-derived Chromium extension for local AI browser automation.
+<p align="center">
+  <a href="https://github.com/wyddy7/browd"><img src="https://img.shields.io/badge/GitHub-wyddy7%2Fbrowd-181717?logo=github" alt="GitHub"></a>
+  <img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License">
+  <img src="https://img.shields.io/badge/Manifest-V3-orange" alt="MV3">
+  <img src="https://img.shields.io/badge/status-experimental-yellow" alt="experimental">
+</p>
 
-The project started from Nanobrowser and is being reshaped into a cleaner open-source browser agent: modern chat-first UI, stronger provider routing, and Speech-to-Text that is not tied to one model vendor.
+---
 
-## Status
+## What Browd actually does
 
-Early fork cleanup and product direction work is in progress.
+You type something into the side panel — *"apply to the first AI Engineer job on hh.ru with my resume"*, *"open the page for the Shutterstock image of the dog"*, *"check the LM Arena leaderboard for the top open-source model right now"* — and a LangGraph.js Plan-and-Execute agent runs the task **inside one of your own browser tabs**, using whatever sessions you're already logged into. No headless replay, no cloud VM, no copy-paste of credentials.
 
-Current focus:
+Forked from Nanobrowser (Apache-2.0) and reshaped over T2d → T2i:
 
-- simplify the extension UI;
-- keep Speech-to-Text provider-agnostic across Gemini, OpenRouter, and Grok/xAI;
-- harden experimental OpenRouter STT and dedicated Grok STT flows with real-browser QA;
-- keep local extension development easy to run in Chromium-based browsers.
+- Unified LangGraph.js ReAct + replanner loop (default `agentMode='unified'`)
+- Plan-and-Execute StateGraph — planner emits structured `taskParameters` (URLs / queries / names), each subgoal runs a focused ReAct step, replanner decides continue-or-finish
+- Tab isolation: agent works in its own `[Browd]`-prefixed tab; user tabs visible as metadata only; cross-over only via the explicit `take_over_user_tab` action
+- Coordinate clicking via grid-overlay screenshots, with a `hitl_click_at` escape hatch for `isTrusted=false` antibot walls
+- Untrusted-content wrap on every third-party page text reaching the LLM
+- Provider-agnostic STT (Gemini / OpenRouter / Grok)
+- Multi-provider Planner / Navigator / Judge routing via OpenRouter
 
-## Local Setup
+Legacy Planner+Navigator pipeline is still selectable via Options → Agent Mode for fallback.
 
-Required:
-
-- Node.js `>=22.12.0`
-- pnpm `9.15.1`
+## Install (local dev build)
 
 ```bash
+git clone https://github.com/wyddy7/browd
+cd browd
 pnpm install
 pnpm build
 ```
 
-The built extension is emitted to `dist/`.
+Then in your Chromium-based browser:
 
-## Load Locally
+1. Open the extensions page (`chrome://extensions` in Chrome/Edge/Brave).
+2. Toggle **Developer mode**.
+3. **Load unpacked** → pick this repo's `dist/` directory.
+4. Pin Browd to your toolbar, click the icon to open the side panel.
+5. Add your provider keys in **Options → Models** (any OpenAI-compatible endpoint works — OpenRouter is convenient for routing Anthropic/Google/Meta/local through one key).
 
-1. Open your browser's extensions page (`chrome://extensions/` in Chrome/Edge, `brave://extensions/` in Brave).
-2. Enable Developer mode.
-3. Click Load unpacked.
-4. Select this repository's `dist/` directory.
-5. After each rebuild, reload the extension card.
-
-Development watch mode:
+Watch mode for development:
 
 ```bash
 pnpm dev
 ```
 
-Background/content-script changes may still require reloading the extension card and reopening the side panel.
+Background and content-script changes require reloading the extension card after a rebuild.
 
-## Repository Shape
+## Known limits — read this before you complain
 
-- `chrome-extension/` — manifest, background worker, browser automation, agent runtime.
-- `pages/side-panel/` — main chat UI.
-- `pages/options/` — settings UI.
-- `pages/content/` — content script.
-- `packages/storage/` — storage/settings abstractions.
-- `packages/i18n/` — source locales and generated i18n helpers.
-- `packages/ui/` — shared UI primitives.
+Browd is **experimental**. These are the failure modes that survived the T2i release gate; they ship as known limits rather than blockers because the fixes are larger than the value:
+
+- **Cost.** A non-trivial multi-site research task typically uses 400–700k input tokens against `visionMode='always'`. Each turn re-attaches one fresh screenshot at ~10–14k tokens, compounding linearly with turn count. On Claude via OpenRouter that's roughly $0.50–$1.50 per such task. For "find one specific thing on one site" the cost is closer to ~$0.15–$0.30. Bring your own budget, watch the live token ring.
+- **Hard `isTrusted=false` antibot walls.** Any CDP / extension-driven click generates `isTrusted=false` MouseEvents. Hard-gated sites (LinkedIn `/jobs` filters, some Cloudflare gates, Google Images result tiles) silently no-op those clicks. Browd detects the loop within three attempts and offers `hitl_click_at` — the agent pauses and asks you to click the blocked element yourself, then continues.
+- **Visible freeze during heavy-vision steps.** Between LLM calls the side panel can sit idle for 20–30 s while the model processes the screenshot + state message. The agent is working; the UI just doesn't paint progress until the next tool call returns.
+- **Not a research tool.** Browd is a *browser-resident agent* for concrete tasks on concrete pages, not a Deep Research / scraper substitute. For "synthesise information across N sites" Tavily + Playwright on the backend is typically cheaper and better. The positioning matters — using Browd for ten consecutive web searches is the expensive way to get a mediocre answer.
+
+## Repo shape
+
+```
+chrome-extension/   manifest, background service worker, agent runtime
+  src/background/agent/
+    agents/         runReactAgent, navigator, planner, executor
+    actions/        tool implementations + Zod schemas
+    tools/          LangGraph adapter (T2g budget + T2i dupGuard live here)
+    guardrails/     loop detector, failure classifier, approval policy
+    state/          task-state classifier
+    __evals__/      T3 scenario harness (3 of 5 shipped)
+    __tests__/      unit tests, ~150 of them
+  src/background/browser/
+                    page abstraction over puppeteer + CDP
+pages/
+  side-panel/       chat UI
+  options/          settings UI
+  content/          content script
+packages/
+  storage/          chrome.storage abstractions, settings models
+  i18n/             locales + generated type bindings
+  ui/               shared primitives
+```
+
+Local AI-agent project contract lives in `CLAUDE.md` / `AGENTS.md` (symlink).
 
 ## Testing
 
-Browd ships three layers of automated checks. Tests live in dedicated
-`__tests__/` and `__evals__/` directories — nothing is scattered into
-random source files.
-
-### 1. Unit tests — `__tests__/` neighbours
-
-Component-level tests run via vitest with happy-dom. Pure functions:
-no LLM calls, no `chrome.storage`, no real browser. ~140 tests,
-~1 second total.
-
-Locations follow the "tests next to code" convention:
-
-```
-chrome-extension/src/background/agent/__tests__/
-chrome-extension/src/background/agent/guardrails/__tests__/
-chrome-extension/src/background/agent/hitl/__tests__/
-chrome-extension/src/background/agent/state/__tests__/
-chrome-extension/src/background/agent/verification/__tests__/
-chrome-extension/src/background/agent/skills/__tests__/
-chrome-extension/src/background/agent/tools/__tests__/
-chrome-extension/src/background/browser/dom/__tests__/
-chrome-extension/src/background/services/__tests__/
-chrome-extension/src/background/services/guardrails/__tests__/
-```
-
-Run all unit tests:
+Three layers, run roughly in this order before pushing:
 
 ```bash
-pnpm -F chrome-extension test
+pnpm type-check                          # tsc --noEmit across workspaces
+pnpm -F chrome-extension test            # 148 unit tests + pure-unit evals (~1 s)
+pnpm build                               # production bundle in dist/
 ```
 
-### 2. Unit evals — `__evals__/`
-
-Single dedicated directory:
-
-```
-chrome-extension/src/background/agent/__evals__/
-├── runner.ts                        # Scenario type + helpers
-├── grader.ts                        # LLM-as-judge wrapper
-├── runEvals.test.ts                 # vitest harness
-├── scenarios.md                     # Behaviour spec for the 5 scenarios
-├── scenarios/                       # Per-scenario implementations
-│   ├── plannerExtractsParameters.ts
-│   ├── replannerSufficiencyGate.ts
-│   ├── streamingRepetitionGuardFires.ts
-│   ├── hitlSensitiveActionTrigger.ts
-│   └── finalAnswerPlausibility.ts
-└── integration/                     # Integration eval skeleton + plan
-    └── README.md
-```
-
-**Pure-unit evals** (no LLM, no `chrome.storage`) run inside the regular
-test suite — `streaming-repetition-guard-fires` and
-`hitl-sensitive-action-trigger` execute on every `pnpm test`.
-
-**LLM-cost evals** (real LLM calls — `planner-extracts-parameters`
-and friends) are gated behind `RUN_EVALS=1`. Some need `chrome.storage`
-and run in the integration runner only; others would work in vitest
-once happy-dom shims are added.
-
-Run LLM-cost evals manually (cost: ~$0.001-0.01 per scenario, varies
-by your configured Planner / Judge models):
+Optional gated LLM-cost evals (need provider keys + `RUN_EVALS=1`):
 
 ```bash
 pnpm -F chrome-extension test:eval
 ```
 
-The grader needs a Judge model configured in `Settings → Models →
-Judge` — if none, it falls back to your Navigator model with a
-logged warning.
+## Attribution & license
 
-### 3. Integration evals — `__evals__/integration/` (skeleton)
+Derived from [Nanobrowser](https://github.com/nanobrowser/nanobrowser), Apache-2.0. Upstream copyright and license notices are preserved in this repository.
 
-End-to-end checks on a real Chromium with the loaded extension via
-Playwright. Currently a planning document — `pnpm test:eval:integration`
-exits 1 with a pointer to the README. When implemented this layer
-verifies real DOM extraction, vision capture, side-panel rendering,
-tab isolation, and full task plausibility.
-
-### Running everything before a PR
-
-```bash
-pnpm install
-pnpm type-check                     # tsc --noEmit across all workspaces
-pnpm -F chrome-extension test       # unit + pure-unit evals (~1s)
-pnpm build                          # production bundle in dist/
-```
-
-Optional, when the change touches agent runtime:
-
-```bash
-pnpm -F chrome-extension test:eval  # LLM-cost evals (manual gate)
-```
-
-## Attribution
-
-Browd is derived from the Apache-2.0 licensed Nanobrowser project. Upstream copyright and license notices are preserved in this repository.
-
-## License
-
-Currently Apache-2.0, inherited from the upstream project.
+Browd's own changes are likewise released under **Apache-2.0**.
