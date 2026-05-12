@@ -15,6 +15,20 @@ export default class BrowserContext {
   private _config: BrowserContextConfig;
   private _currentTabId: number | null = null;
   private _attachedPages: Map<number, Page> = new Map();
+  /**
+   * T2f-tab-iso-1a — id of the tab the agent is working in for the
+   * current task. When set, getCurrentPage() always resolves to this
+   * tab even if the user clicks away. null between tasks; cleared on
+   * `cleanup()`. The agent tab is created via `openAgentTab()` (new
+   * blank tab) or pinned to an existing one via `takeOverTab()`.
+   */
+  private _agentTabId: number | null = null;
+  /**
+   * T2f-tab-iso-1d — listener for re-applying the [Browd] title
+   * prefix after navigation in the agent tab. Lives between
+   * openAgentTab() and cleanup().
+   */
+  private _onTabUpdatedHandler: ((tabId: number, info: chrome.tabs.TabChangeInfo) => void) | null = null;
 
   constructor(config: Partial<BrowserContextConfig>) {
     this._config = { ...DEFAULT_BROWSER_CONTEXT_CONFIG, ...config };
@@ -26,6 +40,13 @@ export default class BrowserContext {
 
   public updateConfig(config: Partial<BrowserContextConfig>): void {
     this._config = { ...this._config, ...config };
+    // T2f-firewall-live: propagate to all attached pages so firewall
+    // changes (allow/deny lists) take effect immediately without
+    // restarting the task. Page caches its own merged config —
+    // mid-task updates were silently lost before this.
+    for (const page of this._attachedPages.values()) {
+      page.updateConfig(config);
+    }
   }
 
   public updateCurrentTabId(tabId: number): void {
@@ -61,6 +82,95 @@ export default class BrowserContext {
     }
     this._attachedPages.clear();
     this._currentTabId = null;
+    this._agentTabId = null;
+    if (this._onTabUpdatedHandler) {
+      chrome.tabs.onUpdated.removeListener(this._onTabUpdatedHandler);
+      this._onTabUpdatedHandler = null;
+    }
+  }
+
+  /**
+   * T2f-tab-iso-1a — open a fresh tab for the agent's task. Returns
+   * the new tab id. The agent's getCurrentPage() will resolve to
+   * this tab for the rest of the task even if the user switches
+   * windows or focuses another tab.
+   *
+   * Default initial URL is about:blank — the agent's first
+   * `go_to_url` moves it to the actual target. We create the tab as
+   * inactive (active:false) so the user keeps focus on whatever
+   * they were doing; the agent's work is visible as a separate tab
+   * the user can click into.
+   */
+  public async openAgentTab(initialUrl: string = 'about:blank'): Promise<number> {
+    const tab = await chrome.tabs.create({ url: initialUrl, active: false });
+    if (!tab.id) {
+      throw new Error('openAgentTab: chrome.tabs.create returned no tab id');
+    }
+    this._agentTabId = tab.id;
+    this._currentTabId = tab.id;
+    logger.info(`openAgentTab: created agent tab ${tab.id} (${initialUrl})`);
+    // T2f-tab-iso-1d — visual feedback. Inject a content script to
+    // prefix the document title with "[Browd] " so the user can see
+    // at a glance which tab in their tab strip is the agent's. Best-
+    // effort: about:blank has no scripting permission, but as soon
+    // as the agent navigates somewhere the prefix gets re-applied.
+    void this._applyAgentTabBadge(tab.id);
+    // Re-apply on every navigation in the agent tab — a fresh
+    // page.complete clobbers the prefix until our injection runs again.
+    if (!this._onTabUpdatedHandler) {
+      this._onTabUpdatedHandler = (updatedTabId, info) => {
+        if (updatedTabId === this._agentTabId && info.status === 'complete') {
+          void this._applyAgentTabBadge(updatedTabId);
+        }
+      };
+      chrome.tabs.onUpdated.addListener(this._onTabUpdatedHandler);
+    }
+    return tab.id;
+  }
+
+  private async _applyAgentTabBadge(tabId: number): Promise<void> {
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        func: () => {
+          const PREFIX = '[Browd] ';
+          if (document.title && !document.title.startsWith(PREFIX)) {
+            document.title = PREFIX + document.title;
+          }
+          // Re-apply on every title change so SPAs that overwrite
+          // document.title don't strip the badge mid-task.
+          // Use a MutationObserver scoped to the title element.
+          const titleEl = document.querySelector('title');
+          if (titleEl && !(window as any).__browdTitleObserver) {
+            const obs = new MutationObserver(() => {
+              if (document.title && !document.title.startsWith(PREFIX)) {
+                document.title = PREFIX + document.title;
+              }
+            });
+            obs.observe(titleEl, { childList: true });
+            (window as any).__browdTitleObserver = obs;
+          }
+        },
+      });
+    } catch (err) {
+      logger.warning(`agent tab badge injection failed (likely chrome:// or about:blank)`, err);
+    }
+  }
+
+  /**
+   * T2f-tab-iso-1c — pin the agent to an existing user tab. Used
+   * only when the task explicitly references the user's open page
+   * ("this page", "current tab", "the open form"). Implemented in
+   * the `take_over_user_tab` action.
+   */
+  public takeOverTab(tabId: number): void {
+    this._agentTabId = tabId;
+    this._currentTabId = tabId;
+    logger.info(`takeOverTab: agent now operates in tab ${tabId}`);
+  }
+
+  public agentTabId(): number | null {
+    return this._agentTabId;
   }
 
   public async attachPage(page: Page): Promise<boolean> {
@@ -90,6 +200,28 @@ export default class BrowserContext {
   }
 
   public async getCurrentPage(): Promise<Page> {
+    // T2f-tab-iso-1a — when a task is running with an agent tab
+    // pinned, always resolve to it regardless of which tab the user
+    // is currently focused on. Prevents user-driven tab switches
+    // from yanking the agent into the wrong page mid-action.
+    if (this._agentTabId) {
+      const cached = this._attachedPages.get(this._agentTabId);
+      if (cached) return cached;
+      try {
+        const tab = await chrome.tabs.get(this._agentTabId);
+        const page = await this._getOrCreatePage(tab);
+        await this.attachPage(page);
+        return page;
+      } catch (err) {
+        // Agent tab was closed (manually by user or by cleanup).
+        // Fall through to default active-tab resolution and clear
+        // the stale id so the next call doesn't loop on a missing tab.
+        logger.warning(`agent tab ${this._agentTabId} no longer reachable, falling back`, err);
+        this._agentTabId = null;
+        this._currentTabId = null;
+      }
+    }
+
     // 1. If _currentTabId not set, query the active tab and attach it
     if (!this._currentTabId) {
       let activeTab: chrome.tabs.Tab;

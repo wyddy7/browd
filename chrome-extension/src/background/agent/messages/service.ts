@@ -7,6 +7,8 @@ import {
   splitUserTextAndAttachments,
   wrapAttachments,
 } from '@src/background/agent/messages/utils';
+import type { HITLDecision } from '../hitl/types';
+import type { HITLRequest } from '../hitl/types';
 
 const logger = createLogger('MessageManager');
 
@@ -424,6 +426,56 @@ export default class MessageManager {
     logger.debug(
       `Added message with ${finalMsg.metadata.tokens} tokens - total tokens now: ${this.history.totalTokens}/${this.settings.maxInputTokens} - total messages: ${this.history.messages.length}`,
     );
+  }
+
+  /**
+   * Records a HITL decision in the message history so the LLM has context about user interventions.
+   */
+  public addHITLDecision(decision: HITLDecision, request: HITLRequest): void {
+    const actionName = Object.keys(request.pendingAction)[0] ?? 'action';
+    let text: string;
+    switch (decision.type) {
+      case 'approve':
+        text = `[HITL] User approved: ${actionName}`;
+        break;
+      case 'reject':
+        text = `[HITL] User rejected ${actionName}: "${decision.message}"`;
+        break;
+      case 'edit':
+        text = `[HITL] User edited ${actionName} to: ${JSON.stringify(decision.editedAction)}`;
+        break;
+      case 'answer':
+        text = `[HITL] User answered: "${decision.answer}"`;
+        break;
+    }
+    this.addMessageWithTokens(new HumanMessage({ content: text }));
+  }
+
+  /**
+   * Replaces old verbose state messages with one-line summaries to keep context compact.
+   * Keeps the most recent `keepLast` state messages intact.
+   */
+  public compactOldStateMessages(keepLast = 5): void {
+    const stateIndices: number[] = [];
+    for (let i = 0; i < this.history.messages.length; i++) {
+      const msg = this.history.messages[i].message;
+      if (msg instanceof HumanMessage) {
+        const content = typeof msg.content === 'string' ? msg.content : '';
+        if (content.includes('[Current state starts here]')) stateIndices.push(i);
+      }
+    }
+    const toCompact = stateIndices.slice(0, -keepLast);
+    for (const idx of [...toCompact].reverse()) {
+      const managed = this.history.messages[idx];
+      const content = typeof managed.message.content === 'string' ? managed.message.content : '';
+      const urlMatch = content.match(/url: ([^\n,}]+)/);
+      const stepMatch = content.match(/Current step: (\d+)/);
+      const summary = `[Compacted step ${stepMatch?.[1] ?? '?'} — URL: ${urlMatch?.[1]?.trim() ?? 'unknown'}]`;
+      const tokenCount = Math.floor(summary.length / this.settings.estimatedCharactersPerToken);
+      this.history.totalTokens = this.history.totalTokens - managed.metadata.tokens + tokenCount;
+      managed.message = new HumanMessage({ content: summary });
+      managed.metadata.tokens = tokenCount;
+    }
   }
 
   /**

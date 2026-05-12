@@ -20,6 +20,12 @@ export default defineConfig(({ mode }) => {
       '@root': rootDir,
       '@src': srcDir,
       '@assets': resolve(srcDir, 'assets'),
+      // T2d-4 MV3 shim: @langchain/langgraph imports AsyncLocalStorage
+      // from node:async_hooks at module load. node:async_hooks does
+      // not exist in service workers, so we redirect to a synchronous
+      // stub. See chrome-extension/src/background/shims/asyncLocalStorage.ts.
+      'node:async_hooks': resolve(srcDir, 'background/shims/asyncLocalStorage.ts'),
+      'async_hooks': resolve(srcDir, 'background/shims/asyncLocalStorage.ts'),
     },
     conditions: ['browser', 'module', 'import', 'default'],
     mainFields: ['browser', 'module', 'main']

@@ -82,6 +82,16 @@ export default class Page {
       false;
   }
 
+  /**
+   * T2f-firewall-live: BrowserContext propagates config updates to
+   * attached pages so firewall changes (allowList / denyList /
+   * displayHighlights) take effect mid-task without recreating the
+   * Page. Page caches the merged config locally; we just overwrite.
+   */
+  updateConfig(config: Partial<BrowserContextConfig>): void {
+    this._config = { ...this._config, ...config };
+  }
+
   get tabId(): number {
     return this._tabId;
   }
@@ -334,6 +344,17 @@ export default class Page {
     return await this._puppeteerPage.content();
   }
 
+  async getPageText(): Promise<string> {
+    if (!this._puppeteerPage) return '';
+    try {
+      return await this._puppeteerPage.evaluate(() =>
+        (document.body?.innerText ?? '').replace(/\s+/g, ' ').trim().slice(0, 2500),
+      );
+    } catch {
+      return '';
+    }
+  }
+
   getCachedState(): PageState | null {
     return this._cachedState;
   }
@@ -392,50 +413,60 @@ export default class Page {
       }
     }
 
-    try {
-      await this.removeHighlight();
-
-      // Get DOM content (equivalent to dom_service.get_clickable_elements)
-      // This part would need to be implemented based on your DomService logic
-      // showHighlightElements is true if either useVision or displayHighlights is true
-      const displayHighlights = this._config.displayHighlights || useVision;
-      const content = await this.getClickableElements(displayHighlights, focusElement);
-      if (!content) {
-        logger.warning('Failed to get clickable elements');
-        // Return last known good state if available
+    // T2f-final-fix-3: SPA pages (LinkedIn especially) routinely
+    // throw "Frame with ID N is showing error page" while still
+    // loading sub-iframes. The first DOM-tree build then fails and
+    // the agent ends up with a stale / empty selectorMap, which
+    // makes every click_element / input_text bounce off
+    // "Element with index X does not exist". Retry once after a
+    // 500ms settle delay before falling back to the cached state.
+    let lastErr: unknown = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        await this.removeHighlight();
+        const displayHighlights = this._config.displayHighlights || useVision;
+        const content = await this.getClickableElements(displayHighlights, focusElement);
+        if (!content) {
+          logger.warning(`Failed to get clickable elements (attempt ${attempt + 1}/2)`);
+          if (attempt === 0) {
+            await new Promise(r => setTimeout(r, 500));
+            continue;
+          }
+          return this._state;
+        }
+        if (content.selectorMap.size === 0 && attempt === 0) {
+          // Empty tree often means we caught the page mid-navigation.
+          // Wait briefly and try again before accepting an empty state.
+          logger.warning('clickable elements empty on first attempt — retrying after 500ms');
+          await new Promise(r => setTimeout(r, 500));
+          continue;
+        }
+        const screenshot = useVision ? await this.takeScreenshot() : null;
+        const [scrollY, visualViewportHeight, scrollHeight] = await this.getScrollInfo();
+        this._state.elementTree = content.elementTree;
+        this._state.selectorMap = content.selectorMap;
+        this._state.url = this._puppeteerPage?.url() || '';
+        this._state.title = (await this._puppeteerPage?.title()) || '';
+        this._state.screenshot = screenshot;
+        this._state.scrollY = scrollY;
+        this._state.visualViewportHeight = visualViewportHeight;
+        this._state.scrollHeight = scrollHeight;
+        this._state.pageText = await this.getPageText();
+        return this._state;
+      } catch (error) {
+        lastErr = error;
+        const msg = error instanceof Error ? error.message : String(error);
+        if (attempt === 0 && /Frame with ID \d+ is showing error page|Frame is detached|Target closed/.test(msg)) {
+          logger.warning(`updateState transient frame error (attempt 1/2), retrying: ${msg}`);
+          await new Promise(r => setTimeout(r, 500));
+          continue;
+        }
+        logger.error('Failed to update state:', error);
         return this._state;
       }
-      // log the attributes of content object
-      if ('selectorMap' in content) {
-        logger.debug('content.selectorMap:', content.selectorMap.size);
-      } else {
-        logger.debug('content.selectorMap: not found');
-      }
-      if ('elementTree' in content) {
-        logger.debug('content.elementTree:', content.elementTree?.tagName);
-      } else {
-        logger.debug('content.elementTree: not found');
-      }
-
-      // Take screenshot if needed
-      const screenshot = useVision ? await this.takeScreenshot() : null;
-      const [scrollY, visualViewportHeight, scrollHeight] = await this.getScrollInfo();
-
-      // update the state
-      this._state.elementTree = content.elementTree;
-      this._state.selectorMap = content.selectorMap;
-      this._state.url = this._puppeteerPage?.url() || '';
-      this._state.title = (await this._puppeteerPage?.title()) || '';
-      this._state.screenshot = screenshot;
-      this._state.scrollY = scrollY;
-      this._state.visualViewportHeight = visualViewportHeight;
-      this._state.scrollHeight = scrollHeight;
-      return this._state;
-    } catch (error) {
-      logger.error('Failed to update state:', error);
-      // Return last known good state if available
-      return this._state;
     }
+    if (lastErr) logger.error('updateState exhausted retries:', lastErr);
+    return this._state;
   }
 
   async takeScreenshot(fullPage = false): Promise<string | null> {
@@ -460,12 +491,17 @@ export default class Page {
         }
       });
 
-      // Take the screenshot using JPEG format with 80% quality
+      // T2f-final-fix-3: bumped quality 80→92. The lightbox + 2× hover
+      // preview were rendering noticeably soft on dense LinkedIn /
+      // Pinterest captures because q=80 introduces visible mosquito
+      // noise on text, which then upsamples poorly. The size delta
+      // is only ~30%, well within Anthropic / OpenAI per-message
+      // image limits.
       const screenshot = await this._puppeteerPage.screenshot({
         fullPage: fullPage,
         encoding: 'base64',
         type: 'jpeg',
-        quality: 80, // Good balance between quality and file size
+        quality: 92,
       });
 
       // Clean up the style element
@@ -481,6 +517,115 @@ export default class Page {
       logger.error('Failed to take screenshot:', error);
       throw error;
     }
+  }
+
+  /**
+   * T2f-coords — coordinate-based interaction primitives.
+   *
+   * The agent reasons in IMAGE pixels (the screenshot it sees). Puppeteer's
+   * mouse.click / keyboard.type expect CSS pixels. On retina displays the
+   * factor differs by `devicePixelRatio`. We read it once from the page,
+   * clamp to the viewport (otherwise a hallucinated (-1, 9999) coord
+   * silently no-ops), and run the action. Verification is left to the
+   * caller — the action loop in pre-T0 already detects no-op steps.
+   */
+  private async _coordToCss(
+    x: number,
+    y: number,
+  ): Promise<{ cssX: number; cssY: number; dpr: number; vw: number; vh: number }> {
+    if (!this._puppeteerPage) {
+      throw new Error('Puppeteer page is not connected');
+    }
+    const dpr = (await this._puppeteerPage.evaluate(() => window.devicePixelRatio || 1)) as number;
+    const viewport = this._puppeteerPage.viewport();
+    const vw = viewport?.width ?? 1280;
+    const vh = viewport?.height ?? 800;
+    const cssX = Math.max(0, Math.min(vw - 1, Math.round(x / dpr)));
+    const cssY = Math.max(0, Math.min(vh - 1, Math.round(y / dpr)));
+    return { cssX, cssY, dpr, vw, vh };
+  }
+
+  async clickAtImageCoord(x: number, y: number): Promise<{ cssX: number; cssY: number; vw: number; vh: number }> {
+    if (!this._puppeteerPage) throw new Error('Puppeteer page is not connected');
+    const m = await this._coordToCss(x, y);
+    await this._puppeteerPage.mouse.click(m.cssX, m.cssY);
+    return { cssX: m.cssX, cssY: m.cssY, vw: m.vw, vh: m.vh };
+  }
+
+  async typeAtImageCoord(
+    x: number,
+    y: number,
+    text: string,
+  ): Promise<{ cssX: number; cssY: number; vw: number; vh: number }> {
+    if (!this._puppeteerPage) throw new Error('Puppeteer page is not connected');
+    const m = await this._coordToCss(x, y);
+    await this._puppeteerPage.mouse.click(m.cssX, m.cssY);
+    await this._puppeteerPage.keyboard.type(text);
+    return { cssX: m.cssX, cssY: m.cssY, vw: m.vw, vh: m.vh };
+  }
+
+  async scrollAtImageCoord(
+    x: number,
+    y: number,
+    dy: number,
+  ): Promise<{ cssX: number; cssY: number; vw: number; vh: number }> {
+    if (!this._puppeteerPage) throw new Error('Puppeteer page is not connected');
+    const m = await this._coordToCss(x, y);
+    await this._puppeteerPage.mouse.move(m.cssX, m.cssY);
+    await this._puppeteerPage.mouse.wheel({ deltaY: dy });
+    return { cssX: m.cssX, cssY: m.cssY, vw: m.vw, vh: m.vh };
+  }
+
+  /**
+   * T2f-drag — drag from one image-pixel coordinate to another.
+   * mouse.move → mouse.down → stepped mouse.move → mouse.up so the
+   * gesture is readable to canvas frameworks (Excalidraw, tldraw,
+   * Figma) that drop straight A→B teleports as no-movement.
+   */
+  async dragAtImageCoord(
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number,
+  ): Promise<{ fromCssX: number; fromCssY: number; toCssX: number; toCssY: number; vw: number; vh: number }> {
+    if (!this._puppeteerPage) throw new Error('Puppeteer page is not connected');
+    const a = await this._coordToCss(fromX, fromY);
+    const b = await this._coordToCss(toX, toY);
+    const page = this._puppeteerPage;
+    await page.mouse.move(a.cssX, a.cssY);
+    await page.mouse.down();
+    const steps = 8;
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps;
+      const x = Math.round(a.cssX + (b.cssX - a.cssX) * t);
+      const y = Math.round(a.cssY + (b.cssY - a.cssY) * t);
+      await page.mouse.move(x, y);
+    }
+    await page.mouse.up();
+    return { fromCssX: a.cssX, fromCssY: a.cssY, toCssX: b.cssX, toCssY: b.cssY, vw: a.vw, vh: a.vh };
+  }
+
+  /**
+   * T2f-coords verification: capture a stable signature of the page so the
+   * caller can detect no-op coordinate clicks. Cheaper than re-running
+   * the full state extraction.
+   */
+  async readClickSignature(): Promise<{ url: string; scrollY: number; domHash: string }> {
+    if (!this._puppeteerPage) {
+      return { url: this._state.url, scrollY: 0, domHash: '' };
+    }
+    const sig = (await this._puppeteerPage.evaluate(() => {
+      const html = document.documentElement.outerHTML;
+      // Cheap hash — last 16 chars of a sum-of-charcodes string.
+      let h = 0;
+      for (let i = 0; i < html.length; i++) h = (h * 31 + html.charCodeAt(i)) | 0;
+      return {
+        url: location.href,
+        scrollY: Math.round(window.scrollY),
+        domHash: String(h),
+      };
+    })) as { url: string; scrollY: number; domHash: string };
+    return sig;
   }
 
   url(): string {
@@ -593,6 +738,12 @@ export default class Page {
   // if yPercent is 0, scroll to the top of the page, if 100, scroll to the bottom of the page
   // if elementNode is provided, scroll to a percentage of the element
   // if elementNode is not provided, scroll to a percentage of the page
+  //
+  // Robust window scroll: many SPAs (hh.ru, modal-based forms) have an inner scroll
+  // container instead of a scrolling <body>, so window.scrollTo is a no-op. We try
+  // window first, and if scrollY didn't move, find the largest scrollable element on
+  // the page and scroll that instead. We use behavior:'instant' so verification ~1s
+  // later sees the final position rather than mid-animation.
   async scrollToPercent(yPercent: number, elementNode?: DOMElementNode): Promise<void> {
     if (!this._puppeteerPage) {
       throw new Error('Puppeteer is not connected');
@@ -602,11 +753,31 @@ export default class Page {
         const scrollHeight = document.documentElement.scrollHeight;
         const viewportHeight = window.visualViewport?.height || window.innerHeight;
         const scrollTop = (scrollHeight - viewportHeight) * (yPercent / 100);
-        window.scrollTo({
-          top: scrollTop,
-          left: window.scrollX,
-          behavior: 'smooth',
-        });
+        const before = window.scrollY;
+        window.scrollTo({ top: scrollTop, left: window.scrollX, behavior: 'instant' as ScrollBehavior });
+
+        // If window didn't move, find the tallest visible scrollable container and scroll it.
+        if (Math.abs(window.scrollY - before) < 5 && scrollHeight - viewportHeight > 5) {
+          const candidates = Array.from(document.querySelectorAll<HTMLElement>('*')).filter(el => {
+            const style = window.getComputedStyle(el);
+            const overflowY = style.overflowY;
+            const scrollable =
+              (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay') &&
+              el.scrollHeight - el.clientHeight > 20 &&
+              el.clientHeight > 100;
+            return scrollable;
+          });
+          // Pick the largest scrollable container by clientHeight (usually the main scroll area)
+          candidates.sort((a, b) => b.clientHeight - a.clientHeight);
+          const target = candidates[0];
+          if (target) {
+            const targetScrollHeight = target.scrollHeight;
+            const targetClientHeight = target.clientHeight;
+            target.scrollTop = (targetScrollHeight - targetClientHeight) * (yPercent / 100);
+            // Mirror to window.scrollY so verifier sees a delta — store on dataset
+            // (no real way to fake window.scrollY; verifier will rely on cache refresh).
+          }
+        }
       }, yPercent);
     } else {
       const element = await this.locateElement(elementNode);
@@ -624,11 +795,7 @@ export default class Page {
         const scrollHeight = el.scrollHeight;
         const viewportHeight = el.clientHeight;
         const scrollTop = (scrollHeight - viewportHeight) * (yPercent / 100);
-        el.scrollTo({
-          top: scrollTop,
-          left: el.scrollLeft,
-          behavior: 'smooth',
-        });
+        el.scrollTo({ top: scrollTop, left: el.scrollLeft, behavior: 'instant' as ScrollBehavior });
       }, yPercent);
     }
   }
@@ -639,11 +806,22 @@ export default class Page {
     }
     if (!elementNode) {
       await this._puppeteerPage.evaluate(y => {
-        window.scrollBy({
-          top: y,
-          left: 0,
-          behavior: 'smooth',
-        });
+        const before = window.scrollY;
+        window.scrollBy({ top: y, left: 0, behavior: 'instant' as ScrollBehavior });
+        if (Math.abs(window.scrollY - before) < 5) {
+          // Inner scroll container fallback (hh.ru, modal-driven SPAs)
+          const candidates = Array.from(document.querySelectorAll<HTMLElement>('*')).filter(el => {
+            const style = window.getComputedStyle(el);
+            const overflowY = style.overflowY;
+            return (
+              (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay') &&
+              el.scrollHeight - el.clientHeight > 20 &&
+              el.clientHeight > 100
+            );
+          });
+          candidates.sort((a, b) => b.clientHeight - a.clientHeight);
+          if (candidates[0]) candidates[0].scrollTop += y;
+        }
       }, y);
     } else {
       const element = await this.locateElement(elementNode);
@@ -656,13 +834,9 @@ export default class Page {
       if (!scrollableElement) {
         throw new Error(`No scrollable ancestor found for element: ${elementNode}`);
       }
-      await scrollableElement.evaluate(el => {
-        el.scrollBy({
-          top: y,
-          left: 0,
-          behavior: 'smooth',
-        });
-      });
+      await scrollableElement.evaluate((el, dy) => {
+        el.scrollBy({ top: dy, left: 0, behavior: 'instant' as ScrollBehavior });
+      }, y);
     }
   }
 
@@ -672,8 +846,10 @@ export default class Page {
     }
 
     if (!elementNode) {
-      // Scroll the whole page up by viewport height
-      await this._puppeteerPage.evaluate('window.scrollBy(0, -(window.visualViewport?.height || window.innerHeight));');
+      // Scroll the whole page up by viewport height (with inner-container fallback)
+      await this.scrollBy(
+        -(await this._puppeteerPage.evaluate(() => window.visualViewport?.height || window.innerHeight)),
+      );
     } else {
       // Scroll the specific element up by its client height
       const element = await this.locateElement(elementNode);
@@ -699,8 +875,10 @@ export default class Page {
     }
 
     if (!elementNode) {
-      // Scroll the whole page down by viewport height
-      await this._puppeteerPage.evaluate('window.scrollBy(0, (window.visualViewport?.height || window.innerHeight));');
+      // Scroll the whole page down by viewport height (with inner-container fallback)
+      await this.scrollBy(
+        await this._puppeteerPage.evaluate(() => window.visualViewport?.height || window.innerHeight),
+      );
     } else {
       // Scroll the specific element down by its client height
       const element = await this.locateElement(elementNode);
@@ -1151,31 +1329,43 @@ export default class Page {
       });
 
       // Choose appropriate input method based on element properties
-      if ((isContentEditable || tagName === 'input') && !isReadOnly && !isDisabled) {
-        // Clear content and set value directly
+      if ((isContentEditable || tagName === 'input' || tagName === 'textarea') && !isReadOnly && !isDisabled) {
+        // React-aware clear: use native value setter so React's fiber state syncs.
+        // Plain `el.value = ''` bypasses React's internal tracking and is ignored on React SPAs.
         await element.evaluate(el => {
-          if (el instanceof HTMLElement) {
+          if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+            const proto =
+              el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+            const nativeSetter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+            if (nativeSetter) {
+              nativeSetter.call(el, '');
+            } else {
+              el.value = '';
+            }
+          } else if (el instanceof HTMLElement) {
             el.textContent = '';
           }
-          if ('value' in el) {
-            (el as HTMLInputElement).value = '';
-          }
-          // Dispatch events
           el.dispatchEvent(new Event('input', { bubbles: true }));
           el.dispatchEvent(new Event('change', { bubbles: true }));
         });
 
-        // Type the text with a small delay between keypresses
-        await element.type(text, { delay: 50 });
+        // Simulate real keystrokes — React's synthetic event system intercepts these correctly
+        await element.type(text, { delay: 30 });
       } else {
-        // Use direct value setting for other types of elements
+        // Fallback for custom/non-standard elements: React-aware direct value set
         await element.evaluate((el, value) => {
           if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
-            el.value = value;
+            const proto =
+              el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+            const nativeSetter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+            if (nativeSetter) {
+              nativeSetter.call(el, value);
+            } else {
+              el.value = value;
+            }
           } else if (el instanceof HTMLElement && el.isContentEditable) {
             el.textContent = value;
           }
-          // Dispatch events
           el.dispatchEvent(new Event('input', { bubbles: true }));
           el.dispatchEvent(new Event('change', { bubbles: true }));
         }, text);
@@ -1550,9 +1740,16 @@ export default class Page {
         }
       }
     } finally {
-      // Clean up event listeners
-      this._puppeteerPage.off('request', onRequest);
-      this._puppeteerPage.off('response', onResponse);
+      // T2f-final-fix-2: null-guard the listener cleanup. The page can
+      // detach mid-task (LinkedIn rapid SPA navigation, debugger
+      // disconnect, tab close) and Bae._waitForStableNetwork would
+      // otherwise crash on `null.off(...)`. Logged for observability.
+      try {
+        this._puppeteerPage?.off('request', onRequest);
+        this._puppeteerPage?.off('response', onResponse);
+      } catch (cleanupErr) {
+        logger.warning('network listener cleanup failed (page detached?)', cleanupErr);
+      }
     }
     console.debug(`Network stabilized for ${this._config.waitForNetworkIdlePageLoadTime} seconds`);
   }

@@ -43,6 +43,7 @@ code {
 .header-logo {
   display: flex;
   align-items: center;
+  gap: 0.55rem;
 }
 
 .header-icons {
@@ -160,4 +161,498 @@ code {
 
 .browd-quick-start-enter {
   animation: browd-quick-start-enter 180ms ease-out;
+}
+
+/* T2f-1.5 — iOS / macOS-style screenshot capture animation.
+   Two layers cooperate:
+   1. .browd-screenshot-flash overlays the chat area for ~250ms with a
+      single white pulse so the user gets the same physical "snap"
+      feeling as Cmd+Shift+5 / iOS volume-up screenshot.
+   2. .browd-screenshot-thumb (rendered inline in the chat) slides up
+      from below while the flash decays, so the captured frame appears
+      to drop into the conversation. */
+
+.browd-screenshot-flash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: #ffffff;
+  opacity: 0;
+  z-index: 40;
+  border-radius: inherit;
+  animation: browd-screenshot-flash 280ms ease-out;
+  mix-blend-mode: screen;
+}
+
+@keyframes browd-screenshot-flash {
+  0% {
+    opacity: 0;
+  }
+  18% {
+    opacity: 0.55;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.browd-screenshot-thumb {
+  animation: browd-screenshot-thumb-enter 320ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  box-shadow: 0 6px 18px hsl(var(--browd-shadow) / 0.25);
+}
+
+@keyframes browd-screenshot-thumb-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* T2f-final-2 / T2f-final-fix-3 — token-usage ring next to the
+   ChatInput paperclip. Minimal: the ring itself is the affordance,
+   numeric breakdown is only revealed on hover/focus through the
+   tooltip span. Scale ~0.9 to match the surrounding 16px iconography. */
+.browd-token-ring {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  user-select: none;
+  transform: scale(0.9);
+  transform-origin: center;
+  outline: none;
+}
+
+.browd-token-ring-track {
+  stroke: var(--browd-border);
+  opacity: 0.5;
+}
+
+.browd-token-ring-fill {
+  transition:
+    stroke-dashoffset 320ms ease,
+    stroke 240ms ease;
+}
+
+.browd-token-ring.browd-token-ring-ok .browd-token-ring-fill {
+  stroke: var(--browd-accent);
+}
+
+.browd-token-ring.browd-token-ring-warn .browd-token-ring-fill {
+  stroke: #d99a2b;
+}
+
+.browd-token-ring.browd-token-ring-crit .browd-token-ring-fill {
+  stroke: #d8523a;
+}
+
+.browd-token-ring-tooltip {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%) translateY(2px);
+  background: var(--browd-panel-strong);
+  color: var(--browd-text);
+  border: 1px solid var(--browd-border);
+  border-radius: 6px;
+  padding: 0.25rem 0.5rem;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 140ms ease,
+    transform 160ms ease;
+  box-shadow: 0 6px 14px hsl(var(--browd-shadow) / 0.25);
+  z-index: 10;
+}
+
+.browd-token-ring:hover .browd-token-ring-tooltip,
+.browd-token-ring:focus-visible .browd-token-ring-tooltip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* Subtle pulse while the next agent step has not arrived yet. We toggle
+   the class via React when the most recent screenshot is also the most
+   recent agent message. */
+.browd-screenshot-thumb.is-pending {
+  animation:
+    browd-screenshot-thumb-enter 320ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    browd-screenshot-thumb-pulse 1800ms ease-in-out 320ms infinite;
+}
+
+@keyframes browd-screenshot-thumb-pulse {
+  0%,
+  100% {
+    box-shadow: 0 6px 18px hsl(var(--browd-shadow) / 0.25);
+  }
+  50% {
+    box-shadow: 0 6px 22px hsl(var(--browd-accent) / 0.45);
+  }
+}
+
+/* T2f-final-3 — 2× hover preview popout. Pure CSS so no JS listener
+   tax on hover; transform-origin keeps the popout anchored to the
+   thumb's top-left, scale + translate gives the iOS Quick-Look feel.
+   pointer-events: none keeps clicks on the underlying thumb. */
+.browd-screenshot-thumb-wrap {
+  display: inline-block;
+}
+
+.browd-screenshot-thumb-hover {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 200%;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(0, 0) scale(0.95);
+  transform-origin: top left;
+  transition:
+    opacity 180ms ease-out,
+    transform 220ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--browd-border);
+  box-shadow: 0 18px 40px hsl(var(--browd-shadow) / 0.55);
+  z-index: 30;
+  background: var(--browd-panel-strong);
+}
+
+.browd-screenshot-thumb-wrap:hover .browd-screenshot-thumb-hover,
+.browd-screenshot-thumb-wrap:focus-within .browd-screenshot-thumb-hover {
+  opacity: 1;
+  transform: translate(0.5rem, 0.5rem) scale(1);
+}
+
+/* T2f-final-3 — full-size lightbox modal. window.open with data: URL
+   is blocked under Chromium 60+ side-panel security policy, so the
+   only reliable preview path is in-panel. Click outside or press Esc
+   to close (Esc handler is in SidePanel.tsx). */
+.browd-screenshot-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: hsl(var(--browd-shadow) / 0.78);
+  backdrop-filter: blur(6px);
+  animation: browd-lightbox-fade 160ms ease-out;
+}
+
+@keyframes browd-lightbox-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.browd-screenshot-lightbox-img {
+  max-width: min(92vw, 1100px);
+  max-height: 90vh;
+  border-radius: 10px;
+  box-shadow: 0 24px 60px hsl(var(--browd-shadow) / 0.6);
+  cursor: zoom-out;
+}
+
+.browd-screenshot-lightbox-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  width: 2rem;
+  height: 2rem;
+  font-size: 1.4rem;
+  line-height: 1;
+  color: var(--browd-text);
+  background: var(--browd-panel-strong);
+  border: 1px solid var(--browd-border);
+  border-radius: 50%;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.browd-screenshot-lightbox-close:hover {
+  background: var(--browd-panel);
+}
+
+/* T2f-handover — pulsing ring marker over the screenshot thumb in
+   the HITL "Help me click" prompt. Coordinates are translated from
+   image-pixels to the rendered thumb's percentage; the ring breathes
+   so the user can spot it on busy pages without it being intrusive. */
+.browd-hitl-click-target img {
+  display: block;
+}
+
+.browd-hitl-click-marker {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  margin-left: -14px;
+  margin-top: -14px;
+  border-radius: 50%;
+  border: 2px solid var(--browd-accent);
+  background: hsl(var(--browd-accent-h, 220) 90% 60% / 0.18);
+  box-shadow: 0 0 0 2px #fff inset;
+  pointer-events: none;
+  animation: browd-hitl-marker-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes browd-hitl-marker-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.18);
+    opacity: 0.85;
+  }
+}
+
+/* T2f-thinking-split / T2f-thinking-live — agent process work folded
+   into a collapsible group. Anthropic-style: no border, no card,
+   no panel background. Summary is muted-color text with a chevron;
+   expanded body inherits the surrounding chat surface and adds a
+   subtle left-rule accent so the user knows what belongs to the
+   reasoning trail. */
+.browd-thinking-group {
+  /* The group is just an inline container — visual rhythm comes from
+     the rest of the chat. No padding, no border, no background. */
+}
+
+.browd-thinking-group summary::-webkit-details-marker {
+  display: none;
+}
+
+.browd-thinking-summary {
+  /* Compact summary, slightly faded so the final answer below has
+     visual priority. */
+  font-size: 13px;
+  opacity: 0.85;
+  padding: 0.15rem 0;
+}
+
+.browd-thinking-chevron {
+  display: inline-block;
+  transform: rotate(0deg);
+  transition: transform 180ms ease;
+}
+
+.browd-thinking-group[open] .browd-thinking-chevron {
+  transform: rotate(180deg);
+}
+
+.browd-thinking-body {
+  /* Subtle left-rule keeps reasoning content visually associated
+     with the group without a hard card border. */
+  border-left: 2px solid var(--browd-border);
+  margin-left: 0.4rem;
+  animation: browd-thinking-reveal 220ms ease-out;
+}
+
+/* T2f-clean-finish — the final answer of a run gets visual priority.
+   Subtle accent left-rule + slightly stronger text. We don't use a
+   panel background or hard border (would clash with the calm chat
+   surface); just a 3px accent rule that says "this is the answer". */
+.browd-final-answer {
+  border-left: 3px solid var(--browd-accent);
+  padding-left: 0.6rem;
+  margin-left: -0.6rem;
+}
+
+.browd-final-answer .browd-markdown {
+  /* Stronger text, more line-height — answer should read like the
+     terminal point of the run, not another piece of the thinking. */
+  color: var(--browd-text);
+  line-height: 1.55;
+}
+
+.browd-final-badge {
+  display: inline-block;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: var(--browd-accent);
+  color: var(--browd-bg);
+}
+
+@keyframes browd-thinking-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 0.92;
+    transform: translateY(0);
+  }
+}
+
+/* T2f-thinking-live — TracePanel mirrors the same visual treatment
+   so the chat shows two consistent collapsibles (thinking and
+   trace) instead of a card and a strip. */
+.browd-trace-group summary::-webkit-details-marker {
+  display: none;
+}
+
+.browd-trace-chevron {
+  display: inline-block;
+  transition: transform 180ms ease;
+}
+
+.browd-trace-group[open] .browd-trace-chevron {
+  transform: rotate(180deg);
+}
+
+/* T2f-plan-pinned — compact checklist pinned above the chat. Same
+   chevron rotation pattern as thinking / trace groups. Default open
+   so the user always sees the plan; can collapse for a one-line
+   summary. */
+.browd-plan-pinned-group summary::-webkit-details-marker {
+  display: none;
+}
+
+.browd-plan-pinned-chevron {
+  display: inline-block;
+  transition: transform 180ms ease;
+}
+
+.browd-plan-pinned-group[open] .browd-plan-pinned-chevron {
+  transform: rotate(180deg);
+}
+
+/* T2f-plan-pinned-live — pulsing ring on the currently-executing
+   subgoal so the user sees motion during long single-step
+   subgoals. Same accent colour as the done state, just animated. */
+.browd-plan-item-pulse {
+  animation: browd-plan-item-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes browd-plan-item-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 hsl(var(--browd-accent-h, 220) 90% 60% / 0.55);
+  }
+  50% {
+    box-shadow: 0 0 0 4px hsl(var(--browd-accent-h, 220) 90% 60% / 0);
+  }
+}
+
+/* T2f-md-render — universal markdown rendering for chat messages.
+   Same Anthropic-style minimal: headings tighter, code block soft
+   surface (no hard border), lists aligned, links accent-coloured. */
+.browd-markdown {
+  white-space: normal;
+  word-break: break-word;
+}
+
+.browd-markdown h1,
+.browd-markdown h2,
+.browd-markdown h3,
+.browd-markdown h4 {
+  font-weight: 600;
+  color: var(--browd-text);
+  line-height: 1.25;
+  margin: 0.55rem 0 0.35rem;
+}
+
+.browd-markdown h1 {
+  font-size: 1.05rem;
+}
+
+.browd-markdown h2 {
+  font-size: 1rem;
+}
+
+.browd-markdown h3,
+.browd-markdown h4 {
+  font-size: 0.94rem;
+}
+
+.browd-markdown p {
+  margin: 0.35rem 0;
+}
+
+.browd-markdown ul,
+.browd-markdown ol {
+  margin: 0.35rem 0;
+  padding-left: 1.2rem;
+}
+
+.browd-markdown ul {
+  list-style: disc;
+}
+
+.browd-markdown ol {
+  list-style: decimal;
+}
+
+.browd-markdown li {
+  margin: 0.15rem 0;
+}
+
+.browd-markdown a {
+  color: var(--browd-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.browd-markdown a:hover {
+  text-decoration-thickness: 2px;
+}
+
+.browd-markdown blockquote {
+  margin: 0.35rem 0;
+  padding-left: 0.6rem;
+  border-left: 2px solid var(--browd-border);
+  color: var(--browd-faint);
+}
+
+.browd-markdown strong {
+  color: var(--browd-text);
+}
+
+.browd-markdown em {
+  font-style: italic;
+}
+
+.browd-markdown hr {
+  border: 0;
+  border-top: 1px solid var(--browd-border);
+  margin: 0.6rem 0;
+}
+
+.browd-code-inline {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85em;
+  background: var(--browd-panel-strong);
+  padding: 0.05rem 0.35rem;
+  border-radius: 4px;
+  color: var(--browd-text);
+}
+
+.browd-markdown pre {
+  margin: 0.45rem 0;
+  background: var(--browd-panel-strong);
+  border-radius: 6px;
+  padding: 0.55rem 0.7rem;
+  overflow-x: auto;
+}
+
+.browd-markdown pre .browd-code-block {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--browd-text);
+  background: transparent;
+  padding: 0;
 }

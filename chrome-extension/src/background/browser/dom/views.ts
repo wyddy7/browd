@@ -2,6 +2,60 @@ import type { CoordinateSet, HashedDomElement, ViewportInfo } from './history/vi
 import { HistoryTreeProcessor } from './history/service';
 import { capTextLength } from '../util';
 
+/**
+ * Resolve a human-readable label for a form field using ancestor <label> and
+ * sibling/uncle-pattern text, without requiring the document root.
+ * Used by clickableElementsToString to annotate unlabelled inputs.
+ */
+function resolveContextLabel(node: DOMElementNode): string {
+  // 1. Ancestor <label> — collect text excluding the field itself
+  let current: DOMElementNode | null = node.parent;
+  while (current) {
+    if ((current.tagName ?? '').toLowerCase() === 'label') {
+      const parts: string[] = [];
+      const collectLabelText = (n: DOMBaseNode): void => {
+        if (n instanceof DOMElementNode && n.highlightIndex !== null) return;
+        if (n instanceof DOMTextNode) {
+          if (n.text.trim()) parts.push(n.text.trim());
+          return;
+        }
+        if (n instanceof DOMElementNode) n.children.forEach(collectLabelText);
+      };
+      current.children.forEach(collectLabelText);
+      const text = parts.join(' ').replace(/\s+/g, ' ').trim();
+      if (text) return text;
+    }
+    current = current.parent;
+  }
+
+  // 2. Preceding sibling + uncle-pattern (level 1 and 2)
+  const collectText = (n: DOMBaseNode): string => {
+    if (n instanceof DOMTextNode) return n.text.trim();
+    if (n instanceof DOMElementNode) return n.children.map(collectText).join(' ').replace(/\s+/g, ' ').trim();
+    return '';
+  };
+
+  if (node.parent) {
+    const siblings = node.parent.children;
+    const idx = siblings.indexOf(node);
+    for (let i = idx - 1; i >= 0; i--) {
+      const text = collectText(siblings[i]);
+      if (text && text.length < 120) return text;
+    }
+    const parent = node.parent;
+    if (parent.parent) {
+      const grandSiblings = parent.parent.children;
+      const parentIdx = grandSiblings.indexOf(parent);
+      for (let i = parentIdx - 1; i >= 0; i--) {
+        const text = collectText(grandSiblings[i]);
+        if (text && text.length < 120) return text;
+      }
+    }
+  }
+
+  return '';
+}
+
 export const DEFAULT_INCLUDE_ATTRIBUTES = [
   'title',
   'type',
@@ -283,6 +337,23 @@ export class DOMElementNode extends DOMBaseNode {
                 attributesToInclude[attr].trim().toLowerCase() === text.trim().toLowerCase()
               ) {
                 delete attributesToInclude[attr];
+              }
+            }
+
+            // For unlabelled form fields, inject a context label via uncle-pattern lookup
+            // so the LLM sees what the field is for even without aria-label/placeholder
+            if (!text && !attributesToInclude['aria-label'] && !attributesToInclude['placeholder']) {
+              const tag = (node.tagName ?? '').toLowerCase();
+              const inputType = (attributesToInclude['type'] ?? '').toLowerCase();
+              const isFormField =
+                tag === 'textarea' ||
+                tag === 'select' ||
+                (tag === 'input' && !['submit', 'button', 'hidden', 'image'].includes(inputType));
+              if (isFormField) {
+                const contextLabel = resolveContextLabel(node);
+                if (contextLabel) {
+                  attributesToInclude['label'] = contextLabel;
+                }
               }
             }
 

@@ -213,3 +213,227 @@ export const waitActionSchema: ActionSchema = {
     seconds: z.number().int().default(3).describe('amount of seconds'),
   }),
 };
+
+/**
+ * Semantic form field fill — preferred over input_text when a form is detected.
+ * Finds the field by its human-readable label, not by DOM index.
+ */
+export const fillFieldByLabelActionSchema: ActionSchema = {
+  name: 'fill_field_by_label',
+  description:
+    'Fill a form field identified by its label text (not DOM index). Use this whenever a "## Forms detected" section is visible in the page state. Preferred over input_text for form fields to avoid index confusion when multiple similar fields exist.',
+  schema: z.object({
+    intent: z.string().default('').describe('purpose of this action'),
+    label: z.string().describe('the exact or partial label text of the field (e.g. "Email", "Английский язык")'),
+    value: z.string().describe('value to type into the field'),
+    nth: z
+      .number()
+      .int()
+      .min(1)
+      .default(1)
+      .optional()
+      .describe('which occurrence to use if multiple fields match the label (1-indexed, default 1)'),
+    xpath: z
+      .string()
+      .nullable()
+      .optional()
+      .describe('xpath override — filled in by the executor after label resolution; do not set manually'),
+  }),
+};
+
+/**
+ * T1 — read-only web tools.
+ *
+ * These three let the agent satisfy information-seeking tasks without
+ * opening a browser tab or interacting with the DOM. Prefer these for
+ * "find X", "what is Y", "look up Z" style requests. See
+ * auto-docs/browd-agent-evolution.md (Tier 1) for context.
+ */
+export const webFetchMarkdownActionSchema: ActionSchema = {
+  name: 'web_fetch_markdown',
+  description:
+    'Fetch a URL and return its main readable content as Markdown (no tab opened). Use for read-only research: docs pages, articles, leaderboards. Do NOT use for interactive flows (login, forms) — use go_to_url + click for those.',
+  schema: z.object({
+    intent: z.string().default('').describe('purpose of this fetch'),
+    url: z.string().describe('absolute URL to fetch'),
+    maxChars: z
+      .number()
+      .int()
+      .min(500)
+      .max(8000)
+      .optional()
+      .default(3000)
+      .describe('truncate the markdown to this many characters; default 3000'),
+  }),
+};
+
+export const webSearchActionSchema: ActionSchema = {
+  name: 'web_search',
+  description:
+    'Search the web and return up to topK {title, url, snippet} hits without opening any tab. Prefer this over search_google when the result is the answer (no need to navigate). Falls back across engines if the primary fails.',
+  schema: z.object({
+    intent: z.string().default('').describe('why you are searching'),
+    query: z.string().describe('search query'),
+    topK: z.number().int().min(1).max(10).optional().default(5).describe('how many results to return; default 5'),
+  }),
+};
+
+/**
+ * T2f-2 — explicit screenshot tool, registered only when
+ * visionMode='fallback'. With visionMode='always' the agent's state
+ * message already carries a fresh screenshot every step, so this tool
+ * is redundant and is omitted from the registry. With 'off' it is
+ * also omitted.
+ *
+ * T2f-coords — `gridOverlay` enables a 10×10 coordinate grid drawn
+ * over the JPEG. Set true when about to call `click_at`/`type_at`/
+ * `scroll_at` — the labelled grid centres make coordinate prediction
+ * meaningfully more accurate (Set-of-Mark / WebVoyager-style
+ * grounding). False keeps the screenshot clean.
+ */
+export const screenshotActionSchema: ActionSchema = {
+  name: 'screenshot',
+  description:
+    'Capture the current viewport as a JPEG and attach it to the next reasoning turn. Use only when the DOM listing is insufficient (canvas, video, custom widgets, ambiguous form). Each call adds image tokens — call once when the visual state actually changed, not every step. Pass gridOverlay=true when you intend to call click_at/type_at/scroll_at next, so the screenshot you reason on carries explicit coordinates.',
+  schema: z.object({
+    intent: z.string().default('').describe('why a screenshot is needed right now'),
+    gridOverlay: z
+      .boolean()
+      .optional()
+      .default(false)
+      .describe('overlay a 10×10 coordinate grid for click-grounding (use before coordinate-based actions)'),
+  }),
+};
+
+/**
+ * T2f-coords — coordinate-based interactions. Use only when DOM
+ * tooling cannot reach the element (canvas, video, custom widget,
+ * closed-shadow-DOM, cross-origin iframe). Coordinates are in
+ * IMAGE pixels of the most recent screenshot; the runtime converts
+ * to CSS pixels via window.devicePixelRatio.
+ */
+export const clickAtActionSchema: ActionSchema = {
+  name: 'click_at',
+  description:
+    'Click at image-pixel coordinates from the most recent screenshot. ONLY for elements that have no DOM index (canvas, video, custom widget). Prefer click_element when an index exists. Coordinates must come from a fresh screenshot with gridOverlay=true.',
+  schema: z.object({
+    intent: z.string().default('').describe('what you are trying to click'),
+    x: z.number().int().describe('image-pixel x coordinate of the click'),
+    y: z.number().int().describe('image-pixel y coordinate of the click'),
+  }),
+};
+
+export const typeAtActionSchema: ActionSchema = {
+  name: 'type_at',
+  description:
+    'Click at image-pixel coordinates and type text into whatever input takes focus. ONLY for inputs without a DOM index. Prefer fill_field_by_label / input_text when DOM is available.',
+  schema: z.object({
+    intent: z.string().default('').describe('what field you are filling'),
+    x: z.number().int().describe('image-pixel x coordinate of the input'),
+    y: z.number().int().describe('image-pixel y coordinate of the input'),
+    text: z.string().describe('text to type after focusing the input'),
+  }),
+};
+
+/**
+ * T2f-tab-iso-1c — explicit hand-off from the agent's dedicated
+ * tab to one of the user's existing tabs. Use ONLY when the user
+ * task literally references their open page ("summarise this page",
+ * "what is on the tab I have open", "fill the form I started").
+ * Never invoke for navigation tasks — those should `go_to_url` in
+ * the agent tab instead. After take-over, getCurrentPage() resolves
+ * to the user's tab; the agent reads / acts on it directly.
+ */
+export const takeOverUserTabActionSchema: ActionSchema = {
+  name: 'take_over_user_tab',
+  description:
+    "Pin the agent to one of the user's existing tabs (listed under <user-tabs> in the state message). ONLY use when the user task explicitly refers to their open page (e.g. 'this page', 'the tab I have open'). For navigation tasks ('open X.com'), use go_to_url in your agent tab instead.",
+  schema: z.object({
+    intent: z.string().default('').describe('what the take-over is for'),
+    tabId: z.number().int().describe('id of the user tab listed in <user-tabs> metadata'),
+    reason: z
+      .string()
+      .describe('why the task needs the user tab specifically (e.g. "user said summarise the page they have open")'),
+  }),
+};
+
+/**
+ * T2f-handover — escape hatch for hard antibot walls (LinkedIn /jobs
+ * filters, Cloudflare turnstile, X "Show more replies"). Every CDP /
+ * extension click generates `MouseEvent.isTrusted = false`; sites
+ * with `if (!e.isTrusted) return` handlers silently ignore us. Real
+ * user clicks have isTrusted=true. This action emits a HITL request
+ * with a screenshot thumb + (x,y) marker; the user clicks the real
+ * button manually and confirms in the side panel. Use sparingly —
+ * only for individual blocked buttons, not for whole flows.
+ */
+export const hitlClickAtActionSchema: ActionSchema = {
+  name: 'hitl_click_at',
+  description:
+    'Ask the human to click a specific spot manually because the page is ignoring synthetic clicks (anti-automation wall). Use ONLY after 2+ failed click_at / click_element attempts on the same target. The user clicks the real button in their browser, confirms, and you continue.',
+  schema: z.object({
+    intent: z.string().describe("what the click is supposed to achieve, in the user's language"),
+    x: z.number().int().describe('image-pixel x coordinate of the target (from the latest screenshot)'),
+    y: z.number().int().describe('image-pixel y coordinate of the target (from the latest screenshot)'),
+    reason: z
+      .string()
+      .describe('why automation cannot do this — e.g. "the Все фильтры button no-ops on synthetic clicks"'),
+  }),
+};
+
+/**
+ * T2f-drag — canvas / whiteboard shape-drawing primitive. click_at
+ * does only mouse-down + mouse-up at one point, but Excalidraw,
+ * tldraw, Figma, draw.io etc. require a drag (down at A, move to B,
+ * up at B) to produce a shape. drag_at provides that.
+ */
+export const dragAtActionSchema: ActionSchema = {
+  name: 'drag_at',
+  description:
+    'Press and hold the mouse at (fromX, fromY), drag to (toX, toY), then release. ONLY for canvas / whiteboard shape drawing or non-DOM widgets that need a drag gesture. Coordinates are in image pixels (the most recent screenshot).',
+  schema: z.object({
+    intent: z.string().default('').describe('what the drag is supposed to draw / move'),
+    fromX: z.number().int().describe('image-pixel x of the drag start'),
+    fromY: z.number().int().describe('image-pixel y of the drag start'),
+    toX: z.number().int().describe('image-pixel x of the drag end'),
+    toY: z.number().int().describe('image-pixel y of the drag end'),
+  }),
+};
+
+export const scrollAtActionSchema: ActionSchema = {
+  name: 'scroll_at',
+  description:
+    'Scroll a custom container under image-pixel coordinates. ONLY for nested scrollable areas that scroll_to_percent / scroll_by cannot reach (e.g. virtualised lists in custom widgets). Positive dy scrolls down.',
+  schema: z.object({
+    intent: z.string().default('').describe('why this nested scroll is needed'),
+    x: z.number().int().describe('image-pixel x coordinate inside the scrollable area'),
+    y: z.number().int().describe('image-pixel y coordinate inside the scrollable area'),
+    dy: z.number().int().describe('vertical scroll amount in CSS pixels (positive=down)'),
+  }),
+};
+
+export const extractPageMarkdownActionSchema: ActionSchema = {
+  name: 'extract_page_as_markdown',
+  description:
+    'Extract the currently-active tab as Markdown (Readability + Turndown over the live DOM). Use when the agent already navigated and now wants to read content semantically rather than by DOM index.',
+  schema: z.object({
+    intent: z.string().default('').describe('purpose'),
+    maxChars: z.number().int().min(500).max(8000).optional().default(3000),
+  }),
+};
+
+/**
+ * Ask the user a clarifying question and wait for their answer before continuing.
+ * Use when a form field is ambiguous, goal is unclear, or confidence is low.
+ * The user's answer is injected into agent memory and the task resumes.
+ */
+export const askUserActionSchema: ActionSchema = {
+  name: 'ask_user',
+  description:
+    'Pause execution and ask the user a question. Use when: (1) a form field purpose is unclear, (2) you need a value only the user knows, (3) confidence in the next action is low. Do NOT use for routine steps — only for genuine ambiguity.',
+  schema: z.object({
+    question: z.string().describe('clear, specific question to ask the user'),
+    reasoning: z.string().describe('why you need this information to proceed'),
+    options: z.array(z.string()).optional().describe('optional suggested answers to show as quick-pick buttons'),
+  }),
+};

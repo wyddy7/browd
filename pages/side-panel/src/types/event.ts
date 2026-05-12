@@ -40,6 +40,16 @@ export enum ExecutionState {
   ACT_START = 'act.start',
   ACT_OK = 'act.ok',
   ACT_FAIL = 'act.fail',
+
+  // HITL states
+  TASK_HITL_APPROVE = 'task.hitl.approve',
+  TASK_HITL_ASK = 'task.hitl.ask',
+
+  // Trace states
+  STEP_TRACE = 'step.trace',
+
+  // T2f-final-2 — cumulative token telemetry per agent invoke.
+  TASK_USAGE = 'task.usage',
 }
 
 export interface EventData {

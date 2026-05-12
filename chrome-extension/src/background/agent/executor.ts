@@ -8,7 +8,9 @@ import { PlannerPrompt } from './prompts/planner';
 import { createLogger } from '@src/background/log';
 import MessageManager from './messages/service';
 import type BrowserContext from '../browser/context';
-import { ActionBuilder } from './actions/builder';
+import { ActionBuilder, type Action } from './actions/builder';
+import { runReactAgent, type PriorMessage, type RunReactAgentVisionMode } from './agents/runReactAgent';
+import { modelSupportsVision } from '@extension/storage';
 import { EventManager } from './event/manager';
 import { Actors, type EventCallback, EventType, ExecutionState } from './event/types';
 import {
@@ -24,6 +26,10 @@ import { URLNotAllowedError } from '../browser/views';
 import { chatHistoryStore } from '@extension/storage/lib/chat';
 import type { AgentStepHistory } from './history';
 import type { GeneralSettingsConfig } from '@extension/storage';
+import { FailureClassifier } from './guardrails/failureClassifier';
+import { classifyError } from './agentErrors';
+import { globalTracer } from './tracing';
+import { HITLController, type SendMessage } from './hitl/controller';
 
 const logger = createLogger('Executor');
 
@@ -33,6 +39,31 @@ export interface ExecutorExtraArgs {
   agentOptions?: Partial<AgentOptions>;
   agentSystemPrompts?: Partial<Record<'planner' | 'navigator', string>>;
   generalSettings?: GeneralSettingsConfig;
+  /** Inject to enable real HITL pause/resume. Called by HITLController to send requests to side-panel. */
+  hitlSendMessage?: SendMessage;
+  /**
+   * T2h: prior chat turns of this session (last N user/assistant pairs)
+   * forwarded by the side panel from `chatHistoryStore`. Unified mode
+   * seeds these into the LangGraph `messages` array so the agent has
+   * cross-task memory; legacy mode ignores them.
+   */
+  priorMessages?: PriorMessage[];
+  /**
+   * T2f-4: capability flag, true if the Navigator model can ingest
+   * images. Computed once in `setupExecutor` from
+   * `modelSupportsVision(provider, modelName)`. Used to degrade
+   * visionMode to 'off' at runtime when the user picked a vision
+   * mode but their Navigator model can't honour it — keeps the agent
+   * working instead of failing the request mid-task.
+   */
+  navigatorSupportsVision?: boolean;
+  /**
+   * T2f-final-2: Navigator model's context window in tokens. Computed
+   * in `setupExecutor` via `getModelContextWindow`. Forwarded into
+   * `runReactAgent` so the TASK_USAGE telemetry that drives the
+   * side-panel token ring carries an accurate denominator.
+   */
+  navigatorContextWindow?: number;
 }
 
 export class Executor {
@@ -42,7 +73,30 @@ export class Executor {
   private readonly plannerPrompt: PlannerPrompt;
   private readonly navigatorPrompt: NavigatorPrompt;
   private readonly generalSettings: GeneralSettingsConfig | undefined;
+  private readonly failureClassifier = new FailureClassifier();
+  private readonly _hitlController?: HITLController;
   private tasks: string[] = [];
+  private readonly unifiedMode: boolean = false;
+  /** T2d: navigator LLM kept for runReactAgent (unified mode entry point). */
+  private readonly navigatorLLM: BaseChatModel;
+  /** T2d: full action set, classic uses via NavigatorAgent, unified passes to runReactAgent. */
+  private readonly unifiedActions: Action[];
+  /**
+   * T2h: latest known prior chat history for the active session. Set by
+   * the constructor from `extraArgs.priorMessages` and refreshed by
+   * `setPriorMessages()` ahead of every follow-up `execute()` call so
+   * the unified agent sees the conversation up to (but not including)
+   * the new task.
+   */
+  private priorMessages: PriorMessage[] = [];
+  /**
+   * T2f-4: effective vision mode resolved at construction time.
+   * `'off'` whenever agentMode is legacy or the Navigator model has
+   * no vision capability; otherwise mirrors generalSettings.visionMode.
+   */
+  private readonly effectiveVisionMode: RunReactAgentVisionMode;
+  /** T2f-final-2: Navigator model context window for the token ring. */
+  private readonly navigatorContextWindow: number;
   constructor(
     task: string,
     taskId: string,
@@ -64,7 +118,27 @@ export class Executor {
     );
 
     this.generalSettings = extraArgs?.generalSettings;
+    if (extraArgs?.hitlSendMessage) {
+      this._hitlController = new HITLController(extraArgs.hitlSendMessage);
+      context.hitlController = this._hitlController;
+    }
     this.tasks.push(task);
+    // agentMode='unified' (default since T2f-1) uses LangGraph.js
+    // createReactAgent. agentMode='legacy' (was 'classic' pre-T2f-1)
+    // keeps the inherited Planner+Navigator pipeline as a safety net.
+    this.unifiedMode = extraArgs?.generalSettings?.agentMode === 'unified';
+    this.priorMessages = extraArgs?.priorMessages ?? [];
+    this.effectiveVisionMode = (() => {
+      if (!this.unifiedMode) return 'off';
+      const requested = (extraArgs?.generalSettings?.visionMode ?? 'off') as RunReactAgentVisionMode;
+      if (requested === 'off') return 'off';
+      if (extraArgs?.navigatorSupportsVision) return requested;
+      logger.warning(
+        `visionMode='${requested}' requested but Navigator model lacks vision capability — degrading to 'off'`,
+      );
+      return 'off';
+    })();
+    this.navigatorContextWindow = extraArgs?.navigatorContextWindow ?? 100_000;
     this.navigatorPrompt = new NavigatorPrompt(
       context.options.maxActionsPerStep,
       extraArgs?.agentSystemPrompts?.navigator,
@@ -72,7 +146,14 @@ export class Executor {
     this.plannerPrompt = new PlannerPrompt(extraArgs?.agentSystemPrompts?.planner);
 
     const actionBuilder = new ActionBuilder(context, extractorLLM);
-    const navigatorActionRegistry = new NavigatorActionRegistry(actionBuilder.buildDefaultActions());
+    // Both modes share the same action set. Classic dispatches via
+    // NavigatorAgent.doMultiAction; unified passes the same array to
+    // runReactAgent which wraps each Action as a LangGraph tool. The
+    // `done` action is filtered out for unified inside actionsToTools
+    // because LangGraph terminates natively on no-tool-calls.
+    this.unifiedActions = actionBuilder.buildDefaultActions();
+    this.navigatorLLM = navigatorLLM;
+    const navigatorActionRegistry = new NavigatorActionRegistry(this.unifiedActions);
 
     // Initialize agents with their respective prompts
     this.navigator = new NavigatorAgent(navigatorActionRegistry, {
@@ -92,6 +173,10 @@ export class Executor {
     this.context.messageManager.initTaskMessages(this.navigatorPrompt.getSystemMessage(), task);
   }
 
+  get hitlController(): HITLController | undefined {
+    return this._hitlController;
+  }
+
   subscribeExecutionEvents(callback: EventCallback): void {
     this.context.eventManager.subscribe(EventType.EXECUTION, callback);
   }
@@ -107,6 +192,18 @@ export class Executor {
 
     // need to reset previous action results that are not included in memory
     this.context.actionResults = this.context.actionResults.filter(result => result.includeInMemory);
+  }
+
+  /**
+   * T2h: refresh the unified-mode chat-history seed before the next
+   * `execute()`. The side panel sends fresh `priorMessages` on every
+   * `follow_up_task` so the agent sees its own previous answers from
+   * `chatHistoryStore` (the in-memory `MemorySaver` does not persist
+   * across `runReactAgent` invocations). Classic mode does not consume
+   * this — it has its own `MessageManager`.
+   */
+  setPriorMessages(priorMessages: PriorMessage[] | undefined): void {
+    this.priorMessages = priorMessages ?? [];
   }
 
   /**
@@ -129,65 +226,53 @@ export class Executor {
    * @returns {Promise<void>}
    */
   async execute(): Promise<void> {
-    logger.info(`🚀 Executing task: ${this.tasks[this.tasks.length - 1]}`);
-    // reset the step counter
+    logger.info(
+      `🚀 Executing task (mode=${this.unifiedMode ? 'unified' : 'legacy'}): ${this.tasks[this.tasks.length - 1]}`,
+    );
     const context = this.context;
     context.nSteps = 0;
-    const allowedMaxSteps = this.context.options.maxSteps;
+
+    // T0: bind the tracer to this task so every Action.call writes a record
+    // attributed to the right taskId.
+    globalTracer.setContext({ taskId: context.taskId, stepNumber: 0 });
+    // Forward structured trace entries to side-panel via STEP_TRACE events.
+    // The payload is JSON-encoded inside `details` so existing string-based
+    // consumers keep working; the side panel tries JSON.parse first.
+    const traceUnsubscribe = globalTracer.subscribe(entry => {
+      void this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.STEP_TRACE, JSON.stringify({ structured: entry }));
+    });
 
     try {
       this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_START, this.context.taskId);
-
-      let step = 0;
-      let latestPlanOutput: AgentOutput<PlannerOutput> | null = null;
-      let navigatorDone = false;
-
-      for (step = 0; step < allowedMaxSteps; step++) {
-        context.stepInfo = {
-          stepNumber: context.nSteps,
-          maxSteps: context.options.maxSteps,
-        };
-
-        logger.info(`🔄 Step ${step + 1} / ${allowedMaxSteps}`);
-        if (await this.shouldStop()) {
-          break;
-        }
-
-        // Run planner periodically for guidance
-        if (this.planner && (context.nSteps % context.options.planningInterval === 0 || navigatorDone)) {
-          navigatorDone = false;
-          latestPlanOutput = await this.runPlanner();
-
-          // Check if task is complete after planner run
-          if (this.checkTaskCompletion(latestPlanOutput)) {
-            break;
-          }
-        }
-
-        // Execute navigator
-        navigatorDone = await this.navigate();
-
-        // If navigator indicates completion, the next periodic planner run will validate it
-        if (navigatorDone) {
-          logger.info('🔄 Navigator indicates completion - will be validated by next planner run');
+      // T2f-tab-iso-1a — unified mode opens its own tab so the agent
+      // never reads or modifies the user's existing tabs without an
+      // explicit take-over signal. Legacy mode keeps the historical
+      // "work in active tab" behaviour for back-compat. Open BEFORE
+      // the agent starts so the very first state-message resolves
+      // to the agent tab, not whatever the user happened to have
+      // focused.
+      if (this.unifiedMode) {
+        try {
+          // T2f-tab-iso-init-url (2026-05-05) — instead of opening the
+          // agent tab at about:blank and then navigating away on the
+          // first agent step (visible double-transition: blank-titled
+          // tab appears, then a few seconds later it loads gmail.com),
+          // try to extract the first URL from the user's task and open
+          // the agent tab AT THAT URL directly. The user sees one
+          // transition, no blank flash. Falls back to about:blank when
+          // no URL is detectable (e.g. "find me jobs" with no link).
+          const lastTask = this.tasks[this.tasks.length - 1] ?? '';
+          const urlMatch = lastTask.match(/https?:\/\/[^\s<>"'`]+/);
+          const initialUrl = urlMatch ? urlMatch[0].replace(/[.,;:!?)]+$/, '') : 'about:blank';
+          await this.context.browserContext.openAgentTab(initialUrl);
+        } catch (err) {
+          logger.warning('openAgentTab failed; falling back to active tab', err);
         }
       }
-
-      // Determine task completion status
-      const isCompleted = latestPlanOutput?.result?.done === true;
-
-      if (isCompleted) {
-        // Emit final answer if available, otherwise use task ID
-        const finalMessage = this.context.finalAnswer || this.context.taskId;
-        this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_OK, finalMessage);
-      } else if (step >= allowedMaxSteps) {
-        logger.error('❌ Task failed: Max steps reached');
-        this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_FAIL, t('exec_errors_maxStepsReached'));
-      } else if (this.context.stopped) {
-        this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_CANCEL, t('exec_task_cancel'));
+      if (this.unifiedMode) {
+        await this.runUnifiedLoop();
       } else {
-        this.context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_PAUSE, t('exec_task_pause'));
-        // Note: We don't track pause as it's not a final state
+        await this.runClassicLoop();
       }
     } catch (error) {
       if (error instanceof RequestCancelledError) {
@@ -208,7 +293,110 @@ export class Executor {
       } else {
         logger.info('Replay historical tasks is disabled, skipping history storage');
       }
+      // T0: stop forwarding trace events and persist remaining entries.
+      try {
+        traceUnsubscribe();
+      } catch {
+        // ignore
+      }
+      try {
+        await globalTracer.flush();
+      } catch (err) {
+        logger.warning('tracer flush failed', err);
+      }
     }
+  }
+
+  /**
+   * Classic Planner+Navigator loop — inherited from Nanobrowser.
+   * Runs the Planner periodically (every `planningInterval` steps or after
+   * the Navigator emits a tentative `done`) which validates / corrects the
+   * Navigator's direction. Terminal: Planner confirms `done` OR maxSteps.
+   */
+  private async runClassicLoop(): Promise<void> {
+    const context = this.context;
+    const allowedMaxSteps = context.options.maxSteps;
+    let step = 0;
+    let latestPlanOutput: AgentOutput<PlannerOutput> | null = null;
+    let navigatorDone = false;
+
+    for (step = 0; step < allowedMaxSteps; step++) {
+      context.stepInfo = { stepNumber: context.nSteps, maxSteps: allowedMaxSteps };
+      globalTracer.setStep(context.nSteps);
+      logger.info(`🔄 [classic] Step ${step + 1} / ${allowedMaxSteps}`);
+
+      if (await this.shouldStop()) break;
+      if (context.messageManager.length() > 30) {
+        context.messageManager.compactOldStateMessages();
+      }
+
+      if (this.planner && (context.nSteps % context.options.planningInterval === 0 || navigatorDone)) {
+        navigatorDone = false;
+        latestPlanOutput = await this.runPlanner();
+        if (this.checkTaskCompletion(latestPlanOutput)) break;
+      }
+
+      navigatorDone = await this.navigate();
+      if (navigatorDone) {
+        logger.info('🔄 Navigator indicates completion - will be validated by next planner run');
+      }
+    }
+
+    const isCompleted = latestPlanOutput?.result?.done === true;
+    if (isCompleted) {
+      const finalMessage = context.finalAnswer || context.taskId;
+      context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_OK, finalMessage);
+    } else if (step >= allowedMaxSteps) {
+      logger.error('❌ Task failed: Max steps reached');
+      context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_FAIL, t('exec_errors_maxStepsReached'));
+    } else if (context.stopped) {
+      context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_CANCEL, t('exec_task_cancel'));
+    } else {
+      context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_PAUSE, t('exec_task_pause'));
+    }
+  }
+
+  /**
+   * UnifiedAgent loop — T2d: delegates to LangGraph.js createReactAgent.
+   *
+   * The bespoke runUnifiedLoop body (~50 lines of for-loop with manual
+   * termination detection, isDone paranoia checks, and event emit
+   * branches) is replaced by a single call into runReactAgent. The
+   * framework owns:
+   *   - Tool dispatch (one tool call per LLM step)
+   *   - Termination (LLM emits AIMessage without tool_calls)
+   *   - Checkpointing per taskId via MemorySaver
+   *   - Cancellation via AbortController signal
+   *
+   * Browd-side responsibilities preserved:
+   *   - globalTracer records every tool call (Action.call hook stays)
+   *   - Side panel sees PLANNER+STEP_OK with the final answer, then
+   *     SYSTEM+TASK_OK / TASK_FAIL / TASK_CANCEL — same events as
+   *     classic so MessageList renders identically
+   *   - context.controller.signal aborts the agent on stop button
+   *
+   * Why the rewrite was necessary — the bespoke loop produced six
+   * iterations of bug fixes without convergence (T2b → T2c critical).
+   * See auto-docs/browd-agent-evolution.md for the full postmortem.
+   */
+  private async runUnifiedLoop(): Promise<void> {
+    const context = this.context;
+    globalTracer.setStep(0);
+    logger.info('🔄 [unified] starting LangGraph.js ReAct agent');
+
+    const task = this.tasks[this.tasks.length - 1] ?? '';
+    await runReactAgent({
+      context,
+      llm: this.navigatorLLM,
+      actions: this.unifiedActions,
+      task,
+      priorMessages: this.priorMessages,
+      visionMode: this.effectiveVisionMode,
+      contextWindow: this.navigatorContextWindow,
+    });
+    // runReactAgent emits PLANNER/SYSTEM events itself; nothing further
+    // to do here. Recursion-limit / abort / error mapping all happen
+    // inside.
   }
 
   /**
@@ -270,12 +458,12 @@ export class Executor {
       if (navOutput.error) {
         throw new Error(navOutput.error);
       }
+      this.failureClassifier.recordSuccess();
       context.consecutiveFailures = 0;
       if (navOutput.result?.done) {
         return true;
       }
     } catch (error) {
-      logger.error(`Failed to execute step: ${error}`);
       if (
         error instanceof ChatModelAuthError ||
         error instanceof ChatModelBadRequestError ||
@@ -286,8 +474,61 @@ export class Executor {
       ) {
         throw error;
       }
-      context.consecutiveFailures++;
-      logger.error(`Failed to execute step: ${error}`);
+      const classified = classifyError(error);
+      const failAction = this.failureClassifier.next(classified);
+      logger.warning(`FailureClassifier → ${failAction} (${classified.type}): ${classified.message}`);
+      context.consecutiveFailures = this.failureClassifier.getTotalFailures();
+
+      // T2a: route on the classifier verdict instead of just counting.
+      // - fail_fast / auth_or_config: abort immediately, do not retry.
+      // - hitl_handoff: pause the loop and ask the user how to proceed.
+      // - retry_backoff: wait before continuing the loop.
+      // - retry / repair / hitl_ask / hitl_approve: fall through (existing
+      //   action handlers already manage hitl_ask / hitl_approve via
+      //   ApprovalPolicy).
+      if (failAction === 'fail_fast') {
+        logger.error(`fail_fast: ${classified.type}: ${classified.message}`);
+        throw new MaxFailuresReachedError(t('exec_errors_maxFailuresReached'));
+      }
+      if (failAction === 'hitl_handoff' && this._hitlController) {
+        try {
+          const decision = await this._hitlController.requestDecision({
+            id: `hitl-handoff-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            reason: 'repeated_failure',
+            pendingAction: { handoff: { reason: classified.type, message: classified.message } },
+            context: {
+              summary: `Agent stuck after repeated ${classified.type} failures. Last error: ${classified.message}`,
+              risk: 'medium',
+              confidence: 0.4,
+            },
+          });
+          context.messageManager.addHITLDecision(decision, {
+            id: `hitl-handoff-${Date.now()}`,
+            reason: 'repeated_failure',
+            pendingAction: { handoff: {} },
+            context: { summary: 'handoff', risk: 'medium', confidence: 0.4 },
+          });
+          if (decision.type === 'reject') {
+            throw new MaxFailuresReachedError(t('exec_errors_maxFailuresReached'));
+          }
+          // approve / edit / answer → continue the loop, classifier reset
+          this.failureClassifier.recordSuccess();
+          context.consecutiveFailures = 0;
+          return false;
+        } catch (handoffErr) {
+          if (handoffErr instanceof MaxFailuresReachedError) throw handoffErr;
+          logger.warning('HITL handoff failed, falling back to maxFailures gate', handoffErr);
+        }
+      }
+      if (failAction === 'retry_backoff') {
+        const backoffMs = Math.min(
+          5_000,
+          (context.options.retryDelay ?? 1) * 1000 * Math.pow(2, this.failureClassifier.getCounts().transient - 1),
+        );
+        logger.info(`retry_backoff: sleeping ${backoffMs}ms before next iteration`);
+        await new Promise(r => setTimeout(r, backoffMs));
+      }
+
       if (context.consecutiveFailures >= context.options.maxFailures) {
         throw new MaxFailuresReachedError(t('exec_errors_maxFailuresReached'));
       }

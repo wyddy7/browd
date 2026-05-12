@@ -10,6 +10,39 @@ export interface Message {
   actor: Actors;
   content: string;
   timestamp: number; // Unix timestamp in milliseconds
+  /**
+   * T2f-1.5: optional inline thumbnail (base64, ~256×144 JPEG q=0.6)
+   * shown when a screenshot tool fires. Side-panel-only — never
+   * persisted to chatHistoryStore (storage entries leave this
+   * undefined). Click on the rendered image opens a full-resolution
+   * lightbox (T2f-final-fix) when imageFullBase64 is present,
+   * otherwise falls back to the thumbnail URL.
+   */
+  imageThumbBase64?: string;
+  imageThumbMime?: string;
+  /** T2f-final-fix: full-resolution screenshot payload for the lightbox. */
+  imageFullBase64?: string;
+  imageFullMime?: string;
+  /**
+   * T2f-replan: live plan checklist emitted by the planner /
+   * replanner nodes. Side-panel renders as a checkbox list and
+   * updates in place across the chat session. Side-panel-only —
+   * never persisted to chatHistoryStore.
+   */
+  planItems?: { text: string; done: boolean }[];
+  /**
+   * T2f-thinking-split: lifecycle phase of an agent-emitted message
+   * inside one user-task run.
+   *   'thinking' — intermediate work (Navigator step, screenshot
+   *     capture, internal Planner reasoning, retry, replan). Folded
+   *     into a collapsible section by MessageList so the chat doesn't
+   *     drown in transcript noise.
+   *   'final' — the answer the user actually asked for. Always
+   *     rendered outside the collapsible.
+   * Undefined = pre-T2f-thinking-split message or user input;
+   * rendered as plain.
+   */
+  phase?: 'thinking' | 'final';
 }
 
 export interface ChatMessage extends Message {

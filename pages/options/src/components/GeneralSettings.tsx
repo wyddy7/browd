@@ -3,7 +3,12 @@ import {
   type AppearanceTheme,
   type GeneralSettingsConfig,
   type InterfaceLanguage,
+  type VisionMode,
+  type AgentMode,
   generalSettingsStore,
+  agentModelStore,
+  AgentNameEnum,
+  modelSupportsVision,
   DEFAULT_GENERAL_SETTINGS,
 } from '@extension/storage';
 import { ToggleSwitch, ToggleTheme } from '@extension/ui';
@@ -22,6 +27,7 @@ interface GeneralSettingsProps {
 
 export const GeneralSettings = ({ onAppearanceThemeChange }: GeneralSettingsProps) => {
   const [settings, setSettings] = useState<GeneralSettingsConfig>(DEFAULT_GENERAL_SETTINGS);
+  const [navigatorSupportsVision, setNavigatorSupportsVision] = useState(false);
 
   useEffect(() => {
     // Load initial settings
@@ -29,6 +35,17 @@ export const GeneralSettings = ({ onAppearanceThemeChange }: GeneralSettingsProp
       setSettings(settings);
       window.localStorage.setItem(LANGUAGE_OVERRIDE_KEY, settings.interfaceLanguage);
     });
+    // T2f-1: poll the Navigator model capability so the Vision Mode
+    // section can warn when the user's choice cannot be honoured at
+    // runtime. agentModelStore has liveUpdate; the Options page is
+    // also the only place where it is mutated, so a single read on
+    // mount is enough — re-render happens via the model select itself.
+    agentModelStore
+      .getAgentModel(AgentNameEnum.Navigator)
+      .then(model => {
+        setNavigatorSupportsVision(modelSupportsVision(model?.provider ?? '', model?.modelName ?? ''));
+      })
+      .catch(() => setNavigatorSupportsVision(false));
   }, []);
 
   const updateSetting = async <K extends keyof GeneralSettingsConfig>(key: K, value: GeneralSettingsConfig[K]) => {
@@ -237,6 +254,56 @@ export const GeneralSettings = ({ onAppearanceThemeChange }: GeneralSettingsProp
 
           <div className="flex items-center justify-between gap-6">
             <div>
+              <h3 className={settingTitleClass}>{t('options_general_agentMode')}</h3>
+              <p className={settingDescriptionClass}>{t('options_general_agentMode_desc')}</p>
+            </div>
+            <label htmlFor="agentMode" className="sr-only">
+              {t('options_general_agentMode')}
+            </label>
+            <select
+              id="agentMode"
+              value={settings.agentMode}
+              onChange={e => updateSetting('agentMode', e.target.value as AgentMode)}
+              className={selectInputClass}>
+              <option value="unified">{t('options_general_agentMode_unified')}</option>
+              <option value="legacy">{t('options_general_agentMode_legacy')}</option>
+            </select>
+          </div>
+
+          {settings.agentMode === 'unified' && (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-6">
+                <div>
+                  <h3 className={settingTitleClass}>{t('options_general_visionMode')}</h3>
+                  <p className={settingDescriptionClass}>{t('options_general_visionMode_desc')}</p>
+                </div>
+                <label htmlFor="visionMode" className="sr-only">
+                  {t('options_general_visionMode')}
+                </label>
+                <select
+                  id="visionMode"
+                  value={settings.visionMode}
+                  onChange={e => updateSetting('visionMode', e.target.value as VisionMode)}
+                  className={selectInputClass}>
+                  <option value="off">{t('options_general_visionMode_off')}</option>
+                  <option value="always" disabled={!navigatorSupportsVision}>
+                    {t('options_general_visionMode_always')}
+                  </option>
+                  <option value="fallback" disabled={!navigatorSupportsVision}>
+                    {t('options_general_visionMode_fallback')}
+                  </option>
+                </select>
+              </div>
+              {!navigatorSupportsVision && settings.visionMode !== 'off' && (
+                <p className="text-sm font-normal text-[var(--browd-warning,#c08400)]">
+                  {t('options_general_visionMode_warning')}
+                </p>
+              )}
+            </div>
+          )}
+
+          <div className="flex items-center justify-between gap-6">
+            <div>
               <h3 className={settingTitleClass}>{t('options_general_launchShortcut')}</h3>
               <p className={settingDescriptionClass}>{t('options_general_launchShortcut_desc')}</p>
             </div>
@@ -250,7 +317,7 @@ export const GeneralSettings = ({ onAppearanceThemeChange }: GeneralSettingsProp
                   void chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
                 }}
                 className={`${shortcutButtonClass} text-[var(--browd-text)] hover:bg-[var(--browd-panel-strong)]`}>
-                Open Shortcuts
+                {t('options_general_launchShortcut_btnOpen') || 'Open Shortcuts'}
               </button>
             </div>
           </div>

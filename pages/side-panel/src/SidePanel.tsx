@@ -14,18 +14,28 @@ import {
   llmProviderStore,
   llmProviderModelNames,
   getSpeechToTextOptions,
+  getJudgeOptions,
   getDefaultAgentModelParams,
   AgentNameEnum,
   ProviderTypeEnum,
   speechToTextModelStore,
+  judgeModelStore,
+  agentTabFocusStore,
+  type AgentTabFocusMode,
 } from '@extension/storage';
 import favoritesStorage, { type FavoritePrompt } from '@extension/storage/lib/prompt/favorites';
 import { t } from '@extension/i18n';
 import MessageList from './components/MessageList';
+import { PlanPinned } from './components/PlanPinned';
+import { buildPriorMessagesForAgent } from './utils';
 import ChatInput, { type ChatInputContentController } from './components/ChatInput';
 import ChatHistoryList from './components/ChatHistoryList';
 import BookmarkList from './components/BookmarkList';
+import { HITLPrompt } from './components/HITLPrompt';
+import { TracePanel, type TraceEntry } from './components/TracePanel';
 import { EventType, type AgentEvent, ExecutionState } from './types/event';
+import type { HITLRequest, HITLDecision } from '../../../chrome-extension/src/background/agent/hitl/types';
+import { HITL_REQUEST_MESSAGE } from '../../../chrome-extension/src/background/agent/hitl/types';
 import './SidePanel.css';
 
 type ModelOption = {
@@ -160,16 +170,60 @@ const SidePanel = () => {
   const [hasConfiguredModels, setHasConfiguredModels] = useState<boolean | null>(null); // null = loading, false = no models, true = has models
   const [availableModels, setAvailableModels] = useState<ModelOption[]>([]);
   const [availableSpeechToTextModels, setAvailableSpeechToTextModels] = useState<ModelOption[]>([]);
+  const [availableJudgeModels, setAvailableJudgeModels] = useState<ModelOption[]>([]);
   const [selectedAgentModels, setSelectedAgentModels] = useState<Record<QuickAgent, string>>({
     planner: '',
     navigator: '',
   });
   const [selectedSpeechToTextModel, setSelectedSpeechToTextModel] = useState('');
+  const [selectedJudgeModel, setSelectedJudgeModel] = useState('');
+  // T2f-tab-iso-2 — agent-tab focus mode. Persisted in storage; live-updated.
+  const [agentTabFocusMode, setAgentTabFocusMode] = useState<AgentTabFocusMode>('foreground');
   const [activeQuickAgent, setActiveQuickAgent] = useState<QuickAgent>('navigator');
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessingSpeech, setIsProcessingSpeech] = useState(false);
   const [isReplaying, setIsReplaying] = useState(false);
   const [replayEnabled, setReplayEnabled] = useState(false);
+  const [hitlRequest, setHitlRequest] = useState<HITLRequest | null>(null);
+  const [traceEntries, setTraceEntries] = useState<TraceEntry[]>([]);
+  // T2f-1.5: bumped each time a screenshot trace event arrives so the
+  // flash overlay div re-mounts and replays its CSS animation. Value
+  // doesn't otherwise matter — the key is only for animation re-trigger.
+  const [screenshotFlashKey, setScreenshotFlashKey] = useState(0);
+  // T2f-final-2: cumulative token usage for the current chat session.
+  // Reset on new chat / history-load. Each TASK_USAGE event from the
+  // agent runtime bumps the running totals.
+  const [tokenUsage, setTokenUsage] = useState<{ input: number; output: number; contextWindow: number } | null>(null);
+  // T2f-final-3 — single shared screenshot lightbox URL. Both
+  // MessageList thumbnails and TracePanel previews open this; window.open
+  // with a data: URL is blocked in Chromium so we render in-panel.
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  // T2f-plan-pinned — current plan as a compact pinned checklist
+  // above the message list, instead of an inline chat message that
+  // scrolls away. Cleared between runs.
+  const [currentPlan, setCurrentPlan] = useState<{ text: string; done: boolean }[] | null>(null);
+  useEffect(() => {
+    if (!lightboxUrl) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setLightboxUrl(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [lightboxUrl]);
+  // T2f-thinking-split / T2f-thinking-live: tracks the start index of
+  // the current agent run so TASK_OK / TASK_FAIL can mark the LAST
+  // message as 'final'. The intermediate ones are tagged 'thinking'
+  // at appendMessage time via currentPhaseRef so the collapsible
+  // group renders LIVE, not only after the run finishes.
+  const runStartIdxRef = useRef<number | null>(null);
+  const currentPhaseRef = useRef<'thinking' | null>(null);
+  // T2f-clean-finish — state mirrors of the refs above so MessageList
+  // re-renders when a run starts / ends. Refs alone don't trigger
+  // re-render. liveRunStartIdx tells thinking-groups whether they are
+  // the live run (start expanded). collapseSignal increments on every
+  // TASK_OK/FAIL/CANCEL so the live group auto-collapses.
+  const [liveRunStartIdx, setLiveRunStartIdx] = useState<number | null>(null);
+  const [collapseSignal, setCollapseSignal] = useState(0);
   const sessionIdRef = useRef<string | null>(null);
   const isReplayingRef = useRef<boolean>(false);
   const portRef = useRef<chrome.runtime.Port | null>(null);
@@ -298,10 +352,20 @@ const SidePanel = () => {
       }
 
       setAvailableSpeechToTextModels(speechToTextOptions);
+      // T3-judge — judge options share the same shape as planner/navigator
+      // available models. Keep separate list so user can pick a cheap
+      // grader independent of agent runtime models.
+      const judgeOptions = getJudgeOptions(providers).map(option => ({
+        provider: option.provider,
+        providerName: option.providerName,
+        model: option.modelName,
+      }));
+      setAvailableJudgeModels(judgeOptions);
     } catch (error) {
       console.error('Error loading available models:', error);
       setAvailableModels([]);
       setAvailableSpeechToTextModels([]);
+      setAvailableJudgeModels([]);
     }
   }, []);
 
@@ -310,6 +374,8 @@ const SidePanel = () => {
       const plannerConfig = await agentModelStore.getAgentModel(AgentNameEnum.Planner);
       const navigatorConfig = await agentModelStore.getAgentModel(AgentNameEnum.Navigator);
       const speechToTextConfig = await speechToTextModelStore.getSpeechToTextModel();
+      const judgeConfig = await judgeModelStore.getJudgeModel();
+      const tabFocusMode = await agentTabFocusStore.getMode();
       setSelectedAgentModels({
         planner: plannerConfig ? `${plannerConfig.provider}>${plannerConfig.modelName}` : '',
         navigator: navigatorConfig ? `${navigatorConfig.provider}>${navigatorConfig.modelName}` : '',
@@ -317,10 +383,14 @@ const SidePanel = () => {
       setSelectedSpeechToTextModel(
         speechToTextConfig ? `${speechToTextConfig.provider}>${speechToTextConfig.modelName}` : '',
       );
+      setSelectedJudgeModel(judgeConfig ? `${judgeConfig.provider}>${judgeConfig.modelName}` : '');
+      setAgentTabFocusMode(tabFocusMode);
     } catch (error) {
       console.error('Error loading agent models:', error);
       setSelectedAgentModels({ planner: '', navigator: '' });
       setSelectedSpeechToTextModel('');
+      setSelectedJudgeModel('');
+      setAgentTabFocusMode('foreground');
     }
   }, []);
 
@@ -426,6 +496,32 @@ const SidePanel = () => {
     }
   }, []);
 
+  // T2f-tab-iso-2 — toggle agent-tab focus. Persists to storage; the
+  // background SW reads it on next openAgentTab() (i.e. next TASK_START).
+  const handleAgentTabFocusToggle = useCallback(() => {
+    setAgentTabFocusMode(prev => {
+      const next: AgentTabFocusMode = prev === 'foreground' ? 'background' : 'foreground';
+      void agentTabFocusStore.setMode(next);
+      return next;
+    });
+  }, []);
+
+  // T3-judge — handler mirrors STT. Persists eval grader choice.
+  const handleJudgeModelChange = useCallback(async (modelValue: string) => {
+    setSelectedJudgeModel(modelValue);
+    try {
+      if (!modelValue) {
+        await judgeModelStore.resetJudgeModel();
+        return;
+      }
+      const [provider, modelName] = modelValue.split('>');
+      if (!provider || !modelName) return;
+      await judgeModelStore.setJudgeModel({ provider, modelName });
+    } catch (error) {
+      console.error('Error saving judge model:', error);
+    }
+  }, []);
+
   useEffect(() => {
     sessionIdRef.current = currentSessionId;
   }, [currentSessionId]);
@@ -438,9 +534,20 @@ const SidePanel = () => {
     // Don't save progress messages
     const isProgressMessage = newMessage.content === progressMessage;
 
+    // T2f-thinking-live: tag agent-emitted messages as 'thinking'
+    // immediately while a run is in flight (currentPhaseRef set on
+    // TASK_START, cleared on TASK_OK/FAIL/CANCEL). User-input
+    // messages stay phase-undefined so they render outside the
+    // collapsible group. Already-tagged messages (e.g. final
+    // override) are kept as is.
+    let staged = newMessage;
+    if (!staged.phase && staged.actor !== Actors.USER && !isProgressMessage && currentPhaseRef.current === 'thinking') {
+      staged = { ...staged, phase: 'thinking' };
+    }
+
     setMessages(prev => {
       const filteredMessages = prev.filter((msg, idx) => !(msg.content === progressMessage && idx === prev.length - 1));
-      return [...filteredMessages, newMessage];
+      return [...filteredMessages, staged];
     });
 
     // Use provided sessionId if available, otherwise fall back to sessionIdRef.current
@@ -450,6 +557,8 @@ const SidePanel = () => {
 
     // Save message to storage if we have a session and it's not a progress message
     if (effectiveSessionId && !isProgressMessage) {
+      // Persist the original message (without phase) — phase is a
+      // runtime UI concern only.
       chatHistoryStore
         .addMessage(effectiveSessionId, newMessage)
         .catch(err => console.error('Failed to save message to history:', err));
@@ -467,14 +576,47 @@ const SidePanel = () => {
         case Actors.SYSTEM:
           switch (state) {
             case ExecutionState.TASK_START:
-              // Reset historical session flag when a new task starts
+              // Reset historical session flag and trace when a new task starts
               setIsHistoricalSession(false);
+              setTraceEntries([]);
+              // T2f-thinking-live: open the live thinking phase so
+              // every appendMessage during this run gets phase
+              // 'thinking' immediately (collapsible visible while
+              // the agent is still working).
+              setMessages(prev => {
+                runStartIdxRef.current = prev.length;
+                setLiveRunStartIdx(prev.length);
+                return prev;
+              });
+              currentPhaseRef.current = 'thinking';
               break;
             case ExecutionState.TASK_OK:
               setIsFollowUpMode(true);
               setInputEnabled(true);
               setShowStopButton(false);
               setIsReplaying(false);
+              // T2f-thinking-live: thinking is already tagged
+              // live; here we only need to lift the LAST run message
+              // out of the collapsible (it's the final answer).
+              currentPhaseRef.current = null;
+              // T2f-clean-finish — clear ref UNCONDITIONALLY so it
+              // can never drift from state (liveRunStartIdx). Edge
+              // case: TASK_OK with empty run (start >= prev.length)
+              // used to leave the ref pointing at an old slice.
+              {
+                const startedAt = runStartIdxRef.current;
+                runStartIdxRef.current = null;
+                setMessages(prev => {
+                  if (startedAt === null || startedAt >= prev.length) return prev;
+                  return prev.map((m, i) => {
+                    if (i < startedAt) return m;
+                    if (i === prev.length - 1) return { ...m, phase: 'final' as const };
+                    return m;
+                  });
+                });
+              }
+              setLiveRunStartIdx(null);
+              setCollapseSignal(s => s + 1);
               break;
             case ExecutionState.TASK_FAIL:
               setIsFollowUpMode(true);
@@ -482,6 +624,22 @@ const SidePanel = () => {
               setShowStopButton(false);
               setIsReplaying(false);
               skip = false;
+              currentPhaseRef.current = null;
+              // T2f-clean-finish — clear ref unconditionally (see TASK_OK).
+              {
+                const startedAt = runStartIdxRef.current;
+                runStartIdxRef.current = null;
+                setMessages(prev => {
+                  if (startedAt === null || startedAt >= prev.length) return prev;
+                  return prev.map((m, i) => {
+                    if (i < startedAt) return m;
+                    if (i === prev.length - 1) return { ...m, phase: 'final' as const };
+                    return m;
+                  });
+                });
+              }
+              setLiveRunStartIdx(null);
+              setCollapseSignal(s => s + 1);
               break;
             case ExecutionState.TASK_CANCEL:
               setIsFollowUpMode(false);
@@ -489,11 +647,43 @@ const SidePanel = () => {
               setShowStopButton(false);
               setIsReplaying(false);
               skip = false;
+              currentPhaseRef.current = null;
+              // On cancel everything in the slice stays 'thinking'
+              // (no final answer was produced). runStartIdxRef
+              // already null because thinking is set live; we just
+              // close the run.
+              runStartIdxRef.current = null;
+              setLiveRunStartIdx(null);
+              setCollapseSignal(s => s + 1);
               break;
             case ExecutionState.TASK_PAUSE:
               break;
             case ExecutionState.TASK_RESUME:
               break;
+            case ExecutionState.TASK_USAGE: {
+              // T2f-final-2 / T2f-final-fix: parse cumulative token
+              // totals for this invoke and add them to the session
+              // running total. Logged so a DevTools open on the side
+              // panel makes it obvious whether the event is reaching
+              // the UI (vs. dropped silently by the provider).
+              try {
+                const parsed = JSON.parse(content ?? '{}') as {
+                  inputTokens?: number;
+                  outputTokens?: number;
+                  contextWindow?: number;
+                };
+                const cw = parsed.contextWindow ?? 100_000;
+                console.log('[Browd] TASK_USAGE', parsed);
+                setTokenUsage(prev => ({
+                  input: (prev?.input ?? 0) + (parsed.inputTokens ?? 0),
+                  output: (prev?.output ?? 0) + (parsed.outputTokens ?? 0),
+                  contextWindow: cw,
+                }));
+              } catch (err) {
+                console.warn('[Browd] TASK_USAGE parse failed', err, content);
+              }
+              return;
+            }
             default:
               console.error('Invalid task state', state);
               return;
@@ -507,6 +697,30 @@ const SidePanel = () => {
               displayProgress = true;
               break;
             case ExecutionState.STEP_OK:
+              // T2f-replan: planner / replanner can emit a JSON
+              // checklist payload as content. Side-panel renders
+              // it as a checkbox list (MessageList ScreenshotThumb
+              // analogue). The same actor+state is reused for the
+              // final user-facing answer too — distinguish by JSON
+              // shape.
+              if (typeof content === 'string' && content.trim().startsWith('{"type":"plan"')) {
+                try {
+                  const parsed = JSON.parse(content) as {
+                    type: string;
+                    items?: { text: string; done: boolean }[];
+                  };
+                  if (parsed.type === 'plan' && Array.isArray(parsed.items)) {
+                    // T2f-plan-pinned: render checklist as a pinned
+                    // affordance above the chat instead of an inline
+                    // message. Updates in place as planner /
+                    // replanner re-emit.
+                    setCurrentPlan(parsed.items);
+                    return;
+                  }
+                } catch {
+                  // fall through to normal handling
+                }
+              }
               skip = false;
               break;
             case ExecutionState.STEP_FAIL:
@@ -546,6 +760,70 @@ const SidePanel = () => {
             case ExecutionState.ACT_FAIL:
               skip = false;
               break;
+            case ExecutionState.STEP_TRACE: {
+              const raw = content ?? '';
+              // Try structured payload first (new T0 path). Falls back to
+              // the legacy "✓ tool: reason" string format if not JSON.
+              if (raw.startsWith('{')) {
+                try {
+                  const parsed = JSON.parse(raw) as { structured?: unknown };
+                  if (parsed.structured && typeof parsed.structured === 'object') {
+                    const structured = parsed.structured as TraceEntry & {
+                      tool?: string;
+                      imageThumbBase64?: string;
+                      imageThumbMime?: string;
+                      imageFullBase64?: string;
+                      imageFullMime?: string;
+                    };
+                    setTraceEntries(prev => [...prev.slice(-19), structured as TraceEntry]);
+                    // T2f-1.5: when the screenshot tool fires, also drop
+                    // an inline preview into the chat (Navigator actor)
+                    // and bump the flash-overlay key so the iOS-style
+                    // capture animation replays. This message is
+                    // ephemeral — we deliberately do NOT pass a
+                    // sessionId so chatHistoryStore is not touched
+                    // (the bytes shouldn't bloat the persistent log).
+                    if (structured.tool === 'screenshot' && structured.imageThumbBase64) {
+                      // T2f-final-fix-3 diag: log payload sizes so we
+                      // can confirm the full-resolution JPEG actually
+                      // travelled through the runtime port (Chromium
+                      // caps individual messages around 64 MB).
+                      console.log(
+                        '[Browd] screenshot trace',
+                        'thumb=',
+                        structured.imageThumbBase64?.length ?? 0,
+                        'full=',
+                        structured.imageFullBase64?.length ?? 0,
+                      );
+                      setScreenshotFlashKey(k => k + 1);
+                      setMessages(prev => [
+                        ...prev.filter(m => !(m.content === progressMessage && m === prev[prev.length - 1])),
+                        {
+                          actor: Actors.NAVIGATOR,
+                          content: 'Captured screenshot',
+                          timestamp: Date.now(),
+                          imageThumbBase64: structured.imageThumbBase64,
+                          imageThumbMime: structured.imageThumbMime,
+                          imageFullBase64: structured.imageFullBase64,
+                          imageFullMime: structured.imageFullMime,
+                          // T2f-thinking-live: tag screenshot
+                          // entries the same way appendMessage does
+                          // so they fold into the live group too.
+                          phase: currentPhaseRef.current === 'thinking' ? 'thinking' : undefined,
+                        },
+                      ]);
+                    }
+                    return;
+                  }
+                } catch {
+                  // fall through to legacy parse
+                }
+              }
+              const icon = raw.startsWith('✓') ? ('✓' as const) : raw.startsWith('✗') ? ('✗' as const) : ('→' as const);
+              const label = raw.replace(/^[✓✗→]\s*/, '');
+              setTraceEntries(prev => [...prev.slice(-19), { icon, label }]);
+              return;
+            }
             default:
               console.error('Invalid action', state);
               return;
@@ -644,6 +922,8 @@ const SidePanel = () => {
           setIsProcessingSpeech(false);
         } else if (message && message.type === 'heartbeat_ack') {
           console.log('Heartbeat acknowledged');
+        } else if (message && message.type === HITL_REQUEST_MESSAGE) {
+          setHitlRequest(message.payload as HITLRequest);
         }
       });
 
@@ -704,6 +984,18 @@ const SidePanel = () => {
       }
     },
     [stopConnection],
+  );
+
+  const submitHITLDecision = useCallback(
+    (id: string, decision: HITLDecision) => {
+      try {
+        sendMessage({ type: 'hitl_decision', id, decision });
+      } catch (e) {
+        console.error('Failed to submit HITL decision', e);
+      }
+      setHitlRequest(null);
+    },
+    [sendMessage],
   );
 
   // Handle replay command
@@ -918,6 +1210,14 @@ const SidePanel = () => {
         setupConnection();
       }
 
+      // T2h: ship the prior chat turns so the unified agent has
+      // cross-task memory. We re-read from chatHistoryStore (rather
+      // than the in-memory `messages` state) because that is the
+      // persistent source of truth and includes the userMessage we
+      // just appended above. Drop the trailing USER turn — it is the
+      // task we are sending right now.
+      const priorMessages = await buildPriorMessagesForAgent(sessionIdRef.current);
+
       // Send message using the utility function
       if (isFollowUpMode) {
         // Send as follow-up task
@@ -926,8 +1226,9 @@ const SidePanel = () => {
           task: text,
           taskId: sessionIdRef.current,
           tabId,
+          priorMessages,
         });
-        console.log('follow_up_task sent', text, tabId, sessionIdRef.current);
+        console.log('follow_up_task sent', text, tabId, sessionIdRef.current, priorMessages.length);
       } else {
         // Send as new task
         await sendMessage({
@@ -935,8 +1236,9 @@ const SidePanel = () => {
           task: text,
           taskId: sessionIdRef.current,
           tabId,
+          priorMessages,
         });
-        console.log('new_task sent', text, tabId, sessionIdRef.current);
+        console.log('new_task sent', text, tabId, sessionIdRef.current, priorMessages.length);
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
@@ -979,6 +1281,9 @@ const SidePanel = () => {
     setShowStopButton(false);
     setIsFollowUpMode(false);
     setIsHistoricalSession(false);
+    setTokenUsage(null);
+    setTraceEntries([]);
+    setCurrentPlan(null);
 
     // Disconnect any existing connection
     stopConnection();
@@ -1449,6 +1754,8 @@ const SidePanel = () => {
                         onActiveAgentChange={setActiveQuickAgent}
                         onModelChange={handleAgentModelChange}
                         onSpeechToTextModelChange={handleSpeechToTextModelChange}
+                        agentTabFocusMode={agentTabFocusMode}
+                        onAgentTabFocusToggle={handleAgentTabFocusToggle}
                         preferredModelMenuDirection="down"
                         isRecording={isRecording}
                         isProcessingSpeech={isProcessingSpeech}
@@ -1460,6 +1767,7 @@ const SidePanel = () => {
                         isDarkMode={isDarkMode}
                         historicalSessionId={isHistoricalSession && replayEnabled ? currentSessionId : null}
                         onReplay={handleReplay}
+                        tokenUsage={tokenUsage}
                       />
                     </div>
                     <div className="flex-1 overflow-y-auto bg-[var(--browd-bg)]/35">
@@ -1476,14 +1784,64 @@ const SidePanel = () => {
                     </div>
                   </>
                 )}
+                {currentPlan && currentPlan.length > 0 && (
+                  <div className="browd-plan-pinned border-b border-[var(--browd-border)] bg-[var(--browd-surface)]/85 px-3 py-2 backdrop-blur">
+                    <PlanPinned items={currentPlan} />
+                  </div>
+                )}
                 {messages.length > 0 && (
-                  <div className="scrollbar-gutter-stable flex-1 overflow-x-hidden overflow-y-scroll bg-[var(--browd-bg)]/60 p-3 scroll-smooth">
-                    <MessageList messages={messages} isDarkMode={isDarkMode} />
+                  <div className="scrollbar-gutter-stable relative flex-1 overflow-x-hidden overflow-y-scroll bg-[var(--browd-bg)]/60 p-3 scroll-smooth">
+                    <MessageList
+                      messages={messages}
+                      isDarkMode={isDarkMode}
+                      onThumbClick={setLightboxUrl}
+                      liveRunStartIdx={liveRunStartIdx}
+                      collapseSignal={collapseSignal}
+                    />
                     <div ref={messagesEndRef} />
+                    {screenshotFlashKey > 0 && (
+                      <div
+                        key={screenshotFlashKey}
+                        className="browd-screenshot-flash"
+                        aria-hidden="true"
+                        onAnimationEnd={undefined}
+                      />
+                    )}
                   </div>
                 )}
                 {messages.length > 0 && (
                   <div className="border-t border-[var(--browd-border)] bg-[var(--browd-surface)]/80 p-2 backdrop-blur">
+                    <TracePanel
+                      entries={traceEntries}
+                      onThumbClick={setLightboxUrl}
+                      onExport={() => {
+                        // T2f-final-fix-7: strip the image payloads
+                        // before copying so the JSON the user pastes
+                        // into a debug ticket is small (a 30-step
+                        // session would otherwise be ~3 MB of base64).
+                        const dump = JSON.stringify(
+                          traceEntries.map(e => {
+                            if (e && typeof e === 'object' && 'tool' in e) {
+                              const {
+                                imageThumbBase64: _t,
+                                imageFullBase64: _f,
+                                imageThumbMime: _tm,
+                                imageFullMime: _fm,
+                                ...rest
+                              } = e as unknown as Record<string, unknown>;
+                              return rest;
+                            }
+                            return e;
+                          }),
+                          null,
+                          2,
+                        );
+                        navigator.clipboard.writeText(dump).catch(() => {
+                          /* clipboard may be unavailable; silently ignore */
+                        });
+                      }}
+                    />
+                    {hitlRequest && <HITLPrompt request={hitlRequest} onDecision={submitHITLDecision} />}
                     <ChatInput
                       onSendMessage={handleSendMessage}
                       onStopTask={handleStopTask}
@@ -1496,6 +1854,8 @@ const SidePanel = () => {
                       onActiveAgentChange={setActiveQuickAgent}
                       onModelChange={handleAgentModelChange}
                       onSpeechToTextModelChange={handleSpeechToTextModelChange}
+                      agentTabFocusMode={agentTabFocusMode}
+                      onAgentTabFocusToggle={handleAgentTabFocusToggle}
                       preferredModelMenuDirection="up"
                       isRecording={isRecording}
                       isProcessingSpeech={isProcessingSpeech}
@@ -1507,6 +1867,7 @@ const SidePanel = () => {
                       isDarkMode={isDarkMode}
                       historicalSessionId={isHistoricalSession && replayEnabled ? currentSessionId : null}
                       onReplay={handleReplay}
+                      tokenUsage={tokenUsage}
                     />
                   </div>
                 )}
@@ -1514,6 +1875,26 @@ const SidePanel = () => {
             )}
           </>
         )}
+        {lightboxUrl ? (
+          <div
+            className="browd-screenshot-lightbox"
+            role="dialog"
+            aria-modal="true"
+            aria-label="screenshot preview"
+            onClick={() => setLightboxUrl(null)}>
+            <img src={lightboxUrl} alt="agent screenshot full" className="browd-screenshot-lightbox-img" />
+            <button
+              type="button"
+              className="browd-screenshot-lightbox-close"
+              onClick={e => {
+                e.stopPropagation();
+                setLightboxUrl(null);
+              }}
+              aria-label="close preview">
+              ×
+            </button>
+          </div>
+        ) : null}
       </div>
     </div>
   );

@@ -56,16 +56,16 @@
     "message": "Checking configuration..."
   },
   "chat_buttons_stop": {
-    "message": "Stop"
+    "message": "Stoppen"
   },
   "chat_buttons_replay": {
-    "message": "Replay"
+    "message": "Wiederholen"
   },
   "chat_buttons_send": {
-    "message": "Send"
+    "message": "Senden"
   },
   "chat_input_placeholder": {
-    "message": "What can I help you with?"
+    "message": "Wie kann ich helfen?"
   },
   "chat_input_form": {
     "message": "Chat input form"
@@ -86,31 +86,31 @@
     "message": "Delete session"
   },
   "chat_bookmarks_header": {
-    "message": "Quick Start"
+    "message": "Schnellstart"
   },
   "chat_bookmarks_description": {
     "message": "Use a saved prompt or create your own starter."
   },
   "chat_bookmarks_new": {
-    "message": "New"
+    "message": "Neu"
   },
   "chat_bookmarks_saveEdit": {
-    "message": "Save changes"
+    "message": "Änderungen speichern"
   },
   "chat_bookmarks_cancelEdit": {
-    "message": "Cancel changes"
+    "message": "Änderungen verwerfen"
   },
   "chat_bookmarks_edit": {
-    "message": "Edit bookmark title"
+    "message": "Lesezeichen-Titel bearbeiten"
   },
   "chat_bookmarks_delete": {
-    "message": "Delete bookmark"
+    "message": "Lesezeichen löschen"
   },
   "chat_bookmarks_titlePlaceholder": {
-    "message": "Title"
+    "message": "Titel (max 30 Zeichen)"
   },
   "chat_bookmarks_contentPlaceholder": {
-    "message": "Describe the task you want to reuse."
+    "message": "Beschreibe die Aufgabe..."
   },
   "chat_replay_starting": {
     "message": "Starting replay of task:\n\n\"$TASK$\"",
@@ -254,76 +254,82 @@
     "message": "Russisch"
   },
   "options_general_maxSteps": {
-    "message": "Max Steps per Task"
+    "message": "Max. Schritte pro Aufgabe"
   },
   "options_general_maxSteps_desc": {
-    "message": "Step limit per task"
+    "message": "Schrittlimit pro Aufgabe"
   },
   "options_general_maxActions": {
-    "message": "Max Actions per Step"
+    "message": "Max. Aktionen pro Schritt"
   },
   "options_general_maxActions_desc": {
-    "message": "Action limit per step"
+    "message": "Aktionslimit pro Schritt"
   },
   "options_general_maxFailures": {
-    "message": "Failure Tolerance"
+    "message": "Fehlertoleranz"
   },
   "options_general_maxFailures_desc": {
-    "message": "How many consecutive failures before stopping"
+    "message": "Wie viele aufeinanderfolgende Fehler vor dem Stoppen"
   },
   "options_general_enableVision": {
-    "message": "Enable Vision"
+    "message": "Vision aktivieren"
   },
   "options_general_enableVision_desc": {
-    "message": "Use vision capability of LLMs (consumes more tokens for better results)"
+    "message": "Nutzt die Vision-Fähigkeit der LLMs (verbraucht mehr Token)"
   },
   "options_general_displayHighlights": {
-    "message": "Display Highlights"
+    "message": "Hervorhebungen anzeigen"
   },
   "options_general_displayHighlights_desc": {
-    "message": "Show visual highlights on interactive elements (e.g. buttons, links, etc.)"
+    "message": "Visuelle Hervorhebungen auf interaktiven Elementen (z.B. Buttons, Links)"
   },
   "options_general_planningInterval": {
-    "message": "Replanning Frequency"
+    "message": "Neuplanungshäufigkeit"
   },
   "options_general_planningInterval_desc": {
-    "message": "Reconsider and update the plan every [Number] steps"
+    "message": "Plan alle [Number] Schritte überdenken und aktualisieren"
   },
   "options_general_minWaitPageLoad": {
-    "message": "Page Load Wait Time"
+    "message": "Wartezeit Seitenaufbau"
   },
   "options_general_minWaitPageLoad_desc": {
-    "message": "Minimum wait time after page loads (250-5000ms)"
+    "message": "Minimale Wartezeit nach Seitenaufbau (250-5000 ms)"
   },
   "options_general_replayHistoricalTasks": {
-    "message": "Replay Historical Tasks( experimental )"
+    "message": "Historische Aufgaben wiederholen (experimentell)"
   },
   "options_general_replayHistoricalTasks_desc": {
-    "message": "Enable storing and replaying of agent step history (experimental, may have issues)"
+    "message": "Speicherung und Wiederholung des Schrittverlaufs (experimentell, kann Probleme verursachen)"
+  },
+  "options_general_agentMode": {
+    "message": "Unified agent mode (experimental)"
+  },
+  "options_general_agentMode_desc": {
+    "message": "Replace the Planner+Navigator pipeline with a single ReAct agent. Faster, requires evidence on done. Default off; flip back to classic if anything regresses."
   },
   "options_general_launchShortcut": {
-    "message": "Browser Shortcut"
+    "message": "Browser-Verknüpfung"
   },
   "options_general_launchShortcut_desc": {
-    "message": "Reliable launch shortcuts are managed by the browser. Default is Ctrl+E, and Command+E on macOS. Change it in browser shortcut settings."
+    "message": "Globale Tastenkombination zum Öffnen des Browd-Seitenpanels konfigurieren"
   },
   "options_models_providers_header": {
-    "message": "LLM Providers"
+    "message": "LLM-Anbieter"
   },
   "options_models_providers_notConfigured": {
-    "message": "No providers configured yet. Add a provider to get started."
+    "message": "Noch keine Anbieter konfiguriert. Füge einen Anbieter hinzu, um zu starten."
   },
   "options_models_providers_btnCancel": {
-    "message": "Cancel"
+    "message": "Abbrechen"
   },
   "options_models_providers_btnSave": {
-    "message": "Save"
+    "message": "Speichern"
   },
   "options_models_providers_btnDelete": {
-    "message": "Delete"
+    "message": "Löschen"
   },
   "options_models_providers_setupInstructions": {
-    "message": "Enter your API key and click Save to set it up."
+    "message": "Gib deinen API-Key ein und klicke auf Speichern."
   },
   "options_models_providers_custom_name": {
     "message": "Name"
@@ -356,7 +362,7 @@
     "message": "Modellauswahl"
   },
   "options_models_speechToText_header": {
-    "message": "Speech-to-Text-Modell"
+    "message": "Sprache-zu-Text-Modell"
   },
   "options_models_agents_navigator": {
     "message": "Navigiert Websites und führt Aktionen aus"
@@ -374,19 +380,19 @@
     "message": "Top P"
   },
   "options_models_labels_reasoning": {
-    "message": "Reasoning"
+    "message": "Überlegungsaufwand"
   },
   "options_models_labels_systemPrompt": {
-    "message": "System-Prompt"
+    "message": "Systemanweisung"
   },
   "options_models_systemPrompt_placeholder": {
-    "message": "Beispiel: Antworte in derselben Sprache wie die Browd-Oberfläche. Sei prägnant. Handle wie ein sorgfältiger Rechercheassistent."
+    "message": "Beispiel: Antworte auf Deutsch. Halte dich kurz. Verhalte dich wie ein umsichtiger Rechercheur."
   },
   "options_models_systemPrompt_desc": {
-    "message": "Optionale dauerhafte Anweisungen für Rolle, Stil oder Antwortsprache dieses Agenten. Die gewählte Oberflächensprache wird ebenfalls an den Agenten übergeben."
+    "message": "Optionale dauerhafte Anweisungen für Rolle, Stil oder Antwortsprache. Die gewählte Oberflächensprache wird ebenfalls an den Agenten übergeben."
   },
   "options_models_stt_desc": {
-    "message": "Configure the provider/model used for microphone speech-to-text. Gemini works directly, OpenRouter requires an audio-input chat model, and Grok uses xAI's dedicated STT API."
+    "message": "Konfiguriere Anbieter/Modell für die Spracherkennung per Mikrofon. Gemini funktioniert sofort, OpenRouter benötigt ein Audio-fähiges Modell."
   },
   "options_models_chooseModel": {
     "message": "Modell wählen"
@@ -1025,5 +1031,134 @@
   },
   "options_general_language_ptBR": {
     "message": "Portugiesisch (Brasilien)"
+  },
+  "chat_bookmarks_default1": {
+    "message": "Browd entdecken"
+  },
+  "chat_bookmarks_default2": {
+    "message": "Daten extrahieren"
+  },
+  "chat_bookmarks_default3": {
+    "message": "Workflow erstellen"
+  },
+  "chat_bookmarks_done": {
+    "message": "Fertig"
+  },
+  "chat_bookmarks_edit_btn": {
+    "message": "Bearbeiten"
+  },
+  "chat_input_models_button": {
+    "message": "Modelle"
+  },
+  "chat_input_models_model": {
+    "message": "Modell"
+  },
+  "chat_input_models_role": {
+    "message": "Rolle"
+  },
+  "chat_input_placeholder_with_files": {
+    "message": "Nachricht hinzufügen (optional)..."
+  },
+  "options_general_launchShortcut_btnOpen": {
+    "message": "Verknüpfungen öffnen"
+  },
+  "options_models_agents_navigator_name": {
+    "message": "Navigator"
+  },
+  "options_models_agents_planner_name": {
+    "message": "Planer"
+  },
+  "options_models_reasoning_high": {
+    "message": "Hoch"
+  },
+  "options_models_reasoning_low": {
+    "message": "Niedrig"
+  },
+  "options_models_reasoning_medium": {
+    "message": "Mittel"
+  },
+  "options_models_reasoning_minimal": {
+    "message": "Minimal"
+  },
+  "options_general_agentMode_unified": {
+    "message": "Unified"
+  },
+  "options_general_agentMode_legacy": {
+    "message": "Legacy"
+  },
+  "options_general_visionMode": {
+    "message": "Vision mode"
+  },
+  "options_general_visionMode_desc": {
+    "message": "Always: a fresh screenshot is attached to every step (slower, higher accuracy). Fallback: the agent only takes a screenshot when it explicitly asks for one. Off: no screenshots."
+  },
+  "options_general_visionMode_off": {
+    "message": "Off"
+  },
+  "options_general_visionMode_always": {
+    "message": "Always"
+  },
+  "options_general_visionMode_fallback": {
+    "message": "Fallback"
+  },
+  "options_general_visionMode_warning": {
+    "message": "Selected Navigator model has no vision support — vision is inactive at runtime. Pick a vision-capable model to enable."
+  },
+  "chat_input_role_planner_tip": {
+    "message": "Planner — decomposes your task into a focused 1–7 step plan that the Navigator will walk."
+  },
+  "chat_input_role_navigator_tip": {
+    "message": "Navigator — the executor. Picks browser tools (click, type, scroll, web fetch) one step at a time and decides when the task is done."
+  },
+  "chat_input_role_stt_tip": {
+    "message": "STT — speech-to-text. Used by the microphone button to transcribe your voice into the chat input."
+  },
+  "chat_input_role_judge_tip": {
+    "message": "Judge — eval-time grader. Used only by the eval suite (pnpm test:eval) to score scenario outputs against a rubric. Optional; defaults to your Navigator model when unset."
+  },
+  "chat_input_role_label_short_planner": {
+    "message": "Plan"
+  },
+  "chat_input_role_label_short_navigator": {
+    "message": "Nav"
+  },
+  "chat_input_role_label_short_stt": {
+    "message": "STT"
+  },
+  "chat_input_role_label_short_judge": {
+    "message": "Judge"
+  },
+  "chat_input_role_group_agents": {
+    "message": "Agents"
+  },
+  "chat_input_role_group_services": {
+    "message": "Services"
+  },
+  "chat_input_tabFocus_background_label": {
+    "message": "Run agent in background tab (current)"
+  },
+  "chat_input_tabFocus_foreground_label": {
+    "message": "Show agent tab when it works (current)"
+  },
+  "chat_input_tabFocus_background_tip": {
+    "message": "Agent works in a separate tab in the background. Click to switch: bring the agent tab to the foreground at task start."
+  },
+  "chat_input_tabFocus_foreground_tip": {
+    "message": "Agent tab is brought to the foreground at task start so you can watch. Click to switch: keep agent tab in the background (safer default)."
+  },
+  "options_models_judge_header": {
+    "message": "Judge"
+  },
+  "options_models_judge_desc": {
+    "message": "Optional grader. Used by the runtime verifier (annotates final answers with quality concerns) and the eval suite (pnpm test:eval). Costs +1 LLM call per finish when verifier is on."
+  },
+  "options_models_judge_runtime_mode_label": {
+    "message": "Runtime verifier"
+  },
+  "options_models_judge_runtime_mode_off": {
+    "message": "Off (no verifier)"
+  },
+  "options_models_judge_runtime_mode_verify_once": {
+    "message": "Verify once (annotate concerns)"
   }
 }

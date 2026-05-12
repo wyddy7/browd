@@ -35,16 +35,32 @@ export enum ExecutionState {
   TASK_RESUME = 'task.resume',
   TASK_CANCEL = 'task.cancel',
 
+  // Human-in-the-loop states
+  /** Agent needs a yes/no/edit/cancel decision from the user before a sensitive action. */
+  TASK_HITL_APPROVE = 'task.hitl.approve',
+  /** Agent needs a text answer from the user to resolve ambiguity. */
+  TASK_HITL_ASK = 'task.hitl.ask',
+
   // Step level states
   STEP_START = 'step.start',
   STEP_OK = 'step.ok',
   STEP_FAIL = 'step.fail',
   STEP_CANCEL = 'step.cancel',
+  /** Emitted after each verified action with human-readable description for the Trace UI. */
+  STEP_TRACE = 'step.trace',
 
   // Action/Tool level states
   ACT_START = 'act.start',
   ACT_OK = 'act.ok',
   ACT_FAIL = 'act.fail',
+
+  /**
+   * T2f-final-2 — token-usage telemetry. Emitted by the unified agent
+   * runtime after each agent.invoke() completes. `details` carries a
+   * JSON payload `{inputTokens, outputTokens, contextWindow}` so the
+   * side panel can render the live token ring in the header.
+   */
+  TASK_USAGE = 'task.usage',
 }
 
 export interface EventData {

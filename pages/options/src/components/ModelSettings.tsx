@@ -15,6 +15,10 @@ import {
   GROK_SPEECH_TO_TEXT_MODEL,
   getSpeechToTextOptions,
   speechToTextModelStore,
+  judgeModelStore,
+  getJudgeOptions,
+  runtimeJudgeStore,
+  type RuntimeJudgeMode,
   AgentNameEnum,
   llmProviderModelNames,
   ProviderTypeEnum,
@@ -60,7 +64,7 @@ interface ModelSettingsProps {
   isDarkMode?: boolean; // Controls dark/light theme styling
 }
 
-type ModelSelectionTab = AgentNameEnum | 'stt';
+type ModelSelectionTab = AgentNameEnum | 'stt' | 'judge';
 
 const cardClass = 'browd-card p-6 text-left';
 const innerCardClass = 'rounded-lg border border-[var(--browd-border)] bg-transparent p-4';
@@ -134,6 +138,12 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
   // State for model input handling
 
   const [selectedSpeechToTextModel, setSelectedSpeechToTextModel] = useState<string>('');
+  // T2f-clean-finish-3 — Judge model + runtime verifier mode.
+  const [selectedJudgeModel, setSelectedJudgeModel] = useState<string>('');
+  const [availableJudgeOptions, setAvailableJudgeOptions] = useState<
+    Array<{ provider: string; providerName: string; modelName: string }>
+  >([]);
+  const [runtimeJudgeMode, setRuntimeJudgeMode] = useState<RuntimeJudgeMode>('off');
   const [activeModelSelectionTab, setActiveModelSelectionTab] = useState<ModelSelectionTab>(AgentNameEnum.Planner);
 
   useEffect(() => {
@@ -219,6 +229,51 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
 
     loadSpeechToTextModel();
   }, []);
+
+  // T2f-clean-finish-3 — load Judge model + runtime mode.
+  useEffect(() => {
+    const loadJudge = async () => {
+      try {
+        const config = await judgeModelStore.getJudgeModel();
+        if (config) setSelectedJudgeModel(`${config.provider}>${config.modelName}`);
+        const mode = await runtimeJudgeStore.getMode();
+        setRuntimeJudgeMode(mode);
+      } catch (error) {
+        console.error('Error loading judge config:', error);
+      }
+    };
+    loadJudge();
+  }, []);
+
+  // Compute available judge options whenever providers change.
+  useEffect(() => {
+    if (!Object.keys(providers).length) return;
+    setAvailableJudgeOptions(getJudgeOptions(providers));
+  }, [providers]);
+
+  const handleSaveJudgeConfig = async () => {
+    try {
+      if (!selectedJudgeModel) {
+        await judgeModelStore.resetJudgeModel();
+      } else {
+        const [provider, modelName] = selectedJudgeModel.split('>');
+        if (provider && modelName) {
+          await judgeModelStore.setJudgeModel({ provider, modelName });
+        }
+      }
+      await runtimeJudgeStore.setMode(runtimeJudgeMode);
+      const btn = document.getElementById('save-btn-judge');
+      if (btn) {
+        const orig = btn.textContent;
+        btn.textContent = '✓';
+        setTimeout(() => {
+          btn.textContent = orig;
+        }, 1200);
+      }
+    } catch (error) {
+      console.error('Error saving judge config:', error);
+    }
+  };
 
   // Auto-focus the input field when a new provider is added
   useEffect(() => {
@@ -770,14 +825,6 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
       ...prev,
       [agentName]: value,
     }));
-
-    try {
-      await updateStoredAgentModel(agentName, {
-        systemPrompt: value.trim() || undefined,
-      });
-    } catch (error) {
-      console.error('Error saving agent system prompt:', error);
-    }
   };
 
   const handleReasoningEffortChange = async (
@@ -869,12 +916,74 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
     }
   };
 
+  const handleSaveModelConfig = async (agentName: AgentNameEnum) => {
+    const selectedModel = selectedModels[agentName];
+    if (!selectedModel) {
+      alert('Please select a model first');
+      return;
+    }
+    const [provider, modelName] = selectedModel.split('>');
+    if (!provider || !modelName) return;
+
+    try {
+      await agentModelStore.setAgentModel(agentName, {
+        provider,
+        modelName,
+        parameters: modelParameters[agentName],
+        reasoningEffort: reasoningEffort[agentName],
+        systemPrompt: systemPrompts[agentName]?.trim() || undefined,
+      });
+      const btn = document.getElementById(`save-btn-${agentName}`);
+      if (btn) {
+        const originalText = btn.innerText;
+        btn.innerText = '✓';
+        btn.classList.add('!bg-[var(--browd-accent)]', '!text-white');
+        setTimeout(() => {
+          btn.innerText = originalText;
+          btn.classList.remove('!bg-[var(--browd-accent)]', '!text-white');
+        }, 2000);
+      }
+    } catch (error) {
+      console.error('Error saving agent model:', error);
+      alert('Error saving: ' + error);
+    }
+  };
+
   const renderModelSelect = (agentName: AgentNameEnum) => (
     <div className={innerCardClass}>
-      <h3 className="mb-2 text-lg font-medium text-[var(--browd-text)]">
-        {agentName.charAt(0).toUpperCase() + agentName.slice(1)}
-      </h3>
-      <p className="mb-4 text-sm font-normal text-[var(--browd-muted)]">{getAgentDescription(agentName)}</p>
+      <div className="mb-4 flex items-start justify-between gap-4">
+        <div>
+          <h3 className="mb-2 flex items-center gap-2 text-lg font-medium text-[var(--browd-text)]">
+            <span>
+              {agentName === AgentNameEnum.Planner
+                ? t('options_models_agents_planner_name')
+                : t('options_models_agents_navigator_name')}
+            </span>
+            {/* T2f-clean-finish-3 — info badge with localized hover
+                tooltip. Native title attribute = zero JS, screen-reader
+                friendly, works on long-hover automatically. */}
+            <span
+              role="img"
+              aria-label={
+                agentName === AgentNameEnum.Planner
+                  ? t('chat_input_role_planner_tip')
+                  : t('chat_input_role_navigator_tip')
+              }
+              title={
+                agentName === AgentNameEnum.Planner
+                  ? t('chat_input_role_planner_tip')
+                  : t('chat_input_role_navigator_tip')
+              }
+              className="browd-role-info inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-[var(--browd-border)] text-[10px] leading-none text-[var(--browd-faint)] hover:border-[var(--browd-text)] hover:text-[var(--browd-text)]">
+              i
+            </span>
+          </h3>
+          <p className="text-sm font-normal text-[var(--browd-muted)]">{getAgentDescription(agentName)}</p>
+        </div>
+        <Button id={`save-btn-${agentName}`} variant="primary" onClick={() => handleSaveModelConfig(agentName)}>
+          {t('options_models_providers_btnSave')}
+        </Button>
+      </div>
 
       <div className="space-y-4">
         {/* Model Selection */}
@@ -1015,10 +1124,10 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
                   handleReasoningEffortChange(agentName, e.target.value as 'minimal' | 'low' | 'medium' | 'high')
                 }
                 className={fieldInputClass}>
-                <option value="minimal/none">Minimal</option>
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
+                <option value="minimal/none">{t('options_models_reasoning_minimal')}</option>
+                <option value="low">{t('options_models_reasoning_low')}</option>
+                <option value="medium">{t('options_models_reasoning_medium')}</option>
+                <option value="high">{t('options_models_reasoning_high')}</option>
               </select>
             </div>
           </div>
@@ -1027,10 +1136,54 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
     </div>
   );
 
+  const handleSaveSttConfig = async () => {
+    try {
+      if (selectedSpeechToTextModel) {
+        const [provider, modelName] = selectedSpeechToTextModel.split('>');
+        await speechToTextModelStore.setSpeechToTextModel({
+          provider,
+          modelName,
+        });
+      } else {
+        await speechToTextModelStore.resetSpeechToTextModel();
+      }
+
+      const btn = document.getElementById('save-btn-stt');
+      if (btn) {
+        const originalText = btn.innerText;
+        btn.innerText = '✓';
+        btn.classList.add('!bg-[var(--browd-accent)]', '!text-white');
+        setTimeout(() => {
+          btn.innerText = originalText;
+          btn.classList.remove('!bg-[var(--browd-accent)]', '!text-white');
+        }, 2000);
+      }
+    } catch (error) {
+      console.error('Error saving STT model:', error);
+      alert('Error saving: ' + error);
+    }
+  };
+
   const renderSpeechToTextSelect = () => (
     <div className={innerCardClass}>
-      <h3 className="mb-2 text-lg font-medium text-[var(--browd-text)]">{t('options_models_speechToText_header')}</h3>
-      <p className="mb-4 text-sm font-normal text-[var(--browd-muted)]">{t('options_models_stt_desc')}</p>
+      <div className="mb-4 flex items-start justify-between gap-4">
+        <div>
+          <h3 className="mb-2 flex items-center gap-2 text-lg font-medium text-[var(--browd-text)]">
+            <span>{t('options_models_speechToText_header')}</span>
+            <span
+              role="img"
+              aria-label={t('chat_input_role_stt_tip')}
+              title={t('chat_input_role_stt_tip')}
+              className="browd-role-info inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-[var(--browd-border)] text-[10px] leading-none text-[var(--browd-faint)] hover:border-[var(--browd-text)] hover:text-[var(--browd-text)]">
+              i
+            </span>
+          </h3>
+          <p className="text-sm font-normal text-[var(--browd-muted)]">{t('options_models_stt_desc')}</p>
+        </div>
+        <Button id="save-btn-stt" variant="primary" onClick={handleSaveSttConfig}>
+          {t('options_models_providers_btnSave')}
+        </Button>
+      </div>
 
       <div className="flex items-center">
         <label htmlFor="speech-to-text-model" className={fieldLabelClass}>
@@ -1048,6 +1201,71 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
             </option>
           ))}
         </select>
+      </div>
+    </div>
+  );
+
+  /**
+   * T2f-clean-finish-3 — Judge model + runtime verifier card.
+   *
+   * Mirrors STT layout: header with (i) tooltip, model select,
+   * runtime-mode toggle, save button. The toggle (`off` /
+   * `verify_once`) is independent of the model picker — user can
+   * configure a Judge but keep verifier off until they want to pay
+   * the +1 LLM call.
+   */
+  const renderJudgeSelect = () => (
+    <div className={innerCardClass}>
+      <div className="mb-4 flex items-start justify-between gap-4">
+        <div>
+          <h3 className="mb-2 flex items-center gap-2 text-lg font-medium text-[var(--browd-text)]">
+            <span>{t('options_models_judge_header')}</span>
+            <span
+              role="img"
+              aria-label={t('chat_input_role_judge_tip')}
+              title={t('chat_input_role_judge_tip')}
+              className="browd-role-info inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-[var(--browd-border)] text-[10px] leading-none text-[var(--browd-faint)] hover:border-[var(--browd-text)] hover:text-[var(--browd-text)]">
+              i
+            </span>
+          </h3>
+          <p className="text-sm font-normal text-[var(--browd-muted)]">{t('options_models_judge_desc')}</p>
+        </div>
+        <Button id="save-btn-judge" variant="primary" onClick={handleSaveJudgeConfig}>
+          {t('options_models_providers_btnSave')}
+        </Button>
+      </div>
+
+      <div className="space-y-4">
+        <div className="flex items-center">
+          <label htmlFor="judge-model" className={fieldLabelClass}>
+            {t('options_models_labels_model')}
+          </label>
+          <select
+            id="judge-model"
+            className={fieldInputClass}
+            value={selectedJudgeModel}
+            onChange={e => setSelectedJudgeModel(e.target.value)}>
+            <option value="">{t('options_models_chooseModel')}</option>
+            {availableJudgeOptions.map(({ provider, providerName, modelName }) => (
+              <option key={`${provider}>${modelName}`} value={`${provider}>${modelName}`}>
+                {providerName}: {modelName}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-center">
+          <label htmlFor="judge-runtime-mode" className={fieldLabelClass}>
+            {t('options_models_judge_runtime_mode_label')}
+          </label>
+          <select
+            id="judge-runtime-mode"
+            className={fieldInputClass}
+            value={runtimeJudgeMode}
+            onChange={e => setRuntimeJudgeMode(e.target.value as RuntimeJudgeMode)}>
+            <option value="off">{t('options_models_judge_runtime_mode_off')}</option>
+            <option value="verify_once">{t('options_models_judge_runtime_mode_verify_once')}</option>
+          </select>
+        </div>
       </div>
     </div>
   );
@@ -1763,6 +1981,7 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
             { id: AgentNameEnum.Planner, label: 'Planner' },
             { id: AgentNameEnum.Navigator, label: 'Navigator' },
             { id: 'stt' as const, label: 'STT' },
+            { id: 'judge' as const, label: 'Judge' },
           ].map(tab => (
             <button
               key={tab.id}
@@ -1775,7 +1994,11 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
             </button>
           ))}
         </div>
-        {activeModelSelectionTab === 'stt' ? renderSpeechToTextSelect() : renderModelSelect(activeModelSelectionTab)}
+        {activeModelSelectionTab === 'stt'
+          ? renderSpeechToTextSelect()
+          : activeModelSelectionTab === 'judge'
+            ? renderJudgeSelect()
+            : renderModelSelect(activeModelSelectionTab)}
       </div>
     </section>
   );

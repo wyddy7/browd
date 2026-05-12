@@ -11,9 +11,9 @@ interface Bookmark {
 
 const MAX_BOOKMARK_TITLE_LENGTH = 30;
 const DEFAULT_TITLE_REWRITES: Record<string, string> = {
-  'Explore Browd on GitHub': 'Explore Browd',
-  'Extract structured data': 'Extract Info',
-  'Create a reusable workflow': 'Create Workflow',
+  'Explore Browd on GitHub': t('chat_bookmarks_default1'),
+  'Extract structured data': t('chat_bookmarks_default2'),
+  'Create a reusable workflow': t('chat_bookmarks_default3'),
 };
 
 function getDisplayTitle(title: string): string {
@@ -196,7 +196,7 @@ const BookmarkList: React.FC<BookmarkListProps> = ({
           className={`browd-button-ghost inline-flex min-w-[54px] items-center justify-center rounded-full px-3 py-1.5 text-sm transition-all duration-200 ${
             isEditMode ? 'bg-[var(--browd-accent-soft)] text-[var(--browd-text)]' : 'text-[var(--browd-text)]'
           }`}>
-          {isEditMode ? 'Done' : 'Edit'}
+          {isEditMode ? t('chat_bookmarks_done') : t('chat_bookmarks_edit_btn')}
         </button>
       </div>
 

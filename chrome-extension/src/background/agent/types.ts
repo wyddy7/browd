@@ -6,6 +6,7 @@ import type MessageManager from './messages/service';
 import type { EventManager } from './event/manager';
 import { type Actors, type ExecutionState, AgentEvent } from './event/types';
 import { AgentStepHistory } from './history';
+import type { HITLController } from './hitl/controller';
 
 export interface AgentOptions {
   maxSteps: number;
@@ -18,11 +19,15 @@ export interface AgentOptions {
   useVisionForPlanner: boolean;
   includeAttributes: string[];
   planningInterval: number;
+  /** Max times the same (action, arg) can repeat before LoopDetector fires. Default 3. */
+  maxRepeatedAction: number;
+  /** Sliding window size for loop detection. Default 6. */
+  loopWindowSize: number;
 }
 
 export const DEFAULT_AGENT_OPTIONS: AgentOptions = {
-  maxSteps: 100,
-  maxActionsPerStep: 10,
+  maxSteps: 50,
+  maxActionsPerStep: 1,
   maxFailures: 3,
   retryDelay: 10,
   maxInputTokens: 128000,
@@ -31,6 +36,8 @@ export const DEFAULT_AGENT_OPTIONS: AgentOptions = {
   useVisionForPlanner: true,
   includeAttributes: DEFAULT_INCLUDE_ATTRIBUTES,
   planningInterval: 3,
+  maxRepeatedAction: 2,
+  loopWindowSize: 4,
 };
 
 export class AgentContext {
@@ -44,6 +51,7 @@ export class AgentContext {
   stopped: boolean;
   consecutiveFailures: number;
   nSteps: number;
+  hitlController?: HITLController;
   stepInfo: AgentStepInfo | null;
   actionResults: ActionResult[];
   stateMessageAdded: boolean;
@@ -116,6 +124,15 @@ export class ActionResult {
   error: string | null;
   includeInMemory: boolean;
   interactedElement: DOMHistoryElement | null;
+  /**
+   * T2f-2: optional base64-encoded screenshot payload. When set, the
+   * langGraph adapter returns the tool result as a multimodal
+   * ToolMessage (text caption + image_url part) so the next LLM turn
+   * can actually look at the page. Today only the `screenshot` tool
+   * produces it; classic mode ignores the field.
+   */
+  imageBase64: string | null;
+  imageMime: string | null;
 
   constructor(params: Partial<ActionResult> = {}) {
     this.isDone = params.isDone ?? false;
@@ -124,6 +141,8 @@ export class ActionResult {
     this.extractedContent = params.extractedContent ?? null;
     this.error = params.error ?? null;
     this.includeInMemory = params.includeInMemory ?? false;
+    this.imageBase64 = params.imageBase64 ?? null;
+    this.imageMime = params.imageMime ?? null;
   }
 }
 

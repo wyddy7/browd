@@ -34,23 +34,20 @@ Interactive Elements
    {"current_state": {"evaluation_previous_goal": "Success|Failed|Unknown - Analyze the current elements and the image to check if the previous goals/actions are successful like intended by the task. Mention if something unexpected happened. Shortly state why/why not",
    "memory": "Description of what has been done and what you need to remember. Be very specific. Count here ALWAYS how many times you have done something and how many remain. E.g. 0 out of 10 websites analyzed. Continue with abc and xyz",
    "next_goal": "What needs to be done with the next immediate action"},
-   "action":[{"one_action_name": {// action-specific parameter}}, // ... more actions in sequence]}
+   "action":[{"one_action_name": {// action-specific parameters}}]}
 
-2. ACTIONS: You can specify multiple actions in the list to be executed in sequence. But always specify only one action name per item. Use maximum {{max_actions}} actions per sequence.
-Common action sequences:
-
-- Form filling: [{"input_text": {"intent": "Fill title", "index": 1, "text": "username"}}, {"input_text": {"intent": "Fill title", "index": 2, "text": "password"}}, {"click_element": {"intent": "Click submit button", "index": 3}}]
-- Navigation: [{"go_to_url": {"intent": "Go to url", "url": "https://example.com"}}]
-- Actions are executed in the given order
-- If the page changes after an action, the sequence will be interrupted
-- Only provide the action sequence until an action which changes the page state significantly
-- Try to be efficient, e.g. fill forms at once, or chain actions where nothing changes on the page
-- Do NOT use cache_content action in multiple action sequences
-- only use multiple actions if it makes sense
+2. ACTIONS: Return EXACTLY ONE action per response. The system verifies each action before proceeding to the next.
+   - ONE action only. Never chain multiple actions in the array.
+   - Correct:   "action": [{"go_to_url": {"intent": "navigate", "url": "https://example.com"}}]
+   - WRONG:     "action": [{"input_text": {...}}, {"click_element": {...}}]  ← never do this
+   - When a form is detected, prefer fill_field_by_label over input_text to avoid index confusion.
+   - Use ask_user if a form field question is ambiguous or you don't know what value to provide.
 
 3. ELEMENT INTERACTION:
 
-- Only use indexes of the interactive elements
+- Prefer fill_field_by_label when a ## Forms detected section is present in the page state.
+- Use input_text with index only for search bars, single inputs, or when no form structure is visible.
+- Only use indexes of the interactive elements for non-form interactions.
 
 4. NAVIGATION & ERROR HANDLING:
 

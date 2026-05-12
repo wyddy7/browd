@@ -301,6 +301,12 @@
   "options_general_replayHistoricalTasks_desc": {
     "message": "啟用儲存與重播代理程式的步驟歷史紀錄 (此為實驗性功能，可能存在問題)"
   },
+  "options_general_agentMode": {
+    "message": "Unified agent mode (experimental)"
+  },
+  "options_general_agentMode_desc": {
+    "message": "Replace the Planner+Navigator pipeline with a single ReAct agent. Faster, requires evidence on done. Default off; flip back to classic if anything regresses."
+  },
   "options_general_launchShortcut": {
     "message": "瀏覽器快捷鍵"
   },
@@ -380,7 +386,7 @@
     "message": "系統提示"
   },
   "options_models_systemPrompt_placeholder": {
-    "message": "範例：使用與 Browd 介面相同的語言回答。保持精簡。扮演謹慎的研究助理。"
+    "message": "範例：使用繁體中文回答。保持精簡。扮演謹慎的研究助理。"
   },
   "options_models_systemPrompt_desc": {
     "message": "此代理的角色、風格或回覆語言的選填持久指令。選取的介面語言也會傳給代理。"
@@ -1025,5 +1031,134 @@
   },
   "options_general_language_ptBR": {
     "message": "葡萄牙文（巴西）"
+  },
+  "chat_bookmarks_default1": {
+    "message": "探索 Browd"
+  },
+  "chat_bookmarks_default2": {
+    "message": "提取資料"
+  },
+  "chat_bookmarks_default3": {
+    "message": "建立流程"
+  },
+  "chat_bookmarks_done": {
+    "message": "完成"
+  },
+  "chat_bookmarks_edit_btn": {
+    "message": "編輯"
+  },
+  "chat_input_models_button": {
+    "message": "模型"
+  },
+  "chat_input_models_model": {
+    "message": "模型"
+  },
+  "chat_input_models_role": {
+    "message": "角色"
+  },
+  "chat_input_placeholder_with_files": {
+    "message": "新增訊息（選填）..."
+  },
+  "options_general_launchShortcut_btnOpen": {
+    "message": "開啟快捷鍵設定"
+  },
+  "options_models_agents_navigator_name": {
+    "message": "領航員"
+  },
+  "options_models_agents_planner_name": {
+    "message": "計畫者"
+  },
+  "options_models_reasoning_high": {
+    "message": "高"
+  },
+  "options_models_reasoning_low": {
+    "message": "低"
+  },
+  "options_models_reasoning_medium": {
+    "message": "中"
+  },
+  "options_models_reasoning_minimal": {
+    "message": "極小"
+  },
+  "options_general_agentMode_unified": {
+    "message": "Unified"
+  },
+  "options_general_agentMode_legacy": {
+    "message": "Legacy"
+  },
+  "options_general_visionMode": {
+    "message": "Vision mode"
+  },
+  "options_general_visionMode_desc": {
+    "message": "Always: a fresh screenshot is attached to every step (slower, higher accuracy). Fallback: the agent only takes a screenshot when it explicitly asks for one. Off: no screenshots."
+  },
+  "options_general_visionMode_off": {
+    "message": "Off"
+  },
+  "options_general_visionMode_always": {
+    "message": "Always"
+  },
+  "options_general_visionMode_fallback": {
+    "message": "Fallback"
+  },
+  "options_general_visionMode_warning": {
+    "message": "Selected Navigator model has no vision support — vision is inactive at runtime. Pick a vision-capable model to enable."
+  },
+  "chat_input_role_planner_tip": {
+    "message": "Planner — decomposes your task into a focused 1–7 step plan that the Navigator will walk."
+  },
+  "chat_input_role_navigator_tip": {
+    "message": "Navigator — the executor. Picks browser tools (click, type, scroll, web fetch) one step at a time and decides when the task is done."
+  },
+  "chat_input_role_stt_tip": {
+    "message": "STT — speech-to-text. Used by the microphone button to transcribe your voice into the chat input."
+  },
+  "chat_input_role_judge_tip": {
+    "message": "Judge — eval-time grader. Used only by the eval suite (pnpm test:eval) to score scenario outputs against a rubric. Optional; defaults to your Navigator model when unset."
+  },
+  "chat_input_role_label_short_planner": {
+    "message": "Plan"
+  },
+  "chat_input_role_label_short_navigator": {
+    "message": "Nav"
+  },
+  "chat_input_role_label_short_stt": {
+    "message": "STT"
+  },
+  "chat_input_role_label_short_judge": {
+    "message": "Judge"
+  },
+  "chat_input_role_group_agents": {
+    "message": "Agents"
+  },
+  "chat_input_role_group_services": {
+    "message": "Services"
+  },
+  "chat_input_tabFocus_background_label": {
+    "message": "Run agent in background tab (current)"
+  },
+  "chat_input_tabFocus_foreground_label": {
+    "message": "Show agent tab when it works (current)"
+  },
+  "chat_input_tabFocus_background_tip": {
+    "message": "Agent works in a separate tab in the background. Click to switch: bring the agent tab to the foreground at task start."
+  },
+  "chat_input_tabFocus_foreground_tip": {
+    "message": "Agent tab is brought to the foreground at task start so you can watch. Click to switch: keep agent tab in the background (safer default)."
+  },
+  "options_models_judge_header": {
+    "message": "Judge"
+  },
+  "options_models_judge_desc": {
+    "message": "Optional grader. Used by the runtime verifier (annotates final answers with quality concerns) and the eval suite (pnpm test:eval). Costs +1 LLM call per finish when verifier is on."
+  },
+  "options_models_judge_runtime_mode_label": {
+    "message": "Runtime verifier"
+  },
+  "options_models_judge_runtime_mode_off": {
+    "message": "Off (no verifier)"
+  },
+  "options_models_judge_runtime_mode_verify_once": {
+    "message": "Verify once (annotate concerns)"
   }
 }

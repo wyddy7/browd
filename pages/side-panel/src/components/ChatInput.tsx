@@ -1,11 +1,16 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { FaMicrophone } from 'react-icons/fa';
+import { FaMicrophone, FaEye, FaEyeSlash } from 'react-icons/fa';
 import { AiOutlineLoading3Quarters } from 'react-icons/ai';
 import { FiPaperclip } from 'react-icons/fi';
 import { t } from '@extension/i18n';
 import { chatInputDraftStorage } from '@extension/storage';
+import { TokenRing } from './TokenRing';
 
 type QuickAgent = 'planner' | 'navigator';
+// T2f-clean-finish-3 — Judge is a service config (used by runtime
+// verifier and eval grader), not something the user picks per chat.
+// Picker exposes only the roles the user actively switches: agent
+// brains + STT mic. Judge lives in Settings → Models.
 type QuickModelRole = QuickAgent | 'stt';
 
 interface ModelOption {
@@ -31,6 +36,14 @@ interface ChatInputProps {
   onActiveAgentChange?: (agent: QuickAgent) => void;
   onModelChange?: (agent: QuickAgent, modelValue: string) => void;
   onSpeechToTextModelChange?: (modelValue: string) => void;
+  /**
+   * T2f-tab-iso-2 — agent-tab focus mode. 'background' (default, safe)
+   * = agent works in a separate tab, user keeps focus on theirs.
+   * 'foreground' = bring agent tab to front on TASK_START so user can
+   * watch the agent work. Toggle via the eye button next to the mic.
+   */
+  agentTabFocusMode?: 'background' | 'foreground';
+  onAgentTabFocusToggle?: () => void;
   preferredModelMenuDirection?: 'up' | 'down';
   isRecording?: boolean;
   isProcessingSpeech?: boolean;
@@ -41,6 +54,13 @@ interface ChatInputProps {
   // Historical session ID - if provided, shows replay button instead of send button
   historicalSessionId?: string | null;
   onReplay?: (sessionId: string) => void;
+  /**
+   * T2f-final-fix-2 — live token usage shown right of the paperclip
+   * button. SidePanel owns the cumulative state; ChatInput is purely
+   * presentational here. Hover surfaces a tooltip with the full
+   * "<used>/<context window>" breakdown.
+   */
+  tokenUsage?: { input: number; output: number; contextWindow: number } | null;
 }
 
 // File attachment interface
@@ -62,6 +82,8 @@ export default function ChatInput({
   onActiveAgentChange,
   onModelChange,
   onSpeechToTextModelChange,
+  agentTabFocusMode = 'background',
+  onAgentTabFocusToggle,
   preferredModelMenuDirection = 'up',
   isRecording = false,
   isProcessingSpeech = false,
@@ -70,6 +92,7 @@ export default function ChatInput({
   setContent,
   historicalSessionId,
   onReplay,
+  tokenUsage,
 }: ChatInputProps) {
   const [text, setText] = useState('');
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
@@ -443,7 +466,7 @@ export default function ChatInput({
           aria-disabled={disabled}
           rows={5}
           className="w-full resize-none overflow-y-auto border-none bg-[var(--browd-bg)] p-3 text-sm leading-6 text-[var(--browd-text)] transition-[height] duration-200 ease-out placeholder:text-[var(--browd-faint)] focus:outline-none disabled:cursor-not-allowed disabled:text-[var(--browd-faint)]"
-          placeholder={attachedFiles.length > 0 ? 'Add a message (optional)...' : t('chat_input_placeholder')}
+          placeholder={attachedFiles.length > 0 ? t('chat_input_placeholder_with_files') : t('chat_input_placeholder')}
           aria-label={t('chat_input_editor')}
         />
 
@@ -475,6 +498,13 @@ export default function ChatInput({
                 className="hidden"
                 aria-hidden="true"
               />
+
+              {/* T2f-final-fix-2: live token-usage ring next to the
+                  attachment button. Stays mounted but invisible
+                  until the first TASK_USAGE event arrives. */}
+              {tokenUsage && (
+                <TokenRing used={tokenUsage.input + tokenUsage.output} contextWindow={tokenUsage.contextWindow} />
+              )}
             </div>
 
             <div className="flex items-center gap-2">
@@ -493,7 +523,9 @@ export default function ChatInput({
                           ? 'max-w-[172px]'
                           : 'max-w-[188px]'
                     }`}>
-                    <span className="min-w-0 truncate font-medium text-[var(--browd-text)]">Models</span>
+                    <span className="min-w-0 truncate font-medium text-[var(--browd-text)]">
+                      {t('chat_input_models_button')}
+                    </span>
                     <span className="shrink-0 text-[11px] text-[var(--browd-faint)]">{modelButtonHint}</span>
                     <span
                       className={`shrink-0 text-xs text-[var(--browd-faint)] transition-transform duration-200 ${
@@ -512,11 +544,22 @@ export default function ChatInput({
                       } ${modelMenuDirection === 'up' ? 'origin-bottom-right' : 'origin-top-right'}`}
                       style={{ width: `${menuWidth}px` }}>
                       <div className="px-4 pb-2 pt-1">
-                        <div className="mb-2 text-sm text-[var(--browd-faint)]">Role</div>
-                        <div className="flex gap-4">
-                          {(['planner', 'navigator', 'stt'] as QuickModelRole[]).map(role => {
+                        <div className="mb-2 text-sm text-[var(--browd-faint)]">{t('chat_input_models_role')}</div>
+                        {/* T2f-clean-finish-3 — single row of three roles the
+                            user actively switches in chat: Planner, Navigator,
+                            STT. Judge is a service config (Settings → Models)
+                            because it's used by runtime verifier / eval grader,
+                            not directly during chat. Tooltip explanations live
+                            in Settings, not here — keep the picker minimal. */}
+                        <div className="flex flex-wrap items-center gap-4">
+                          {(['planner', 'navigator', 'stt'] as const).map(role => {
                             const isSelected = role === activeModelRole;
-                            const label = role === 'planner' ? 'Planner' : role === 'navigator' ? 'Navigator' : 'STT';
+                            const label =
+                              role === 'planner'
+                                ? t('options_models_agents_planner_name')
+                                : role === 'navigator'
+                                  ? t('options_models_agents_navigator_name')
+                                  : 'STT';
                             return (
                               <button
                                 key={role}
@@ -524,7 +567,7 @@ export default function ChatInput({
                                 onClick={() => {
                                   setActiveModelRole(role);
                                   if (role !== 'stt') {
-                                    onActiveAgentChange?.(role);
+                                    onActiveAgentChange?.(role as QuickAgent);
                                   }
                                 }}
                                 className={`text-sm transition-colors ${
@@ -539,7 +582,7 @@ export default function ChatInput({
                         </div>
                       </div>
                       <div className="border-t border-[var(--browd-border)] px-4 pb-2 pt-3 text-sm text-[var(--browd-faint)]">
-                        Model
+                        {t('chat_input_models_model')}
                       </div>
                       <div className="max-h-72 overflow-y-auto">
                         {visibleModels.map(({ provider, providerName, model }) => {
@@ -584,6 +627,35 @@ export default function ChatInput({
                     </div>
                   )}
                 </div>
+              )}
+              {onAgentTabFocusToggle && !historicalSessionId && (
+                <button
+                  type="button"
+                  onClick={onAgentTabFocusToggle}
+                  disabled={disabled}
+                  aria-label={
+                    agentTabFocusMode === 'foreground'
+                      ? t('chat_input_tabFocus_foreground_label')
+                      : t('chat_input_tabFocus_background_label')
+                  }
+                  title={
+                    agentTabFocusMode === 'foreground'
+                      ? t('chat_input_tabFocus_foreground_tip')
+                      : t('chat_input_tabFocus_background_tip')
+                  }
+                  className={`rounded-md p-1.5 transition-colors ${
+                    disabled
+                      ? 'cursor-not-allowed opacity-50'
+                      : agentTabFocusMode === 'foreground'
+                        ? 'bg-[var(--browd-accent)]/15 text-[var(--browd-accent)] hover:bg-[var(--browd-accent)]/25'
+                        : 'browd-icon-button'
+                  }`}>
+                  {agentTabFocusMode === 'foreground' ? (
+                    <FaEye className="size-4" />
+                  ) : (
+                    <FaEyeSlash className="size-4" />
+                  )}
+                </button>
               )}
               {onMicClick && !historicalSessionId && (
                 <button

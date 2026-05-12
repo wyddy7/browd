@@ -60,6 +60,102 @@ Background/content-script changes may still require reloading the extension card
 - `packages/i18n/` — source locales and generated i18n helpers.
 - `packages/ui/` — shared UI primitives.
 
+## Testing
+
+Browd ships three layers of automated checks. Tests live in dedicated
+`__tests__/` and `__evals__/` directories — nothing is scattered into
+random source files.
+
+### 1. Unit tests — `__tests__/` neighbours
+
+Component-level tests run via vitest with happy-dom. Pure functions:
+no LLM calls, no `chrome.storage`, no real browser. ~140 tests,
+~1 second total.
+
+Locations follow the "tests next to code" convention:
+
+```
+chrome-extension/src/background/agent/__tests__/
+chrome-extension/src/background/agent/guardrails/__tests__/
+chrome-extension/src/background/agent/hitl/__tests__/
+chrome-extension/src/background/agent/state/__tests__/
+chrome-extension/src/background/agent/verification/__tests__/
+chrome-extension/src/background/agent/skills/__tests__/
+chrome-extension/src/background/agent/tools/__tests__/
+chrome-extension/src/background/browser/dom/__tests__/
+chrome-extension/src/background/services/__tests__/
+chrome-extension/src/background/services/guardrails/__tests__/
+```
+
+Run all unit tests:
+
+```bash
+pnpm -F chrome-extension test
+```
+
+### 2. Unit evals — `__evals__/`
+
+Single dedicated directory:
+
+```
+chrome-extension/src/background/agent/__evals__/
+├── runner.ts                        # Scenario type + helpers
+├── grader.ts                        # LLM-as-judge wrapper
+├── runEvals.test.ts                 # vitest harness
+├── scenarios.md                     # Behaviour spec for the 5 scenarios
+├── scenarios/                       # Per-scenario implementations
+│   ├── plannerExtractsParameters.ts
+│   ├── replannerSufficiencyGate.ts
+│   ├── streamingRepetitionGuardFires.ts
+│   ├── hitlSensitiveActionTrigger.ts
+│   └── finalAnswerPlausibility.ts
+└── integration/                     # Integration eval skeleton + plan
+    └── README.md
+```
+
+**Pure-unit evals** (no LLM, no `chrome.storage`) run inside the regular
+test suite — `streaming-repetition-guard-fires` and
+`hitl-sensitive-action-trigger` execute on every `pnpm test`.
+
+**LLM-cost evals** (real LLM calls — `planner-extracts-parameters`
+and friends) are gated behind `RUN_EVALS=1`. Some need `chrome.storage`
+and run in the integration runner only; others would work in vitest
+once happy-dom shims are added.
+
+Run LLM-cost evals manually (cost: ~$0.001-0.01 per scenario, varies
+by your configured Planner / Judge models):
+
+```bash
+pnpm -F chrome-extension test:eval
+```
+
+The grader needs a Judge model configured in `Settings → Models →
+Judge` — if none, it falls back to your Navigator model with a
+logged warning.
+
+### 3. Integration evals — `__evals__/integration/` (skeleton)
+
+End-to-end checks on a real Chromium with the loaded extension via
+Playwright. Currently a planning document — `pnpm test:eval:integration`
+exits 1 with a pointer to the README. When implemented this layer
+verifies real DOM extraction, vision capture, side-panel rendering,
+tab isolation, and full task plausibility.
+
+### Running everything before a PR
+
+```bash
+pnpm install
+pnpm type-check                     # tsc --noEmit across all workspaces
+pnpm -F chrome-extension test       # unit + pure-unit evals (~1s)
+pnpm build                          # production bundle in dist/
+```
+
+Optional, when the change touches agent runtime:
+
+```bash
+pnpm -F chrome-extension test:eval  # LLM-cost evals (manual gate)
+```
+
 ## Attribution
 
 Browd is derived from the Apache-2.0 licensed Nanobrowser project. Upstream copyright and license notices are preserved in this repository.

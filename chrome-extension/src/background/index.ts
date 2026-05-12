@@ -5,6 +5,8 @@ import {
   firewallStore,
   generalSettingsStore,
   llmProviderStore,
+  modelSupportsVision,
+  getModelContextWindow,
   type InterfaceLanguage,
 } from '@extension/storage';
 import { t } from '@extension/i18n';
@@ -17,6 +19,7 @@ import type { BaseChatModel } from '@langchain/core/language_models/chat_models'
 import { DEFAULT_AGENT_OPTIONS } from './agent/types';
 import { SpeechToTextService } from './services/speechToText';
 import { injectBuildDomTreeScripts } from './browser/dom/service';
+import { HITL_DECISION_MESSAGE } from './agent/hitl/types';
 
 const logger = createLogger('background');
 
@@ -26,21 +29,16 @@ let currentPort: chrome.runtime.Port | null = null;
 const SIDE_PANEL_URL = chrome.runtime.getURL('side-panel/index.html');
 
 function getInterfaceLanguageInstruction(language: InterfaceLanguage): string | undefined {
-  const languageNames: Partial<Record<InterfaceLanguage, string>> = {
-    en: 'English',
-    ru: 'Russian',
-    es: 'Spanish',
-    fr: 'French',
-    de: 'German',
-    pt_BR: 'Portuguese (Brazil)',
+  const instructions: Partial<Record<InterfaceLanguage, string>> = {
+    en: 'Respond in English. Be concise and clear.',
+    ru: 'Отвечай на русском. Будь лаконичным и понятным.',
+    es: 'Responde en español. Sé conciso y claro.',
+    fr: 'Réponds en français. Sois concis et clair.',
+    de: 'Antworte auf Deutsch. Sei präzise und klar.',
+    pt_BR: 'Responda em português. Seja conciso e claro.',
   };
 
-  const languageName = languageNames[language];
-  if (!languageName) {
-    return undefined;
-  }
-
-  return `Browd interface language is ${languageName}. Prefer ${languageName} for user-facing replies unless the current user task explicitly asks for another language.`;
+  return instructions[language];
 }
 
 function mergeSystemInstructions(...instructions: Array<string | undefined>) {
@@ -90,6 +88,26 @@ chrome.debugger.onDetach.addListener(async (source, reason) => {
 // Cleanup when tab is closed
 chrome.tabs.onRemoved.addListener(tabId => {
   browserContext.removeAttachedPage(tabId);
+});
+
+// T2f-firewall-live: keep BrowserContext config in sync with
+// firewallStore. The store has chrome.storage liveUpdate; subscribe
+// re-fetches the latest values whenever the user edits the firewall
+// in Options. Without this, edits during a running task were
+// ignored until the next new_task.
+firewallStore.subscribe(() => {
+  void (async () => {
+    try {
+      const fw = await firewallStore.getFirewall();
+      browserContext.updateConfig({
+        allowedUrls: fw.enabled ? fw.allowList : [],
+        deniedUrls: fw.enabled ? fw.denyList : [],
+      });
+      logger.info('firewall config refreshed (enabled=%s, deny=%d)', String(fw.enabled), fw.denyList.length);
+    } catch (err) {
+      logger.warning('firewall live-update failed', err);
+    }
+  })();
 });
 
 logger.info('background loaded');
@@ -144,7 +162,7 @@ chrome.runtime.onConnect.addListener(port => {
             if (!message.tabId) return port.postMessage({ type: 'error', error: t('bg_errors_noTabId') });
 
             logger.info('new_task', message.tabId, message.task);
-            currentExecutor = await setupExecutor(message.taskId, message.task, browserContext);
+            currentExecutor = await setupExecutor(message.taskId, message.task, browserContext, message.priorMessages);
             subscribeToExecutorEvents(currentExecutor);
 
             const result = await currentExecutor.execute();
@@ -161,6 +179,11 @@ chrome.runtime.onConnect.addListener(port => {
             // If executor exists, add follow-up task
             if (currentExecutor) {
               currentExecutor.addFollowUpTask(message.task);
+              // T2h: re-seed the chat-history snapshot. The side panel
+              // ships the latest chatHistoryStore contents on every
+              // submit; runReactAgent rebuilds its MemorySaver per call,
+              // so unified mode would otherwise restart blank.
+              currentExecutor.setPriorMessages(message.priorMessages);
               // Re-subscribe to events in case the previous subscription was cleaned up
               subscribeToExecutorEvents(currentExecutor);
               const result = await currentExecutor.execute();
@@ -171,6 +194,13 @@ chrome.runtime.onConnect.addListener(port => {
               return port.postMessage({ type: 'error', error: t('bg_cmd_followUpTask_cleaned') });
             }
             break;
+          }
+
+          case 'hitl_decision': {
+            // Side-panel submits user decision for a pending HITL request
+            if (!currentExecutor) return;
+            currentExecutor.hitlController?.submitDecision(message.id, message.decision);
+            return;
           }
 
           case 'cancel_task': {
@@ -303,7 +333,12 @@ chrome.runtime.onConnect.addListener(port => {
   }
 });
 
-async function setupExecutor(taskId: string, task: string, browserContext: BrowserContext) {
+async function setupExecutor(
+  taskId: string,
+  task: string,
+  browserContext: BrowserContext,
+  priorMessages?: { role: 'user' | 'assistant'; content: string }[],
+) {
   const providers = await llmProviderStore.getAllProviders();
   // if no providers, need to display the options page
   if (Object.keys(providers).length === 0) {
@@ -328,6 +363,12 @@ async function setupExecutor(taskId: string, task: string, browserContext: Brows
   // Log the provider config being used for the navigator
   const navigatorProviderConfig = providers[navigatorModel.provider];
   const navigatorLLM = createChatModel(navigatorProviderConfig, navigatorModel);
+  // T2f-4: capability flag for vision input. Resolved here once per
+  // task setup; the Executor uses it to degrade visionMode='always'/
+  // 'fallback' to 'off' when the user picked a non-vision Navigator.
+  const navigatorSupportsVision = modelSupportsVision(navigatorModel.provider, navigatorModel.modelName);
+  // T2f-final-2: model context window for the side-panel token ring.
+  const navigatorContextWindow = getModelContextWindow(navigatorModel.provider, navigatorModel.modelName);
 
   let plannerLLM: BaseChatModel | null = null;
   const plannerModel = agentModels[AgentNameEnum.Planner];
@@ -373,6 +414,12 @@ async function setupExecutor(taskId: string, task: string, browserContext: Brows
       planningInterval: generalSettings.planningInterval,
     },
     generalSettings: generalSettings,
+    hitlSendMessage: msg => currentPort?.postMessage(msg),
+    // T2h: forward the side-panel's chat-history seed so unified mode
+    // has cross-task memory. Legacy mode ignores it.
+    priorMessages,
+    navigatorSupportsVision,
+    navigatorContextWindow,
   });
 
   return executor;
