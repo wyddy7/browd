@@ -16,6 +16,12 @@
 
 ---
 
+## Why Browd
+
+- **Open-source alternative to OpenAI Operator and Claude Computer-use.** Apache-2.0, no $200/month paywall, no waitlist, no cloud-side queue. Install the extension, point it at any provider you already pay for.
+- **Runs in your own browser, with your own sessions.** Proprietary browser agents drive a remote Chromium against fresh, logged-out sessions — you exchange credentials, paste cookies, or do without authenticated tasks entirely. Browd runs the agent loop inside Chrome / Edge / Brave on your machine, against the sessions you're already logged into. GitHub, Gmail, LinkedIn, your dashboards — Browd sees them the same way you do.
+- **Bring your own keys, any provider.** Models are configured per role (Planner / Navigator / Judge) and routed through OpenRouter or any OpenAI-compatible endpoint. Anthropic, Google, Meta, local — one extension, no vendor lock.
+
 ## What Browd actually does
 
 You type something into the side panel — *"apply to the first AI Engineer job on hh.ru with my resume"*, *"open the page for the Shutterstock image of the dog"*, *"check the LM Arena leaderboard for the top open-source model right now"* — and a LangGraph.js Plan-and-Execute agent runs the task **inside one of your own browser tabs**, using whatever sessions you're already logged into. No headless replay, no cloud VM, no copy-paste of credentials.
