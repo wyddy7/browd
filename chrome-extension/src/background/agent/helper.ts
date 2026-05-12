@@ -11,6 +11,22 @@ import { ChatDeepSeek } from '@langchain/deepseek';
 
 const maxTokens = 1024 * 4;
 
+// T2m-observability — explicit per-request timeout and zero retries
+// on the LangChain ChatOpenAI client. Defaults in
+// `@langchain/openai@0.6.16` leave `timeout` undefined (effectively
+// Infinity at the OpenAI SDK layer) and `maxRetries` at 6 via
+// `AsyncCaller`, which combined produced the 9-minute silent burn
+// captured in test-runs/test6.md (no `handleLLMError` ever fired
+// because the in-flight request never returned). 90s is generous
+// for reasoning models at long context but bounded enough that a
+// stuck call surfaces to the user inside one minute and a half.
+// `maxRetries: 0` is the corollary — silent retries are the other
+// half of the burn, and once the lifecycle callbacks are wired the
+// agent loop can decide whether to retry at a higher layer with
+// visible logging instead.
+const LLM_REQUEST_TIMEOUT_MS = 90_000;
+const LLM_MAX_RETRIES = 0;
+
 function assertHeaderSafeValue(label: string, value: string | undefined) {
   if (!value) {
     return;
@@ -126,9 +142,15 @@ function createOpenAIChatModel(
     topP?: number;
     temperature?: number;
     maxTokens?: number;
+    timeout?: number;
+    maxRetries?: number;
   } = {
     model: modelConfig.modelName,
     apiKey: providerConfig.apiKey,
+    // T2m-observability — see LLM_REQUEST_TIMEOUT_MS / LLM_MAX_RETRIES
+    // declaration at top of file for full rationale (silent-burn fix).
+    timeout: LLM_REQUEST_TIMEOUT_MS,
+    maxRetries: LLM_MAX_RETRIES,
   };
 
   const configuration: Record<string, unknown> = {};
@@ -240,6 +262,10 @@ function createAzureChatModel(providerConfig: ProviderConfig, modelConfig: Model
     azureOpenAIApiVersion: providerConfig.azureApiVersion,
     // For Azure, the model name should be the deployment name itself
     model: deploymentName, // Set model = deployment name to fix Azure requests
+    // T2m-observability — mirror the OpenAI path: explicit 90s
+    // timeout + zero retries to bound the silent-burn window.
+    timeout: LLM_REQUEST_TIMEOUT_MS,
+    maxRetries: LLM_MAX_RETRIES,
     // For O series models, use modelKwargs instead of temperature/topP
     ...(isOSeriesModel
       ? {

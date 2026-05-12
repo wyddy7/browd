@@ -43,6 +43,7 @@ import { extractForms, formatFormsForPrompt } from '@src/background/browser/dom/
 import { wrapUntrustedContent } from '../messages/utils';
 import { Actors, ExecutionState } from '../event/types';
 import { createLogger } from '@src/background/log';
+import { createObservabilityCallback } from './observabilityCallback';
 
 const logger = createLogger('runReactAgent');
 
@@ -362,6 +363,13 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
       }
     },
   };
+  // T2m-observability — sibling handler that logs LLM/chain/tool
+  // lifecycle events. Kept separate from `usageCallback` so token
+  // accounting (cumulative ring telemetry) and lifecycle logging
+  // (start/end/error/streaming progress + TRACE rows) stay
+  // separable. Both are registered in the StateGraph and per-step
+  // ReAct `callbacks:` arrays below.
+  const observabilityCallback = createObservabilityCallback({ taskId: context.taskId });
   const emitUsage = () => {
     if (cumulativeIn || cumulativeOut) {
       context.emitEvent(
@@ -555,7 +563,7 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
       // Total task budget enforced by the outer StateGraph recursion.
       recursionLimit: 25,
       signal: context.controller.signal,
-      callbacks: [usageCallback],
+      callbacks: [usageCallback, observabilityCallback],
     };
     // T2f-plan-context-leak: ship the original task in the
     // HumanMessage so a model that ignores the system prompt's
@@ -751,7 +759,7 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
     // a runaway replan loop still terminates.
     recursionLimit: Math.min(context.options.maxSteps, 50),
     signal: context.controller.signal,
-    callbacks: [usageCallback],
+    callbacks: [usageCallback, observabilityCallback],
   };
 
   try {
