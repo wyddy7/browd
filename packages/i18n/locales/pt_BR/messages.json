@@ -296,16 +296,16 @@
     "message": "Tempo mínimo de espera após carregar a página (250-5000ms)"
   },
   "options_general_replayHistoricalTasks": {
-    "message": "Repetir tarefas históricas (experimental)"
+    "message": "Repetir tarefas históricas"
   },
   "options_general_replayHistoricalTasks_desc": {
-    "message": "Ativar armazenamento e repetição do histórico de passos (experimental, pode ter problemas)"
+    "message": "Ativar armazenamento e repetição do histórico de passos do agente"
   },
   "options_general_agentMode": {
-    "message": "Unified agent mode (experimental)"
+    "message": "Modo do agente"
   },
   "options_general_agentMode_desc": {
-    "message": "Replace the Planner+Navigator pipeline with a single ReAct agent. Faster, requires evidence on done. Default off; flip back to classic if anything regresses."
+    "message": "Unified é o agente ReAct padrão (com orçamentos de ferramentas e persistência do histórico). Legacy mantém o antigo pipeline Planner+Navigator como rede de segurança."
   },
   "options_general_launchShortcut": {
     "message": "Atalho do navegador"

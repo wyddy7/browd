@@ -299,13 +299,13 @@
     "message": "重播歷史任務（實驗性功能）"
   },
   "options_general_replayHistoricalTasks_desc": {
-    "message": "啟用儲存與重播代理程式的步驟歷史紀錄 (此為實驗性功能，可能存在問題)"
+    "message": "啟用代理程式步驟歷史紀錄的儲存與重播"
   },
   "options_general_agentMode": {
-    "message": "Unified agent mode (experimental)"
+    "message": "代理程式模式"
   },
   "options_general_agentMode_desc": {
-    "message": "Replace the Planner+Navigator pipeline with a single ReAct agent. Faster, requires evidence on done. Default off; flip back to classic if anything regresses."
+    "message": "Unified 是預設的 ReAct 代理程式（具有工具預算與聊天歷史持久化）。Legacy 保留舊版 Planner+Navigator 流程作為安全網。"
   },
   "options_general_launchShortcut": {
     "message": "瀏覽器快捷鍵"

@@ -296,10 +296,10 @@
     "message": "Minimum wait time after page loads (250-5000ms)"
   },
   "options_general_replayHistoricalTasks": {
-    "message": "Replay Historical Tasks( experimental )"
+    "message": "Replay Historical Tasks"
   },
   "options_general_replayHistoricalTasks_desc": {
-    "message": "Enable storing and replaying of agent step history (experimental, may have issues)"
+    "message": "Enable storing and replaying of agent step history"
   },
   "options_general_agentMode": {
     "message": "Agent mode"

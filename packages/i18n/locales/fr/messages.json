@@ -299,13 +299,13 @@
     "message": "Rejouer tâches historiques (expérimental)"
   },
   "options_general_replayHistoricalTasks_desc": {
-    "message": "Activer le stockage et le rejeu de l'historique (expérimental, peut présenter des problèmes)"
+    "message": "Activer le stockage et le rejeu de l'historique des étapes de l'agent"
   },
   "options_general_agentMode": {
-    "message": "Unified agent mode (experimental)"
+    "message": "Mode de l'agent"
   },
   "options_general_agentMode_desc": {
-    "message": "Replace the Planner+Navigator pipeline with a single ReAct agent. Faster, requires evidence on done. Default off; flip back to classic if anything regresses."
+    "message": "Unified est l'agent ReAct par défaut (avec budgets d'outils et persistance de l'historique). Legacy conserve l'ancien pipeline Planner+Navigator comme filet de sécurité."
   },
   "options_general_launchShortcut": {
     "message": "Raccourci navigateur"

@@ -11,9 +11,7 @@
 
 <p align="center">
   <a href="https://github.com/wyddy7/browd"><img src="https://img.shields.io/badge/GitHub-wyddy7%2Fbrowd-181717?logo=github" alt="GitHub"></a>
-  <img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License">
-  <img src="https://img.shields.io/badge/Manifest-V3-orange" alt="MV3">
-  <img src="https://img.shields.io/badge/status-experimental-yellow" alt="experimental">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License"></a>
 </p>
 
 ---
@@ -59,59 +57,25 @@ pnpm dev
 
 Background and content-script changes require reloading the extension card after a rebuild.
 
-## Known limits — read this before you complain
+## Known limits
 
-Browd is **experimental**. These are the failure modes that survived the T2i release gate; they ship as known limits rather than blockers because the fixes are larger than the value:
+These are the constraints currently shipping. They are documented up front rather than buried, because the fixes are larger than the value:
 
 - **Cost.** A non-trivial multi-site research task typically uses 400–700k input tokens against `visionMode='always'`. Each turn re-attaches one fresh screenshot at ~10–14k tokens, compounding linearly with turn count. On Claude via OpenRouter that's roughly $0.50–$1.50 per such task. For "find one specific thing on one site" the cost is closer to ~$0.15–$0.30. Bring your own budget, watch the live token ring.
 - **Hard `isTrusted=false` antibot walls.** Any CDP / extension-driven click generates `isTrusted=false` MouseEvents. Hard-gated sites (LinkedIn `/jobs` filters, some Cloudflare gates, Google Images result tiles) silently no-op those clicks. Browd detects the loop within three attempts and offers `hitl_click_at` — the agent pauses and asks you to click the blocked element yourself, then continues.
 - **Visible freeze during heavy-vision steps.** Between LLM calls the side panel can sit idle for 20–30 s while the model processes the screenshot + state message. The agent is working; the UI just doesn't paint progress until the next tool call returns.
 - **Not a research tool.** Browd is a *browser-resident agent* for concrete tasks on concrete pages, not a Deep Research / scraper substitute. For "synthesise information across N sites" Tavily + Playwright on the backend is typically cheaper and better. The positioning matters — using Browd for ten consecutive web searches is the expensive way to get a mediocre answer.
 
-## Repo shape
+## Contributing
 
-```
-chrome-extension/   manifest, background service worker, agent runtime
-  src/background/agent/
-    agents/         runReactAgent, navigator, planner, executor
-    actions/        tool implementations + Zod schemas
-    tools/          LangGraph adapter (T2g budget + T2i dupGuard live here)
-    guardrails/     loop detector, failure classifier, approval policy
-    state/          task-state classifier
-    __evals__/      T3 scenario harness (3 of 5 shipped)
-    __tests__/      unit tests, ~150 of them
-  src/background/browser/
-                    page abstraction over puppeteer + CDP
-pages/
-  side-panel/       chat UI
-  options/          settings UI
-  content/          content script
-packages/
-  storage/          chrome.storage abstractions, settings models
-  i18n/             locales + generated type bindings
-  ui/               shared primitives
-```
+Local setup, repo layout, testing commands, and pull-request expectations live in [`CONTRIBUTING.md`](CONTRIBUTING.md). The AI-agent contract for working in `chrome-extension/src/background/agent/` is in [`CLAUDE.md`](CLAUDE.md).
 
-Local AI-agent project contract lives in `CLAUDE.md` / `AGENTS.md` (symlink).
+## Acknowledgments
 
-## Testing
+Browd is derived from [Nanobrowser](https://github.com/nanobrowser/nanobrowser), released under Apache-2.0. The Plan-and-Execute agent topology, LangGraph.js integration, and Chrome Web Store packaging path here diverge from upstream, but the inherited foundation — side-panel architecture, Planner+Navigator pipeline, untrusted-content wrap, and i18n scaffolding — is theirs.
 
-Three layers, run roughly in this order before pushing:
+The unified agent runtime uses [LangGraph.js](https://github.com/langchain-ai/langgraphjs)'s `createReactAgent` and `StateGraph`. URL → markdown extraction goes through [Jina Reader](https://r.jina.ai/) by default with a [linkedom](https://github.com/WebReflection/linkedom) fallback.
 
-```bash
-pnpm type-check                          # tsc --noEmit across workspaces
-pnpm -F chrome-extension test            # 148 unit tests + pure-unit evals (~1 s)
-pnpm build                               # production bundle in dist/
-```
+## License
 
-Optional gated LLM-cost evals (need provider keys + `RUN_EVALS=1`):
-
-```bash
-pnpm -F chrome-extension test:eval
-```
-
-## Attribution & license
-
-Derived from [Nanobrowser](https://github.com/nanobrowser/nanobrowser), Apache-2.0. Upstream copyright and license notices are preserved in this repository.
-
-Browd's own changes are likewise released under **Apache-2.0**.
+Apache-2.0 — see [LICENSE](LICENSE). Upstream copyright and license notices are preserved in this repository.

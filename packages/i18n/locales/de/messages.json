@@ -299,13 +299,13 @@
     "message": "Historische Aufgaben wiederholen (experimentell)"
   },
   "options_general_replayHistoricalTasks_desc": {
-    "message": "Speicherung und Wiederholung des Schrittverlaufs (experimentell, kann Probleme verursachen)"
+    "message": "Speicherung und Wiederholung des Schrittverlaufs des Agenten aktivieren"
   },
   "options_general_agentMode": {
-    "message": "Unified agent mode (experimental)"
+    "message": "Agentenmodus"
   },
   "options_general_agentMode_desc": {
-    "message": "Replace the Planner+Navigator pipeline with a single ReAct agent. Faster, requires evidence on done. Default off; flip back to classic if anything regresses."
+    "message": "Unified ist der Standard-ReAct-Agent (mit Tool-Budgets und Chatverlauf-Persistenz). Legacy behält die alte Planner+Navigator-Pipeline als Sicherheitsnetz."
   },
   "options_general_launchShortcut": {
     "message": "Browser-Verknüpfung"
