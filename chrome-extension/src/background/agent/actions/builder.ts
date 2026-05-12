@@ -1008,9 +1008,26 @@ export class ActionBuilder {
       try {
         const page = await this.context.browserContext.getCurrentPage();
         const before = await page.readClickSignature();
+        // T2k-tab-follow: snapshot tab ids before/after the click so
+        // target="_blank" opens follow the same switch-to-new-tab
+        // path that click_element has used since inception
+        // (see clickElement above, lines ~357-372). Without this the
+        // signature compare below would mark the click as a no-op
+        // because the original page is unchanged.
+        const initialTabIds = await this.context.browserContext.getAllTabIds();
         const m = await page.clickAtImageCoord(input.x, input.y);
         // Brief settle delay so SPAs have a chance to react.
         await new Promise(r => setTimeout(r, 200));
+        const currentTabIds = await this.context.browserContext.getAllTabIds();
+        if (currentTabIds.size > initialTabIds.size) {
+          const newTabId = Array.from(currentTabIds).find(id => !initialTabIds.has(id));
+          if (newTabId !== undefined) {
+            await this.context.browserContext.switchTab(newTabId);
+            const msg = `clicked at image (${input.x},${input.y}) → css (${m.cssX},${m.cssY}) — new tab opened, switched to tabId=${newTabId}`;
+            this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_OK, msg);
+            return new ActionResult({ extractedContent: msg, includeInMemory: true });
+          }
+        }
         const after = await page.readClickSignature();
         const noop = before.url === after.url && before.scrollY === after.scrollY && before.domHash === after.domHash;
         if (noop) {
@@ -1033,7 +1050,22 @@ export class ActionBuilder {
       this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_START, intent);
       try {
         const page = await this.context.browserContext.getCurrentPage();
+        // T2k-tab-follow: symmetric tab-snapshot. Typing into a
+        // search input in some SPAs can spawn a new tab/window
+        // (rare, but matches the click_element / click_at pattern
+        // and pre-empts the next mirror bug).
+        const initialTabIds = await this.context.browserContext.getAllTabIds();
         const m = await page.typeAtImageCoord(input.x, input.y, input.text);
+        const currentTabIds = await this.context.browserContext.getAllTabIds();
+        if (currentTabIds.size > initialTabIds.size) {
+          const newTabId = Array.from(currentTabIds).find(id => !initialTabIds.has(id));
+          if (newTabId !== undefined) {
+            await this.context.browserContext.switchTab(newTabId);
+            const msg = `typed at image (${input.x},${input.y}) → css (${m.cssX},${m.cssY}) — new tab opened, switched to tabId=${newTabId}`;
+            this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_OK, msg);
+            return new ActionResult({ extractedContent: msg, includeInMemory: true });
+          }
+        }
         const msg = `typed at image (${input.x},${input.y}) → css (${m.cssX},${m.cssY})`;
         this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_OK, msg);
         return new ActionResult({ extractedContent: msg, includeInMemory: true });
