@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security report
+    url: https://github.com/wyddy7/browd/blob/master/SECURITY.md
+    about: Security-sensitive issues must be reported privately — please follow SECURITY.md, do not file a public issue.
+  - name: Contributing guide
+    url: https://github.com/wyddy7/browd/blob/master/CONTRIBUTING.md
+    about: Local setup, PR expectations, repository layout.

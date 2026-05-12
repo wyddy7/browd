@@ -1,0 +1,117 @@
+name: Bug report
+description: Report a defect in the Browd extension or its agent runtime.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. To keep triage fast, please include the trace export or the agent's last few tool calls — without that, agent-runtime bugs are rarely actionable.
+
+  - type: input
+    id: version
+    attributes:
+      label: Browd version
+      description: Find this on `chrome://extensions/` after expanding the Browd card.
+      placeholder: "0.1.13"
+    validations:
+      required: true
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser + version
+      description: Chrome, Edge, or Brave — and the version string.
+      placeholder: "Chrome 132.0.6834.111"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "macOS 15.2 / Windows 11 23H2 / Ubuntu 24.04"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: agent_mode
+    attributes:
+      label: Agent mode
+      description: Options → General → Agent mode.
+      options:
+        - "Unified (default)"
+        - Legacy
+    validations:
+      required: true
+
+  - type: dropdown
+    id: vision_mode
+    attributes:
+      label: Vision mode
+      description: Options → General → Vision mode. Only relevant in Unified mode.
+      options:
+        - Off
+        - "Always (default)"
+        - Fallback
+    validations:
+      required: false
+
+  - type: input
+    id: provider_model
+    attributes:
+      label: Provider and model
+      description: Which provider key was active and which model handled the task. Include all roles if they differ (Planner / Navigator / Judge).
+      placeholder: "OpenRouter — anthropic/claude-sonnet-4-6 (Navigator), google/gemini-2.5-pro (Planner)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: task_typed
+    attributes:
+      label: Task you typed
+      description: The exact text you typed into the side panel.
+      placeholder: "open the LM Arena leaderboard and tell me the top open-source model right now"
+    validations:
+      required: true
+
+  - type: input
+    id: page_url
+    attributes:
+      label: Page URL the task was meant to run on
+      description: Where the agent should have started. Leave blank if the agent was supposed to figure out the URL itself.
+      placeholder: "https://chat.lmsys.org/?leaderboard"
+    validations:
+      required: false
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      placeholder: "Agent reads the leaderboard, returns the top open-source model name."
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      placeholder: "Agent opened the page, then looped on screenshot tool calls and never returned an answer."
+    validations:
+      required: true
+
+  - type: textarea
+    id: trace
+    attributes:
+      label: Trace export or last 3–5 tool calls
+      description: Open the side panel TRACE row for the failed task and copy the relevant turn(s). At minimum, include the last 3–5 tool calls (name + brief input/output) so the agent's path is reconstructible. Without this, agent-runtime bugs typically cannot be diagnosed.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Anything else
+      description: Console errors from the Service Worker, screenshots of the side panel, reproduction frequency, environment quirks (proxy, VPN, custom DNS), etc.
+    validations:
+      required: false
