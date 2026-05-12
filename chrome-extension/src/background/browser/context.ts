@@ -404,6 +404,13 @@ export default class BrowserContext {
     const page = await this._getOrCreatePage(await chrome.tabs.get(tabId));
     await this.attachPage(page);
     this._currentTabId = tabId;
+    if (this._agentTabId !== null) {
+      // T2o-agent-tab-follow: agent-driven switchTab MUST move agent
+      // attention to the new tab. Otherwise getCurrentPage() keeps
+      // resolving to the original _agentTabId, state-message builds
+      // from stale content, and the LLM loops re-emitting switch_tab.
+      this._agentTabId = tabId;
+    }
     return page;
   }
 
