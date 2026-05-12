@@ -30,6 +30,19 @@ export default class BrowserContext {
    */
   private _onTabUpdatedHandler: ((tabId: number, info: chrome.tabs.TabChangeInfo) => void) | null = null;
 
+  /**
+   * T2n-overlay-handling — set after `switchTab` / `navigateTo` so
+   * the very next stateModifier build forces a fresh screenshot
+   * capture regardless of the fallback heuristic. This addresses
+   * the overlay-on-load case (cookie banner / sign-in modal /
+   * paywall) where the existing triggers
+   * (`domEmpty || domFault || stepsExpired`) would silently miss
+   * the blocking overlay. The flag is consumed on the next read
+   * via `consumePendingForceScreenshot()` so it only fires once
+   * per tab settle.
+   */
+  private _pendingForceScreenshot: boolean = false;
+
   constructor(config: Partial<BrowserContextConfig>) {
     this._config = { ...DEFAULT_BROWSER_CONTEXT_CONFIG, ...config };
   }
@@ -171,6 +184,30 @@ export default class BrowserContext {
 
   public agentTabId(): number | null {
     return this._agentTabId;
+  }
+
+  /**
+   * T2n-overlay-handling — read & clear the pending-force-screenshot
+   * flag. Called by the per-step stateModifier in runReactAgent so
+   * the next state message gets a fresh capture even if the existing
+   * fallback triggers wouldn't have fired. One-shot semantic: after
+   * `consumePendingForceScreenshot()` returns true, the flag is
+   * reset to false so subsequent state-message builds revert to
+   * the regular adaptive heuristic.
+   */
+  public consumePendingForceScreenshot(): boolean {
+    const v = this._pendingForceScreenshot;
+    this._pendingForceScreenshot = false;
+    return v;
+  }
+
+  /**
+   * T2n-overlay-handling — test-only accessor. Production code reads
+   * via `consumePendingForceScreenshot()` (which clears the flag);
+   * tests use this to assert state without disturbing it.
+   */
+  public hasPendingForceScreenshot(): boolean {
+    return this._pendingForceScreenshot;
   }
 
   public async attachPage(page: Page): Promise<boolean> {
@@ -352,6 +389,15 @@ export default class BrowserContext {
   public async switchTab(tabId: number): Promise<Page> {
     logger.info('switchTab', tabId);
 
+    // T2n-overlay-handling — mark that the next state-message build
+    // must capture a fresh screenshot regardless of the adaptive
+    // fallback heuristic. The new tab may have an overlay
+    // (cookie banner / sign-in / paywall) blocking real content
+    // that the existing triggers (domEmpty / domFault / stepsExpired)
+    // would silently miss. Set BEFORE the awaits so the flag is
+    // visible even if the page-attach pipeline yields.
+    this._pendingForceScreenshot = true;
+
     await chrome.tabs.update(tabId, { active: true });
     await this.waitForTabEvents(tabId, { waitForUpdate: false });
 
@@ -365,6 +411,12 @@ export default class BrowserContext {
     if (!isUrlAllowed(url, this._config.allowedUrls, this._config.deniedUrls)) {
       throw new URLNotAllowedError(`URL: ${url} is not allowed`);
     }
+
+    // T2n-overlay-handling — same rationale as switchTab: a navigation
+    // that lands on a new origin commonly surfaces a cookie / consent
+    // / sign-in modal that the next state message must include in
+    // its screenshot for the LLM to dismiss it. Set BEFORE the awaits.
+    this._pendingForceScreenshot = true;
 
     const page = await this.getCurrentPage();
     if (!page) {

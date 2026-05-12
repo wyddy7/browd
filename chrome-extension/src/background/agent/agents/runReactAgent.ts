@@ -120,6 +120,36 @@ export interface RunReactAgentResult {
 }
 
 /**
+ * T2n-overlay-handling — pure helper for the screenshot-capture
+ * decision at the top of stateModifier. Extracted so the
+ * pendingForceScreenshot consume-and-clear interaction with the
+ * adaptive fallback heuristic is unit-testable without running a
+ * full LangGraph agent. Returns the resolved `{shouldCapture,
+ * intent}` for the visionMode='always' base case plus the T2n
+ * pending-force override; the visionMode='fallback' adaptive
+ * triggers (domEmpty / urlChanged / domFault / stepsExpired)
+ * still live inline in stateModifier because they read live
+ * BrowserState and the running message history.
+ */
+export function resolveBaseCaptureDecision(input: {
+  visionMode: RunReactAgentVisionMode;
+  hasScreenshotAction: boolean;
+  pendingForce: boolean;
+}): { shouldCapture: boolean; intent: string } {
+  const { visionMode, hasScreenshotAction, pendingForce } = input;
+  if (visionMode === 'always') {
+    return { shouldCapture: true, intent: 'auto-attach (visionMode=always)' };
+  }
+  if (pendingForce && hasScreenshotAction) {
+    return {
+      shouldCapture: true,
+      intent: 'tab-settle force-capture (T2n overlay-handling)',
+    };
+  }
+  return { shouldCapture: false, intent: 'auto-attach (visionMode=always)' };
+}
+
+/**
  * Build a fresh "Page state" HumanMessage from the live browser. Called
  * by stateModifier on every agent step so the LLM always sees current
  * DOM/forms/page text rather than a stale snapshot from task start.
@@ -469,7 +499,14 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
       params.urls.length || params.queries.length || params.names.length
         ? `\n<task-parameters>\nThese are the EXACT concrete parameters the user named in the original task. Use these verbatim — never substitute similar-looking values from training data, current tab state, or chat history.\n${params.urls.length ? `URLs: ${params.urls.map(u => `"${u}"`).join(', ')}\n` : ''}${params.queries.length ? `Queries: ${params.queries.map(q => `"${q}"`).join(', ')}\n` : ''}${params.names.length ? `Names: ${params.names.map(n => `"${n}"`).join(', ')}\n` : ''}</task-parameters>`
         : '';
-    return `${baseSystemPrompt}\n<original-user-task>\n${task}\n</original-user-task>${paramsBlock}\n<current-subgoal>\nFocus on this single subgoal of the larger user task:\n${currentStep}\n\nIf the subgoal text refers to "the provided URL" / "the requested term" / similar abstractions, ALWAYS resolve them by re-reading the original user task above and the <task-parameters> block. Do not invent parameters from memory or the current tab.\n\nFinish this subgoal with at most a few tool calls, then write a brief description of what you achieved. Do NOT solve the entire user task in one go — the orchestrator will pick the next subgoal.\n</current-subgoal>${completedBlock}`;
+    // T2n-overlay-handling — single-sentence nudge appended to every
+    // per-step prompt. Prompt addition only (no runtime guard, no
+    // detector). Caskad-compatible. Addresses the cookie-banner /
+    // sign-in modal / paywall blocking content on first render of a
+    // new tab or navigation target.
+    const overlayNudge =
+      'If a modal overlay (cookie banner, newsletter signup, sign-in prompt, paywall dialog) is blocking the content you need, dismiss it first via the available click tool before attempting to extract data from the page.';
+    return `${baseSystemPrompt}\n<original-user-task>\n${task}\n</original-user-task>${paramsBlock}\n<current-subgoal>\nFocus on this single subgoal of the larger user task:\n${currentStep}\n\nIf the subgoal text refers to "the provided URL" / "the requested term" / similar abstractions, ALWAYS resolve them by re-reading the original user task above and the <task-parameters> block. Do not invent parameters from memory or the current tab.\n\n${overlayNudge}\n\nFinish this subgoal with at most a few tool calls, then write a brief description of what you achieved. Do NOT solve the entire user task in one go — the orchestrator will pick the next subgoal.\n</current-subgoal>${completedBlock}`;
   };
 
   const runReactStep = async (
@@ -493,8 +530,21 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
           //     previous tool message looks like a DOM-fault error,
           //     or N steps elapsed without a capture.
           //   - 'off': never.
-          let shouldCapture = visionMode === 'always';
-          let captureIntent = 'auto-attach (visionMode=always)';
+          // T2n-overlay-handling — consume the pending-force flag set
+          // by switchTab / navigateTo so the next state message
+          // carries a fresh capture regardless of the adaptive
+          // fallback triggers. The flag is one-shot (read & clears
+          // in `consumePendingForceScreenshot`); under visionMode='off'
+          // we still consume it (preventing leakage across toggles)
+          // but no capture happens because there is no screenshotAction.
+          const pendingForce = context.browserContext.consumePendingForceScreenshot();
+          const base = resolveBaseCaptureDecision({
+            visionMode,
+            hasScreenshotAction: !!screenshotAction,
+            pendingForce,
+          });
+          let shouldCapture = base.shouldCapture;
+          let captureIntent = base.intent;
           if (visionMode === 'fallback' && screenshotAction) {
             const browserStateForTriggers = await context.browserContext.getState(false).catch(() => null);
             const currentUrl = browserStateForTriggers?.url ?? '';
