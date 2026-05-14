@@ -35,3 +35,9 @@ chrome-extension/public/manifest.json
 # captures while testing the extension. Useful as iteration artifacts
 # but contain real task content; never push.
 test-runs/
+
+# Raw demo recordings — only the compressed assets/demo.gif is committed
+demo.MOV
+demo-demo.MOV
+demo*.mov
+assets/demo-twitter.mp4

@@ -14,6 +14,10 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License"></a>
 </p>
 
+<p align="center">
+  <img src="assets/demo.gif" alt="Browd opening the LM Arena leaderboard, filtering to open-source models, and returning the top three" width="600">
+</p>
+
 ---
 
 ## Why Browd
@@ -70,7 +74,7 @@ These are the constraints currently shipping. They are documented up front rathe
 
 - **Cost.** A non-trivial multi-site research task typically uses 400–700k input tokens against `visionMode='always'`. Each turn re-attaches one fresh screenshot at ~10–14k tokens, compounding linearly with turn count. On Claude via OpenRouter that's roughly $0.50–$1.50 per such task. For "find one specific thing on one site" the cost is closer to ~$0.15–$0.30. Bring your own budget, watch the live token ring.
 - **Hard `isTrusted=false` antibot walls.** Any CDP / extension-driven click generates `isTrusted=false` MouseEvents. Hard-gated sites (LinkedIn `/jobs` filters, some Cloudflare gates, Google Images result tiles) silently no-op those clicks. Browd detects the loop within three attempts and offers `hitl_click_at` — the agent pauses and asks you to click the blocked element yourself, then continues.
-- **Visible freeze during heavy-vision steps.** Between LLM calls the side panel can sit idle for 20–30 s while the model processes the screenshot + state message. The agent is working; the UI just doesn't paint progress until the next tool call returns.
+- **Heavy-vision steps are slow.** Processing a screenshot plus the state message can take 20–30 s per turn on vision-capable models. The side-panel TRACE row shows the in-flight LLM call with elapsed time, so you can see it working — but it is genuinely slow, not instant.
 - **Not a research tool.** Browd is a *browser-resident agent* for concrete tasks on concrete pages, not a Deep Research / scraper substitute. For "synthesise information across N sites" Tavily + Playwright on the backend is typically cheaper and better. The positioning matters — using Browd for ten consecutive web searches is the expensive way to get a mediocre answer.
 - **Modal overlays on first page load.** Cookie banners and sign-in prompts that cover fresh content can stall progress for a turn or two before the agent decides to dismiss them. The replanner usually recovers by trying a different URL or invoking a direct nav, but for first-impression sites it can add latency.
 
