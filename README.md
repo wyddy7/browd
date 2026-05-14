@@ -16,8 +16,6 @@
 
 <p align="center">
   <img src="assets/demo.gif" alt="Browd opening the LM Arena leaderboard, filtering to open-source models, and returning the top three" width="600">
-  <br>
-  <sub><i>Browd opens the LM Arena leaderboard, filters to open-source models, and returns the top three.<a href="#demo-note">*</a></i></sub>
 </p>
 
 ---
@@ -96,4 +94,4 @@ Apache-2.0 — see [LICENSE](LICENSE). Upstream copyright and license notices ar
 
 ---
 
-<sub id="demo-note">* The demo above is sped up. The actual run took roughly three minutes — agentic browser tasks are not instant. See <a href="#known-limits">Known limits</a> for the honest performance picture.</sub>
+\* The demo GIF at the top is sped up — the actual run took roughly three minutes. Agentic browser tasks are not instant; see [Known limits](#known-limits) for the honest performance picture.
