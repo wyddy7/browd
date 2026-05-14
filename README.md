@@ -27,7 +27,7 @@
 
 You type something into the side panel — *"apply to the first AI Engineer job on hh.ru with my resume"*, *"open the page for the Shutterstock image of the dog"*, *"check the LM Arena leaderboard for the top open-source model right now"* — and a LangGraph.js Plan-and-Execute agent runs the task **inside one of your own browser tabs**, using whatever sessions you're already logged into. No headless replay, no cloud VM, no copy-paste of credentials.
 
-Forked from Nanobrowser (Apache-2.0) and reshaped over T2d → T2i:
+Forked from Nanobrowser (Apache-2.0) and reshaped into a LangGraph.js Plan-and-Execute runtime:
 
 - Unified LangGraph.js ReAct + replanner loop (default `agentMode='unified'`)
 - Plan-and-Execute StateGraph — planner emits structured `taskParameters` (URLs / queries / names), each subgoal runs a focused ReAct step, replanner decides continue-or-finish
