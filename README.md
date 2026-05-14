@@ -16,6 +16,8 @@
 
 <p align="center">
   <img src="assets/demo.gif" alt="Browd opening the LM Arena leaderboard, filtering to open-source models, and returning the top three" width="600">
+  <br>
+  <sub><i>Browd opens the LM Arena leaderboard, filters to open-source models, and returns the top three.<a href="#demo-note">*</a></i></sub>
 </p>
 
 ---
@@ -91,3 +93,7 @@ The unified agent runtime uses [LangGraph.js](https://github.com/langchain-ai/la
 ## License
 
 Apache-2.0 — see [LICENSE](LICENSE). Upstream copyright and license notices are preserved in this repository.
+
+---
+
+<sub id="demo-note">* The demo above is sped up. The actual run took roughly three minutes — agentic browser tasks are not instant. See <a href="#known-limits">Known limits</a> for the honest performance picture.</sub>
