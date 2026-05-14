@@ -43,7 +43,19 @@ Forked from Nanobrowser (Apache-2.0) and reshaped into a LangGraph.js Plan-and-E
 
 Legacy Planner+Navigator pipeline is still selectable via Options → Agent Mode for fallback.
 
-## Install (local dev build)
+## Install
+
+### From a release (no build step)
+
+1. Download `browd-0.1.13.zip` from the [latest release](https://github.com/wyddy7/browd/releases/latest).
+2. Unzip it anywhere.
+3. Open the extensions page (`chrome://extensions` in Chrome/Edge/Brave).
+4. Toggle **Developer mode**.
+5. **Load unpacked** → pick the unzipped folder.
+6. Pin Browd to your toolbar, click the icon to open the side panel.
+7. Add your provider keys in **Options → Models** — any OpenAI-compatible endpoint works; OpenRouter is convenient for routing Anthropic / Google / Meta / local through one key.
+
+### From source (for development)
 
 ```bash
 git clone https://github.com/wyddy7/browd
@@ -52,21 +64,7 @@ pnpm install
 pnpm build
 ```
 
-Then in your Chromium-based browser:
-
-1. Open the extensions page (`chrome://extensions` in Chrome/Edge/Brave).
-2. Toggle **Developer mode**.
-3. **Load unpacked** → pick this repo's `dist/` directory.
-4. Pin Browd to your toolbar, click the icon to open the side panel.
-5. Add your provider keys in **Options → Models** (any OpenAI-compatible endpoint works — OpenRouter is convenient for routing Anthropic/Google/Meta/local through one key).
-
-Watch mode for development:
-
-```bash
-pnpm dev
-```
-
-Background and content-script changes require reloading the extension card after a rebuild.
+Then load the `dist/` directory as an unpacked extension (steps 3–7 above). `pnpm dev` runs a watch build; background and content-script changes still need an extension-card reload after each rebuild.
 
 ## Known limits
 
