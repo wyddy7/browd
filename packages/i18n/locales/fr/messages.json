@@ -1,7 +1,7 @@
 {
   "app_metadata_description": {
     "description": "Extension description",
-    "message": "Automate web tasks with AI. Browd is an open-source browser extension for local browser agents, data extraction, form filling, and more."
+    "message": "Open-source AI browser agent. Runs web tasks in your Chrome side panel — data extraction, form filling, and more."
   },
   "app_metadata_name": {
     "description": "Extension name",

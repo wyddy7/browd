@@ -1,7 +1,7 @@
 {
   "app_metadata_description": {
     "description": "Extension description",
-    "message": "Автоматизируйте веб-задачи с AI. Browd — open-source расширение браузера для локальных браузерных агентов, извлечения данных, заполнения форм и не только."
+    "message": "Open-source браузерный AI-агент. Веб-задачи в side panel Chrome: извлечение данных, заполнение форм и не только."
   },
   "app_metadata_name": {
     "description": "Extension name",
