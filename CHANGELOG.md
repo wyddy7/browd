@@ -104,8 +104,9 @@ affordances.
 
 ### Known limits
 
-- Cost: 400–700k input tokens on non-trivial multi-site research tasks
-  under `visionMode='always'`.
+- Token usage is high: 400–700k input tokens on non-trivial multi-site
+  tasks under `visionMode='always'`. Exact cost depends on provider and
+  model.
 - Hard `isTrusted=false` antibot walls (LinkedIn `/jobs` filters, some
   Cloudflare gates) cannot be defeated by any CDP-driven click; the
   mitigation is `hitl_click_at`.
