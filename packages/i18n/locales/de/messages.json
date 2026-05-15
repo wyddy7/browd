@@ -1162,25 +1162,25 @@
     "message": "Verify once (annotate concerns)"
   },
   "options_general_section_appearance": {
-    "message": "Appearance"
+    "message": "Erscheinungsbild"
   },
   "options_general_section_agent": {
-    "message": "Agent behavior"
+    "message": "Agent-Verhalten"
   },
   "options_general_section_page": {
-    "message": "Page behavior"
+    "message": "Seitenverhalten"
   },
   "options_general_section_control": {
-    "message": "Controls"
+    "message": "Steuerung"
   },
   "options_general_section_advanced": {
-    "message": "Advanced"
+    "message": "Erweitert"
   },
   "options_general_section_legacyOnly": {
-    "message": "Legacy-mode only"
+    "message": "Nur im Legacy-Modus"
   },
   "options_general_section_legacyOnly_desc": {
-    "message": "These settings only apply when Agent mode is switched to Legacy."
+    "message": "Diese Einstellungen wirken nur, wenn der Agent-Modus auf Legacy umgestellt ist."
   },
   "options_general_badge_beta": {
     "message": "beta"

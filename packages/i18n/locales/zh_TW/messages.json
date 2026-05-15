@@ -1162,25 +1162,25 @@
     "message": "Verify once (annotate concerns)"
   },
   "options_general_section_appearance": {
-    "message": "Appearance"
+    "message": "外觀"
   },
   "options_general_section_agent": {
-    "message": "Agent behavior"
+    "message": "代理行為"
   },
   "options_general_section_page": {
-    "message": "Page behavior"
+    "message": "頁面行為"
   },
   "options_general_section_control": {
-    "message": "Controls"
+    "message": "控制項"
   },
   "options_general_section_advanced": {
-    "message": "Advanced"
+    "message": "進階"
   },
   "options_general_section_legacyOnly": {
-    "message": "Legacy-mode only"
+    "message": "僅限 Legacy 模式"
   },
   "options_general_section_legacyOnly_desc": {
-    "message": "These settings only apply when Agent mode is switched to Legacy."
+    "message": "這些設定僅在代理模式切換為 Legacy 時生效。"
   },
   "options_general_badge_beta": {
     "message": "beta"
