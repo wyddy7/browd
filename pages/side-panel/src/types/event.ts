@@ -50,6 +50,9 @@ export enum ExecutionState {
 
   // T2f-final-2 — cumulative token telemetry per agent invoke.
   TASK_USAGE = 'task.usage',
+
+  // T2v — token-level live indicator (status strip above TRACE).
+  TASK_LIVE = 'task.live',
 }
 
 export interface EventData {

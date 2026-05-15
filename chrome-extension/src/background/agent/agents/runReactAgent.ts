@@ -59,6 +59,7 @@ import {
   isInnerRecursionLimitError,
 } from '../guardrails/unifiedStuckDetector';
 import { TabGoneError } from '@src/background/browser/views';
+import { bridgeStreamEvents, type LiveEvent } from './streamBridge';
 
 const logger = createLogger('runReactAgent');
 
@@ -946,8 +947,15 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
     callbacks: [usageCallback, observabilityCallback],
   };
 
+  // T2v — `streamEvents(v2)` replaces batch `invoke()` so silence is a real abnormal signal.
+  const emitLive = (msg: LiveEvent) => context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_LIVE, JSON.stringify(msg));
   try {
-    const finalState = await compiled.invoke({}, config);
+    const finalState = await bridgeStreamEvents<typeof PlanExecuteState.State>(
+      compiled.streamEvents({}, { ...config, version: 'v2' }),
+      emitLive,
+      context.controller.signal,
+    );
+    emitLive({ kind: 'idle' });
     emitUsage();
     const finalAnswer =
       finalState.response ??
@@ -962,6 +970,7 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
     context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_FAIL, msg);
     return { finalAnswer: null, error: msg };
   } catch (err) {
+    emitLive({ kind: 'idle' });
     emitUsage();
     const message = err instanceof Error ? err.message : String(err);
     if (context.stopped || message.includes('aborted')) {
