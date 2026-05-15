@@ -1160,5 +1160,29 @@
   },
   "options_models_judge_runtime_mode_verify_once": {
     "message": "Verify once (annotate concerns)"
+  },
+  "options_general_section_appearance": {
+    "message": "Appearance"
+  },
+  "options_general_section_agent": {
+    "message": "Agent behavior"
+  },
+  "options_general_section_page": {
+    "message": "Page behavior"
+  },
+  "options_general_section_control": {
+    "message": "Controls"
+  },
+  "options_general_section_advanced": {
+    "message": "Advanced"
+  },
+  "options_general_section_legacyOnly": {
+    "message": "Legacy-mode only"
+  },
+  "options_general_section_legacyOnly_desc": {
+    "message": "These settings only apply when Agent mode is switched to Legacy."
+  },
+  "options_general_badge_beta": {
+    "message": "beta"
   }
 }

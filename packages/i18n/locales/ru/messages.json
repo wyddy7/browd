@@ -296,16 +296,16 @@
     "message": "Минимальное ожидание после загрузки страницы (250-5000мс)"
   },
   "options_general_replayHistoricalTasks": {
-    "message": "Повторять задачи (экспериментально)"
+    "message": "Повторять задачи"
   },
   "options_general_replayHistoricalTasks_desc": {
-    "message": "Включить сохранение и повтор истории шагов (экспериментально, возможны проблемы)"
+    "message": "Сохранять и проигрывать историю шагов задачи. Сырая фича — возможны сбои."
   },
   "options_general_agentMode": {
-    "message": "Единый агент (эксперимент)"
+    "message": "Режим агента"
   },
   "options_general_agentMode_desc": {
-    "message": "Заменить пайплайн Planner+Navigator одним ReAct агентом. Быстрее, требует evidence на done. По умолчанию выключено; вернись на classic если что-то ломается."
+    "message": "Unified — основной ReAct-агент (тулзы под контролем, чат-история сохраняется). Legacy — старый Planner+Navigator на случай отладки."
   },
   "options_general_launchShortcut": {
     "message": "Горячая клавиша браузера"
@@ -1160,5 +1160,29 @@
   },
   "options_models_judge_runtime_mode_verify_once": {
     "message": "Проверить один раз (пометка замечаний)"
+  },
+  "options_general_section_appearance": {
+    "message": "Внешний вид"
+  },
+  "options_general_section_agent": {
+    "message": "Поведение агента"
+  },
+  "options_general_section_page": {
+    "message": "Поведение страницы"
+  },
+  "options_general_section_control": {
+    "message": "Управление"
+  },
+  "options_general_section_advanced": {
+    "message": "Дополнительно"
+  },
+  "options_general_section_legacyOnly": {
+    "message": "Только для Legacy-режима"
+  },
+  "options_general_section_legacyOnly_desc": {
+    "message": "Эти настройки имеют эффект только когда Режим агента переключён на Legacy."
+  },
+  "options_general_badge_beta": {
+    "message": "beta"
   }
 }
