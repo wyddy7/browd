@@ -200,7 +200,13 @@ export function createObservabilityCallback(opts: ObservabilityCallbackOptions =
     handleChainStart(chain, _inputs, runId, _parentRunId, _tags, _metadata, _runType, runName) {
       runStart.set(runId, Date.now());
       const name = runName ?? (chain as SerializedLike | undefined)?.name ?? 'chain';
-      logger.info(`${prefix}chain start (runId=${runId.slice(0, 8)} name=${name})`);
+      // T2r-observability: chain start/end emit one console line per
+      // LangGraph node — at info this dominates the prod log (~400
+      // lines per task in test11). Demote to debug; the side-panel
+      // TRACE record below stays unchanged so the UI still shows
+      // chain timing. Bump LOG_LEVEL=debug or use a dev build to
+      // restore.
+      logger.debug(`${prefix}chain start (runId=${runId.slice(0, 8)} name=${name})`);
       try {
         globalTracer.record({
           tool: 'chain_node',
@@ -219,7 +225,8 @@ export function createObservabilityCallback(opts: ObservabilityCallbackOptions =
       const start = runStart.get(runId);
       const elapsedMs = start ? Date.now() - start : -1;
       runStart.delete(runId);
-      logger.info(`${prefix}chain end (runId=${runId.slice(0, 8)} ms=${elapsedMs})`);
+      // T2r-observability: see handleChainStart comment.
+      logger.debug(`${prefix}chain end (runId=${runId.slice(0, 8)} ms=${elapsedMs})`);
       try {
         globalTracer.record({
           tool: 'chain_node',

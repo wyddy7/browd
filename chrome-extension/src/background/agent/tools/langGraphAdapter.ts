@@ -214,11 +214,18 @@ export function actionToTool(action: Action, budget?: ToolBudgetOptions, dupGuar
   const limit = budget?.limits?.[name];
   return tool(
     async (input: unknown) => {
+      // T2r-observability: one log line per call summarising args.
+      // For click-class tools that is the LLM's `intent` (the plan);
+      // for others, the JSON minus intent (kept ≤120 chars).
+      // The same canonical form drives the dupGuard, so debugging
+      // a "BLOCKED-dup" line and the prior calls reads consistently.
+      const argSummary = canonicaliseArgsForGuard(name, input).slice(0, 120);
+      const callStart = Date.now();
       if (budget && limit !== undefined) {
         const next = (budget.counters[name] ?? 0) + 1;
         budget.counters[name] = next;
         if (next > limit) {
-          logger.warning(`tool ${name} budget exhausted (${next}/${limit}) — blocking call`);
+          logger.info(`[tool] ${name} ${argSummary} → BLOCKED-budget ${next}/${limit}`);
           return `Error: budget exhausted for ${name} (${next - 1}/${limit}). Stop calling this tool. Write a final answer with what you have.`;
         }
       }
@@ -234,18 +241,25 @@ export function actionToTool(action: Action, budget?: ToolBudgetOptions, dupGuar
         }
         const count = dupGuard.recentKeys.filter(k => k === key).length;
         if (count >= DUPLICATE_THRESHOLD) {
-          logger.warning(
-            `tool ${name} called ${count}× in last ${dupGuard.recentKeys.length} (key=${key.slice(0, 80)}…) — blocking`,
-          );
+          logger.info(`[tool] ${name} ${argSummary} → BLOCKED-dup ${count}× in last ${dupGuard.recentKeys.length}`);
           return dupGuardErrorMessage(name, count);
         }
       }
       try {
         const result = await action.call(input);
+        const ms = Date.now() - callStart;
+        if (result.error) {
+          // Action.call may resolve with an error result (vs throwing).
+          // Surface that consistently in the log line.
+          logger.info(`[tool] ${name} ${argSummary} → error ${ms}ms msg="${String(result.error).slice(0, 120)}"`);
+        } else {
+          logger.info(`[tool] ${name} ${argSummary} → ok ${ms}ms`);
+        }
         return renderResult(result);
       } catch (err) {
+        const ms = Date.now() - callStart;
         const msg = err instanceof Error ? err.message : String(err);
-        logger.warning(`tool ${name} threw`, msg);
+        logger.info(`[tool] ${name} ${argSummary} → error ${ms}ms msg="${msg.slice(0, 120)}"`);
         // Surface as plain string — LangGraph will wrap in ToolMessage.
         return `Error: ${msg}`;
       }
