@@ -195,7 +195,11 @@ export default class Page {
     }
   }
 
-  async getClickableElements(showHighlightElements: boolean, focusElement: number): Promise<DOMState | null> {
+  async getClickableElements(
+    showHighlightElements: boolean,
+    focusElement: number,
+    signal?: AbortSignal,
+  ): Promise<DOMState | null> {
     if (!this._validWebPage) {
       return null;
     }
@@ -205,6 +209,8 @@ export default class Page {
       showHighlightElements,
       focusElement,
       this._config.viewportExpansion,
+      false,
+      signal,
     );
   }
 
@@ -366,13 +372,13 @@ export default class Page {
     return this._cachedState;
   }
 
-  async getState(useVision = false, cacheClickableElementsHashes = false): Promise<PageState> {
+  async getState(useVision = false, cacheClickableElementsHashes = false, signal?: AbortSignal): Promise<PageState> {
     if (!this._validWebPage) {
       // return the initial state
       return build_initial_state(this._tabId);
     }
     await this.waitForPageAndFramesLoad();
-    const updatedState = await this._updateState(useVision);
+    const updatedState = await this._updateState(useVision, -1, signal);
 
     // Find out which elements are new
     // Do this only if url has not changed
@@ -403,7 +409,10 @@ export default class Page {
     return updatedState;
   }
 
-  async _updateState(useVision = false, focusElement = -1): Promise<PageState> {
+  async _updateState(useVision = false, focusElement = -1, signal?: AbortSignal): Promise<PageState> {
+    if (signal?.aborted) {
+      throw new TabGoneError(this._tabId, new Error(`Tab ${this._tabId} probe aborted: tab gone`));
+    }
     try {
       // Test if page is still accessible
       // @ts-expect-error - puppeteerPage is not null, already checked before calling this function
@@ -429,10 +438,17 @@ export default class Page {
     // 500ms settle delay before falling back to the cached state.
     let lastErr: unknown = null;
     for (let attempt = 0; attempt < 2; attempt++) {
+      // T2u-abort — between attempts the 500ms settle sleep may
+      // have elapsed while `handleTabGone` aborted the signal.
+      // Bail before another full DOM build fires against a tab
+      // we already know is gone.
+      if (signal?.aborted) {
+        throw new TabGoneError(this._tabId, new Error(`Tab ${this._tabId} probe aborted: tab gone`));
+      }
       try {
         await this.removeHighlight();
         const displayHighlights = this._config.displayHighlights || useVision;
-        const content = await this.getClickableElements(displayHighlights, focusElement);
+        const content = await this.getClickableElements(displayHighlights, focusElement, signal);
         if (!content) {
           logger.warning(`Failed to get clickable elements (attempt ${attempt + 1}/2)`);
           if (attempt === 0) {

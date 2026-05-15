@@ -98,6 +98,7 @@ export async function getClickableElements(
   focusElement = -1,
   viewportExpansion = 0,
   debugMode = false,
+  signal?: AbortSignal,
 ): Promise<DOMState> {
   const [elementTree, selectorMap] = await _buildDomTree(
     tabId,
@@ -106,8 +107,23 @@ export async function getClickableElements(
     focusElement,
     viewportExpansion,
     debugMode,
+    signal,
   );
   return { elementTree, selectorMap };
+}
+
+/**
+ * T2u-abort — bail out a probe that was started against a now-dead
+ * tab. Used at each iframe-loop boundary and before each
+ * `chrome.scripting.executeScript` call so an in-flight DOM tree
+ * build does not iterate through hundreds of cached frame ids
+ * after `BrowserContext.handleTabGone` has already evicted the
+ * `Page`. Reuses `TabGoneError` — same downstream classification.
+ */
+function _throwIfAborted(tabId: number, signal: AbortSignal | undefined): void {
+  if (signal?.aborted) {
+    throw new TabGoneError(tabId, new Error(`Tab ${tabId} probe aborted: tab gone`));
+  }
 }
 
 async function _buildDomTree(
@@ -117,6 +133,7 @@ async function _buildDomTree(
   focusElement = -1,
   viewportExpansion = 0,
   debugMode = false,
+  signal?: AbortSignal,
 ): Promise<[DOMElementNode, Map<number, DOMElementNode>]> {
   // If URL is provided and it's about:blank, return a minimal DOM tree
   if (isNewTabPage(url) || url.startsWith('chrome://')) {
@@ -134,7 +151,9 @@ async function _buildDomTree(
     return [elementTree, new Map<number, DOMElementNode>()];
   }
 
+  _throwIfAborted(tabId, signal);
   await injectBuildDomTreeScripts(tabId);
+  _throwIfAborted(tabId, signal);
 
   // T2u-runaway-loop — main-frame executeScript is the canonical
   // place where Chrome reports `No tab with id: N` after the tab has
@@ -210,6 +229,7 @@ async function _buildDomTree(
     const frameInfoResultsRaw = await Promise.all(
       subFrames.map(async frame => {
         try {
+          _throwIfAborted(tabId, signal);
           const result = await chrome.scripting.executeScript({
             target: { tabId, frameIds: [frame.frameId] },
             func: frameId => ({
@@ -253,6 +273,7 @@ async function _buildDomTree(
       frameInfoResults,
       _getMaxID(mainFramePage),
       _getMaxHighlighIndex(mainFramePage),
+      signal,
     );
     mainFramePage = frameTreeResult.resultPage;
   }
@@ -270,6 +291,7 @@ async function constructFrameTree(
   allFramesInfo: FrameInfo[],
   startingNodeId: number,
   startingHighlightIndex: number,
+  signal?: AbortSignal,
 ): Promise<{ maxNodeId: number; maxHighlightIndex: number; resultPage: BuildDomTreeResult }> {
   const parentIframesFailedLoading = _visibleIFramesFailedLoading(parentFramePage);
   const failedLoadingFrames = allFramesInfo.filter(frameInfo => {
@@ -289,6 +311,12 @@ async function constructFrameTree(
   let maxHighlightIndex = startingHighlightIndex;
 
   for (const subFrame of failedLoadingFrames) {
+    // T2u-abort — the iframe loop is the original burst-amplifier:
+    // one dead tab × ~900 cached frame ids produced the 3660-line
+    // log spew in the screenshot. Checking the signal at the top
+    // of every iteration short-circuits the loop before another
+    // executeScript fires against the dead tab.
+    _throwIfAborted(tabId, signal);
     // Processing one frame at a time, to start from the proper highlightIndex and element id.
     // T2f-final-fix-3: any one frame can land in chrome-error://
     // (cross-origin redirect, X-Frame-Options block, captcha) and
@@ -378,6 +406,7 @@ async function constructFrameTree(
         allFramesInfo,
         maxNodeId,
         maxHighlightIndex,
+        signal,
       );
       maxNodeId = Math.max(maxNodeId, result.maxNodeId);
       maxHighlightIndex = Math.max(maxHighlightIndex, result.maxHighlightIndex);

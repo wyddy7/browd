@@ -37,6 +37,18 @@ export default class BrowserContext {
   private _agentGroupId: number | null = null;
 
   /**
+   * T2u-abort — in-flight `getState` / `getCachedState` probes
+   * keyed by tabId. When `handleTabGone(tabId)` fires, we abort
+   * the controller for that tab BEFORE evicting the cached Page,
+   * so any DOM tree build still walking the (now-dead) tab's
+   * frame list short-circuits on the next iteration boundary
+   * instead of running to completion and spewing thousands of
+   * `No tab with id` warnings. One controller per tab; replaced
+   * on each fresh probe; deleted after the probe settles.
+   */
+  private _probeAborts: Map<number, AbortController> = new Map();
+
+  /**
    * T2n-overlay-handling — set after `switchTab` / `navigateTo` so
    * the very next stateModifier build forces a fresh screenshot
    * capture regardless of the fallback heuristic. This addresses
@@ -93,6 +105,18 @@ export default class BrowserContext {
   }
 
   public async cleanup(): Promise<void> {
+    // T2u-abort — abort every in-flight probe up front so any DOM
+    // build still iterating sees the signal and bails before its
+    // next executeScript fires. We do this BEFORE detaching pages,
+    // for the same ordering reason as `handleTabGone`.
+    for (const controller of this._probeAborts.values()) {
+      try {
+        controller.abort();
+      } catch {
+        /* swallow — the controller may already be aborted */
+      }
+    }
+    this._probeAborts.clear();
     const currentPage = await this.getCurrentPage();
     currentPage?.removeHighlight();
     // detach all pages
@@ -286,6 +310,23 @@ export default class BrowserContext {
    *     the dead tab. Other tabs in the workspace remain attached.
    */
   public handleTabGone(tabId: number): void {
+    // T2u-abort — fire the abort signal BEFORE any other eviction
+    // work so an in-flight `buildDomTree` walking the iframe list
+    // sees `signal.aborted` on its very next iteration boundary and
+    // bails with a typed `TabGoneError`. If we deleted the
+    // controller (or the cached Page) first, the in-flight probe
+    // would keep iterating against a torn-down tab and log every
+    // per-frame failure — exactly the zombie-loop spew we're
+    // closing here.
+    const inflight = this._probeAborts.get(tabId);
+    if (inflight) {
+      try {
+        inflight.abort();
+      } catch (err) {
+        logger.debug(`handleTabGone: abort(${tabId}) threw (ignored)`, err);
+      }
+      this._probeAborts.delete(tabId);
+    }
     const page = this._attachedPages.get(tabId);
     if (page) {
       // detachPuppeteer is fire-and-forget here: awaiting it would
@@ -607,16 +648,48 @@ export default class BrowserContext {
     return tabInfos;
   }
 
+  /**
+   * T2u-abort — register a fresh AbortController for an in-flight
+   * DOM probe on `tabId`. Overwrites any previous controller for
+   * the same tab (the prior probe is now orphaned but still
+   * aborted-on-tab-gone via the new controller — both will see
+   * the abort because we replace, then `handleTabGone` aborts
+   * whatever is currently stored). Returns the signal so the
+   * caller can thread it through to `Page.getState`.
+   */
+  private _beginProbe(tabId: number): AbortController {
+    const controller = new AbortController();
+    this._probeAborts.set(tabId, controller);
+    return controller;
+  }
+
+  /**
+   * T2u-abort — drop the controller for `tabId` once the probe
+   * has settled. Guarded against replacement: only clear the map
+   * entry if it still points at `controller`. Otherwise a fresh
+   * probe started while this one was still running would be
+   * unregistered prematurely.
+   */
+  private _endProbe(tabId: number, controller: AbortController): void {
+    if (this._probeAborts.get(tabId) === controller) {
+      this._probeAborts.delete(tabId);
+    }
+  }
+
   public async getCachedState(useVision = false, cacheClickableElementsHashes = false): Promise<BrowserState> {
     const currentPage = await this.getCurrentPage();
 
     let pageState = !currentPage ? build_initial_state() : currentPage.getCachedState();
     if (!pageState) {
+      const tabId = currentPage?.tabId ?? null;
+      const controller = tabId != null ? this._beginProbe(tabId) : null;
       try {
-        pageState = await currentPage.getState(useVision, cacheClickableElementsHashes);
+        pageState = await currentPage.getState(useVision, cacheClickableElementsHashes, controller?.signal);
       } catch (err) {
-        this._handleStateError(currentPage?.tabId ?? null, err);
+        this._handleStateError(tabId, err);
         throw err;
+      } finally {
+        if (tabId != null && controller) this._endProbe(tabId, controller);
       }
     }
 
@@ -630,15 +703,19 @@ export default class BrowserContext {
 
   public async getState(useVision = false, cacheClickableElementsHashes = false): Promise<BrowserState> {
     const currentPage = await this.getCurrentPage();
+    const tabId = currentPage?.tabId ?? null;
+    const controller = tabId != null ? this._beginProbe(tabId) : null;
 
     let pageState;
     try {
       pageState = !currentPage
         ? build_initial_state()
-        : await currentPage.getState(useVision, cacheClickableElementsHashes);
+        : await currentPage.getState(useVision, cacheClickableElementsHashes, controller?.signal);
     } catch (err) {
-      this._handleStateError(currentPage?.tabId ?? null, err);
+      this._handleStateError(tabId, err);
       throw err;
+    } finally {
+      if (tabId != null && controller) this._endProbe(tabId, controller);
     }
     const tabInfos = await this.getTabInfos();
     const browserState: BrowserState = {
