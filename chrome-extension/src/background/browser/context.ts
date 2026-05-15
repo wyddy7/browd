@@ -16,19 +16,23 @@ export default class BrowserContext {
   private _currentTabId: number | null = null;
   private _attachedPages: Map<number, Page> = new Map();
   /**
-   * T2f-tab-iso-1a — id of the tab the agent is working in for the
-   * current task. When set, getCurrentPage() always resolves to this
-   * tab even if the user clicks away. null between tasks; cleared on
-   * `cleanup()`. The agent tab is created via `openAgentTab()` (new
-   * blank tab) or pinned to an existing one via `takeOverTab()`.
+   * Id of the tab the agent is currently working in. When set,
+   * `getCurrentPage()` resolves to this tab even if the user clicks
+   * away. null between tasks; cleared on `cleanup()`.
    */
   private _agentTabId: number | null = null;
   /**
-   * T2f-tab-iso-1d — listener for re-applying the [Browd] title
-   * prefix after navigation in the agent tab. Lives between
-   * openAgentTab() and cleanup().
+   * T2s-1 — id of the Chrome tab group that scopes the agent's
+   * workspace. On task start, `openAgentTab()` takes the user's
+   * current active tab and wraps it in a "Browd" tab group; every
+   * subsequent tab the agent opens is added to the group; switching
+   * to a tab outside the group is refused at runtime. The group is
+   * the security boundary — without it the LLM could call
+   * `switch_tab(42)` and silently take over any tab the user had open.
+   * null between tasks; cleared (but the underlying Chrome group is
+   * left alone so the user can keep using it) on `cleanup()`.
    */
-  private _onTabUpdatedHandler: ((tabId: number, info: chrome.tabs.TabChangeInfo) => void) | null = null;
+  private _agentGroupId: number | null = null;
 
   /**
    * T2n-overlay-handling — set after `switchTab` / `navigateTo` so
@@ -96,87 +100,109 @@ export default class BrowserContext {
     this._attachedPages.clear();
     this._currentTabId = null;
     this._agentTabId = null;
-    if (this._onTabUpdatedHandler) {
-      chrome.tabs.onUpdated.removeListener(this._onTabUpdatedHandler);
-      this._onTabUpdatedHandler = null;
-    }
+    // T2s-1 — drop the in-memory pointer but leave the Chrome tab
+    // group itself intact. The user keeps their workspace visible;
+    // Chrome auto-destroys the group only when its last tab closes.
+    this._agentGroupId = null;
   }
 
   /**
-   * T2f-tab-iso-1a — open a fresh tab for the agent's task. Returns
-   * the new tab id. The agent's getCurrentPage() will resolve to
-   * this tab for the rest of the task even if the user switches
-   * windows or focuses another tab.
+   * T2s-1 — initialise the agent workspace for a new task.
    *
-   * Default initial URL is about:blank — the agent's first
-   * `go_to_url` moves it to the actual target. We create the tab as
-   * inactive (active:false) so the user keeps focus on whatever
-   * they were doing; the agent's work is visible as a separate tab
-   * the user can click into.
+   * Instead of creating a fresh `about:blank` tab (the pre-T2s
+   * behaviour: visible "blank flash" + an extra goofy tab the user
+   * never asked for), this takes the user's CURRENT active tab and
+   * wraps it in a Chrome tab group titled "Browd". The agent works
+   * inside that group; tabs the agent opens later are auto-added to
+   * the same group; `switchTab` refuses any tab outside the group.
+   * The colour-labelled group is also the visual cue the user needs
+   * to see where the agent's work boundary is — replaces the
+   * pre-T2s `[Browd]` title-prefix injection.
+   *
+   * `initialUrl` (optional): if the user's task started with a
+   * concrete URL, navigate the existing tab there. Empty / `about:blank`
+   * = keep whatever the user had loaded.
+   *
+   * Returns the agent's working tab id.
    */
   public async openAgentTab(initialUrl: string = 'about:blank'): Promise<number> {
-    const tab = await chrome.tabs.create({ url: initialUrl, active: false });
-    if (!tab.id) {
-      throw new Error('openAgentTab: chrome.tabs.create returned no tab id');
+    // 1. Find the user's current active tab. That tab IS the agent's
+    //    workspace — we don't conjure a new one.
+    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!activeTab?.id) {
+      throw new Error('openAgentTab: no active tab in current window to anchor the agent group');
     }
-    this._agentTabId = tab.id;
-    this._currentTabId = tab.id;
-    logger.info(`openAgentTab: created agent tab ${tab.id} (${initialUrl})`);
-    // T2f-tab-iso-1d — visual feedback. Inject a content script to
-    // prefix the document title with "[Browd] " so the user can see
-    // at a glance which tab in their tab strip is the agent's. Best-
-    // effort: about:blank has no scripting permission, but as soon
-    // as the agent navigates somewhere the prefix gets re-applied.
-    void this._applyAgentTabBadge(tab.id);
-    // Re-apply on every navigation in the agent tab — a fresh
-    // page.complete clobbers the prefix until our injection runs again.
-    if (!this._onTabUpdatedHandler) {
-      this._onTabUpdatedHandler = (updatedTabId, info) => {
-        if (updatedTabId === this._agentTabId && info.status === 'complete') {
-          void this._applyAgentTabBadge(updatedTabId);
-        }
-      };
-      chrome.tabs.onUpdated.addListener(this._onTabUpdatedHandler);
+    const tabId = activeTab.id;
+
+    // 2. Wrap it in a Chrome tab group. `chrome.tabs.group` returns
+    //    the new group id; subsequent calls with the same `groupId`
+    //    add tabs to that group. We give it a recognisable title and
+    //    colour so the user can see the agent's boundary at a glance.
+    try {
+      const groupId = await chrome.tabs.group({ tabIds: [tabId] });
+      this._agentGroupId = groupId;
+      try {
+        await chrome.tabGroups.update(groupId, { title: 'Browd', color: 'purple' });
+      } catch (err) {
+        logger.warning('tabGroups.update failed; group remains untitled', err);
+      }
+      logger.info(`openAgentTab: anchored agent group ${groupId} on tab ${tabId} (${activeTab.url ?? ''})`);
+    } catch (err) {
+      // Grouping failed (e.g. unsupported browser variant, perms
+      // missing). Continue without isolation rather than aborting the
+      // task — log loudly so the user notices.
+      logger.warning('openAgentTab: tabs.group failed, isolation disabled for this task', err);
+      this._agentGroupId = null;
     }
-    return tab.id;
+
+    this._agentTabId = tabId;
+    this._currentTabId = tabId;
+
+    // 3. If the task supplied a concrete URL hint, navigate the
+    //    anchored tab to it. The user typed the task, so this is
+    //    consented navigation — same semantics as clicking a link.
+    if (initialUrl && initialUrl !== 'about:blank') {
+      try {
+        await chrome.tabs.update(tabId, { url: initialUrl });
+      } catch (err) {
+        logger.warning(`openAgentTab: failed to navigate ${tabId} to ${initialUrl}`, err);
+      }
+    }
+
+    return tabId;
   }
 
-  private async _applyAgentTabBadge(tabId: number): Promise<void> {
+  /**
+   * T2s-1 — runtime check used by `switchTab` to refuse cross-over
+   * to tabs outside the agent's group. Returns true when isolation
+   * is OFF (group not set) so legacy / fallback callers don't break.
+   */
+  private async _isTabInsideAgentGroup(tabId: number): Promise<boolean> {
+    if (this._agentGroupId === null) return true;
     try {
-      await chrome.scripting.executeScript({
-        target: { tabId },
-        func: () => {
-          const PREFIX = '[Browd] ';
-          if (document.title && !document.title.startsWith(PREFIX)) {
-            document.title = PREFIX + document.title;
-          }
-          // Re-apply on every title change so SPAs that overwrite
-          // document.title don't strip the badge mid-task.
-          // Use a MutationObserver scoped to the title element.
-          const titleEl = document.querySelector('title');
-          if (titleEl && !(window as any).__browdTitleObserver) {
-            const obs = new MutationObserver(() => {
-              if (document.title && !document.title.startsWith(PREFIX)) {
-                document.title = PREFIX + document.title;
-              }
-            });
-            obs.observe(titleEl, { childList: true });
-            (window as any).__browdTitleObserver = obs;
-          }
-        },
-      });
-    } catch (err) {
-      logger.warning(`agent tab badge injection failed (likely chrome:// or about:blank)`, err);
+      const tab = await chrome.tabs.get(tabId);
+      return tab.groupId === this._agentGroupId;
+    } catch {
+      return false;
     }
   }
 
   /**
-   * T2f-tab-iso-1c — pin the agent to an existing user tab. Used
-   * only when the task explicitly references the user's open page
-   * ("this page", "current tab", "the open form"). Implemented in
-   * the `take_over_user_tab` action.
+   * Pin the agent to an existing user tab. Used by the
+   * `take_over_user_tab` action when the task explicitly references
+   * a page already open in the user's browser. The taken-over tab
+   * is added to the agent group so subsequent `switch_tab` calls
+   * targeting it are allowed.
+   *
+   * T2s-2 will wrap this behind an HITL approval prompt; for now
+   * the action layer (`actions/builder.ts`) is the gate.
    */
   public takeOverTab(tabId: number): void {
+    if (this._agentGroupId !== null) {
+      void chrome.tabs.group({ tabIds: [tabId], groupId: this._agentGroupId }).catch(err => {
+        logger.warning(`takeOverTab: failed to add ${tabId} to agent group`, err);
+      });
+    }
     this._agentTabId = tabId;
     this._currentTabId = tabId;
     logger.info(`takeOverTab: agent now operates in tab ${tabId}`);
@@ -184,6 +210,10 @@ export default class BrowserContext {
 
   public agentTabId(): number | null {
     return this._agentTabId;
+  }
+
+  public agentGroupId(): number | null {
+    return this._agentGroupId;
   }
 
   /**
@@ -389,6 +419,23 @@ export default class BrowserContext {
   public async switchTab(tabId: number): Promise<Page> {
     logger.info('switchTab', tabId);
 
+    // T2s-1 — isolation enforcement. If an agent group is pinned,
+    // refuse to switch to any tab outside that group. This closes
+    // the cross-over breach where the LLM could call
+    // `switch_tab(figmaTabId)` for any random user-owned tab and
+    // implicitly take it over. New tabs the agent opens (via
+    // `openTab`) are auto-added to the group, so legitimate flows
+    // ("agent opens search results, switches to a result tab")
+    // keep working. To bring in an existing user tab the agent must
+    // go through `take_over_user_tab`.
+    if (!(await this._isTabInsideAgentGroup(tabId))) {
+      throw new Error(
+        `switch_tab(${tabId}) refused: tab is outside the agent group. ` +
+          `Open a new tab (it will join the group automatically) or call take_over_user_tab(${tabId}) ` +
+          `if the user needs the agent to work in that tab.`,
+      );
+    }
+
     // T2n-overlay-handling — mark that the next state-message build
     // must capture a fresh screenshot regardless of the adaptive
     // fallback heuristic. The new tab may have an overlay
@@ -457,6 +504,19 @@ export default class BrowserContext {
     if (!tab.id) {
       throw new Error('No tab ID available');
     }
+
+    // T2s-1 — every new tab the agent opens is added to the agent
+    // group so isolation stays intact. Chrome enforces "tab can only
+    // be in one group at a time", so this is also the safest way to
+    // pull the new tab into our workspace.
+    if (this._agentGroupId !== null) {
+      try {
+        await chrome.tabs.group({ tabIds: [tab.id], groupId: this._agentGroupId });
+      } catch (err) {
+        logger.warning(`openTab: failed to add new tab ${tab.id} to agent group ${this._agentGroupId}`, err);
+      }
+    }
+
     // Wait for tab events
     await this.waitForTabEvents(tab.id);
 
