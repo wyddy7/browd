@@ -44,6 +44,7 @@ import { wrapUntrustedContent } from '../messages/utils';
 import { Actors, ExecutionState } from '../event/types';
 import { createLogger } from '@src/background/log';
 import { createObservabilityCallback } from './observabilityCallback';
+import { UnifiedStuckDetector, computeStateFingerprint } from '../guardrails/unifiedStuckDetector';
 
 const logger = createLogger('runReactAgent');
 
@@ -281,6 +282,18 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
   // T2f-final-fix: consecutive-duplicate guard shared across all
   // tool wrappers — see langGraphAdapter for the threshold logic.
   const dupGuard = { recentKeys: [] as string[] };
+  // T2p: subgoal-level stuck detector. dupGuard above catches
+  // tool-call-signature repeats at the tool wrapper level; this
+  // detector catches the orthogonal failure modes from test10.md:
+  //   - env-fingerprint: same post-subgoal URL/DOM/text across ≥3
+  //     subgoals (varied actions but the page never changed —
+  //     e.g. dead-frame or wrong URL grind);
+  //   - silent-step: two consecutive subgoals with zero tool calls
+  //     (e.g. "Wait for X to load completely" no-op planner output).
+  // On either, recordSubgoal returns a reasoning_failure ActionError;
+  // we surface it as the StateGraph's terminal response so the outer
+  // FailureClassifier path emits TASK_FAIL with a clear reason.
+  const stuckDetector = new UnifiedStuckDetector();
   // T2f-3 / T2f-coords: gate vision-only tools on visionMode.
   //  - 'screenshot' belongs to 'fallback' only ('always' captures
   //    via stateModifier, 'off' never).
@@ -514,7 +527,7 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
     completed: Array<[string, string]>,
     stepIndex: number,
     params: PlanType['taskParameters'],
-  ): Promise<string> => {
+  ): Promise<{ finalAnswer: string; toolCallCount: number }> => {
     const stepSystemPrompt = buildSystemPromptForStep(currentStep, completed, params);
     const agent = createReactAgent({
       llm,
@@ -629,7 +642,20 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
       },
       stepConfig,
     );
-    return extractFinalAnswer(stepResult.messages) ?? 'no observable result';
+    // T2p: count AIMessage entries that emitted at least one tool call.
+    // Drives the silent-step guard in stuckDetector. AIMessages without
+    // tool_calls are reasoning or the final answer for this subgoal;
+    // they don't count toward "actually acting on the page".
+    let toolCallCount = 0;
+    for (const m of stepResult.messages) {
+      if (m instanceof AIMessage && Array.isArray(m.tool_calls) && m.tool_calls.length > 0) {
+        toolCallCount += 1;
+      }
+    }
+    return {
+      finalAnswer: extractFinalAnswer(stepResult.messages) ?? 'no observable result',
+      toolCallCount,
+    };
   };
 
   // ---- StateGraph definition (planner → agent → replanner) ----
@@ -703,12 +729,36 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
       ...remainingAfter.map(s => ({ text: s, done: false })),
     ]);
     let stepResult: string;
+    let toolCallCount = 0;
     try {
-      stepResult = await runReactStep(currentStep, state.pastSteps, state.pastSteps.length, state.taskParameters);
+      const stepOut = await runReactStep(currentStep, state.pastSteps, state.pastSteps.length, state.taskParameters);
+      stepResult = stepOut.finalAnswer;
+      toolCallCount = stepOut.toolCallCount;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       logger.warning(`subgoal "${currentStep}" failed: ${msg}`);
       stepResult = `failed: ${msg}`;
+    }
+    // T2p — post-subgoal stagnation check. Compute fingerprint of the
+    // current page state and feed it + tool-call count to the detector.
+    // On stuck the detector returns a `reasoning_failure` ActionError;
+    // we short-circuit the StateGraph by writing `response` so `decide`
+    // routes to END and the outer try/catch in runReactAgent emits
+    // TASK_FAIL with the verdict message. Without this, test10's
+    // 4× identical screenshot + "Wait for X" no-toolCall pattern
+    // grinds CPU + tokens with no termination signal.
+    let stuckResponse: string | null = null;
+    try {
+      const liveState = await context.browserContext.getState(false);
+      const fp = computeStateFingerprint(liveState);
+      const verdict = stuckDetector.recordSubgoal({ fingerprint: fp, toolCallCount });
+      if (verdict) {
+        logger.warning(`stuckDetector: ${verdict.kind} — ${verdict.message}`);
+        const partial = state.pastSteps.map(([s, r]) => `- ${s}: ${r}`).join('\n');
+        stuckResponse = `I'm stopping because the agent appears stuck: ${verdict.message}\n\nWhat I did so far:\n${partial || '(no completed subgoals)'}\n\nTry rephrasing the task, opening the target page yourself, or switching to legacy agent mode in Settings.`;
+      }
+    } catch (err) {
+      logger.warning('stuckDetector post-subgoal probe failed; skipping this round', err);
     }
     // After the step: flip current to done (or leave at false if it
     // came back as a "failed:..." marker — replanner picks up from
@@ -718,7 +768,11 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
       { text: currentStep, done: !stepResult.startsWith('failed:') },
       ...remainingAfter.map(s => ({ text: s, done: false })),
     ]);
-    return { pastSteps: [[currentStep, stepResult] as [string, string]] };
+    const update: { pastSteps: Array<[string, string]>; response?: string } = {
+      pastSteps: [[currentStep, stepResult] as [string, string]],
+    };
+    if (stuckResponse !== null) update.response = stuckResponse;
+    return update;
   };
 
   const replannerNode = async (state: typeof PlanExecuteState.State) => {
