@@ -54,6 +54,15 @@ decide what to do. Concretely:
   anything.
 - You're interacting with a non-DOM surface (canvas, video player,
   custom widget, drag area) where there's no index to pick.
+- **The task requires visual judgement** — the user asked for "the
+  best", "the most relevant", "the prettiest", "which one looks
+  better", or any similar pick-from-options-by-appearance call. The
+  DOM listing gives you tag / alt text / href, NOT the actual
+  pixels; an alt attribute saying \`"woman"\` tells you nothing about
+  whether the image matches the user's intent. Image-search result
+  pages (Google Images, Pinterest, image galleries, video thumbnails)
+  always fall here. Take a screenshot first, then pick the index
+  based on what you see.
 
 Pass \`gridOverlay: true\` when you intend to call a coordinate tool
 next — the screenshot will carry a 10×10 coordinate grid so you can
