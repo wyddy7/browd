@@ -95,7 +95,7 @@ function stubChrome(opts: StubOptions) {
       ]),
       create: vi.fn().mockImplementation(async () => {
         const tab = { id: nextCreatedId++, status: 'complete' as const, url: '', title: '' };
-        opts.onCreate?.(tab);
+        opts.onCreate?.(tab as unknown as chrome.tabs.Tab);
         return tab;
       }),
       group: vi.fn().mockImplementation(async (args: { tabIds: number[]; groupId?: number }) => {

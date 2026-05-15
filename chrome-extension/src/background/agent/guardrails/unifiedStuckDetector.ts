@@ -134,6 +134,30 @@ export class UnifiedStuckDetector {
 }
 
 /**
+ * T2p-2 — detect LangGraph's inner `GraphRecursionError` thrown when
+ * a single subgoal exhausts `recursionLimit` (default 25) inside
+ * `createReactAgent` without landing on a terminal state. The
+ * canonical message is *"Recursion limit of N reached without
+ * hitting a stop condition"*. We match the generic shape so a future
+ * LangGraph wording tweak still trips.
+ *
+ * Why this matters: the per-subgoal createReactAgent loop can run
+ * tens of LLM rounds emitting tool calls that all silently no-op
+ * (isTrusted=false antibot clicks on anti-automation pages). The
+ * existing per-tool dupGuard is defeated when the LLM rephrases its
+ * `intent` string slightly between rounds, so the recursion limit
+ * fires AFTER ~25 wasted rounds. Without this detector the outer
+ * replanner would then attempt the same approach again under a new
+ * subgoal — burning another 25 rounds. Treating the inner-recursion
+ * error as a structural failure (not a transient one) short-circuits
+ * the StateGraph immediately.
+ */
+export function isInnerRecursionLimitError(message: string): boolean {
+  if (typeof message !== 'string') return false;
+  return /Recursion limit of \d+ reached/i.test(message);
+}
+
+/**
  * Build a stable fingerprint string from a `BrowserState`.
  *
  * Components chosen for the test10.md class of failures:

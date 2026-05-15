@@ -53,7 +53,11 @@ import { wrapUntrustedContent } from '../messages/utils';
 import { Actors, ExecutionState } from '../event/types';
 import { createLogger } from '@src/background/log';
 import { createObservabilityCallback } from './observabilityCallback';
-import { UnifiedStuckDetector, computeStateFingerprint } from '../guardrails/unifiedStuckDetector';
+import {
+  UnifiedStuckDetector,
+  computeStateFingerprint,
+  isInnerRecursionLimitError,
+} from '../guardrails/unifiedStuckDetector';
 
 const logger = createLogger('runReactAgent');
 
@@ -739,6 +743,7 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
     ]);
     let stepResult: string;
     let toolCallCount = 0;
+    let innerRecursionExhausted = false;
     try {
       const stepOut = await runReactStep(currentStep, state.pastSteps, state.pastSteps.length, state.taskParameters);
       stepResult = stepOut.finalAnswer;
@@ -747,6 +752,16 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
       const msg = err instanceof Error ? err.message : String(err);
       logger.warning(`subgoal "${currentStep}" failed: ${msg}`);
       stepResult = `failed: ${msg}`;
+      // T2p-2: when the inner createReactAgent exhausts its own
+      // recursionLimit, the subgoal burned ~25 LLM rounds emitting
+      // tool calls with no progress (typical: isTrusted=false antibot
+      // wall on click_at). Treat it as a structural reasoning failure
+      // and short-circuit the outer StateGraph immediately, BEFORE
+      // the replanner takes another swing and burns another 25
+      // rounds under a new subgoal description.
+      if (isInnerRecursionLimitError(msg)) {
+        innerRecursionExhausted = true;
+      }
     }
     // T2p — post-subgoal stagnation check. Compute fingerprint of the
     // current page state and feed it + tool-call count to the detector.
@@ -757,17 +772,22 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
     // 4× identical screenshot + "Wait for X" no-toolCall pattern
     // grinds CPU + tokens with no termination signal.
     let stuckResponse: string | null = null;
-    try {
-      const liveState = await context.browserContext.getState(false);
-      const fp = computeStateFingerprint(liveState);
-      const verdict = stuckDetector.recordSubgoal({ fingerprint: fp, toolCallCount });
-      if (verdict) {
-        logger.warning(`stuckDetector: ${verdict.kind} — ${verdict.message}`);
-        const partial = state.pastSteps.map(([s, r]) => `- ${s}: ${r}`).join('\n');
-        stuckResponse = `I'm stopping because the agent appears stuck: ${verdict.message}\n\nWhat I did so far:\n${partial || '(no completed subgoals)'}\n\nTry rephrasing the task, opening the target page yourself, or switching to legacy agent mode in Settings.`;
+    if (innerRecursionExhausted) {
+      const partial = state.pastSteps.map(([s, r]) => `- ${s}: ${r}`).join('\n');
+      stuckResponse = `I'm stopping because the agent got stuck inside one step: it burned the inner recursion budget on "${currentStep}" without making progress (usually means the target page silently blocks automated clicks).\n\nWhat I did so far:\n${partial || '(no completed subgoals)'}\n\nTry rephrasing the task, opening the target page yourself, or switching to legacy agent mode in Settings.`;
+    } else {
+      try {
+        const liveState = await context.browserContext.getState(false);
+        const fp = computeStateFingerprint(liveState);
+        const verdict = stuckDetector.recordSubgoal({ fingerprint: fp, toolCallCount });
+        if (verdict) {
+          logger.warning(`stuckDetector: ${verdict.kind} — ${verdict.message}`);
+          const partial = state.pastSteps.map(([s, r]) => `- ${s}: ${r}`).join('\n');
+          stuckResponse = `I'm stopping because the agent appears stuck: ${verdict.message}\n\nWhat I did so far:\n${partial || '(no completed subgoals)'}\n\nTry rephrasing the task, opening the target page yourself, or switching to legacy agent mode in Settings.`;
+        }
+      } catch (err) {
+        logger.warning('stuckDetector post-subgoal probe failed; skipping this round', err);
       }
-    } catch (err) {
-      logger.warning('stuckDetector post-subgoal probe failed; skipping this round', err);
     }
     // After the step: flip current to done (or leave at false if it
     // came back as a "failed:..." marker — replanner picks up from

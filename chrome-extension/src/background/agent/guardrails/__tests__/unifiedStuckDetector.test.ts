@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { UnifiedStuckDetector, computeStateFingerprint } from '../unifiedStuckDetector';
+import { UnifiedStuckDetector, computeStateFingerprint, isInnerRecursionLimitError } from '../unifiedStuckDetector';
 import type { BrowserState } from '@src/background/browser/views';
 
 const ok = { toolCallCount: 1 } as const;
@@ -154,5 +154,37 @@ describe('computeStateFingerprint', () => {
       selectorMap: undefined,
     } as unknown as BrowserState);
     expect(fp).toBe('|0|');
+  });
+});
+
+describe('isInnerRecursionLimitError (T2p-2)', () => {
+  it('matches the canonical LangGraph GraphRecursionError message', () => {
+    expect(isInnerRecursionLimitError('Recursion limit of 25 reached without hitting a stop condition.')).toBe(true);
+  });
+
+  it('matches when wrapped in a longer error string', () => {
+    expect(
+      isInnerRecursionLimitError(
+        'Error inside agent.invoke: Recursion limit of 25 reached without hitting a stop condition. See troubleshooting URL...',
+      ),
+    ).toBe(true);
+  });
+
+  it('survives future limit-number changes', () => {
+    expect(isInnerRecursionLimitError('Recursion limit of 50 reached.')).toBe(true);
+    expect(isInnerRecursionLimitError('Recursion limit of 8 reached and we gave up.')).toBe(true);
+  });
+
+  it('does not false-positive on unrelated error messages', () => {
+    expect(isInnerRecursionLimitError('Network timeout after 30s')).toBe(false);
+    expect(isInnerRecursionLimitError('Element with index 12 does not exist')).toBe(false);
+    expect(isInnerRecursionLimitError('History entry to navigate to not found')).toBe(false);
+    expect(isInnerRecursionLimitError('')).toBe(false);
+  });
+
+  it('handles non-string inputs without throwing', () => {
+    expect(isInnerRecursionLimitError(null as unknown as string)).toBe(false);
+    expect(isInnerRecursionLimitError(undefined as unknown as string)).toBe(false);
+    expect(isInnerRecursionLimitError(42 as unknown as string)).toBe(false);
   });
 });
