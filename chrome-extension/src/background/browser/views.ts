@@ -151,3 +151,41 @@ export class URLNotAllowedError extends BrowserError {
     this.name = 'URLNotAllowedError';
   }
 }
+
+/**
+ * T2u-runaway-loop — typed error raised when an underlying Chrome API
+ * (`chrome.tabs.get`, `chrome.scripting.executeScript`,
+ * `chrome.webNavigation.getAllFrames`) reports that the target tab no
+ * longer exists ("No tab with id: N"). The pre-fix path swallowed
+ * this error and returned a cached `PageState`, which let the caller
+ * immediately retry against the same dead tab — generating tens of
+ * thousands of identical `[DOMService] skipping subFrame ... No tab
+ * with id` warnings per second after the user pressed Stop.
+ *
+ * The cure is a typed bubble: throw `TabGoneError` from the leaf
+ * Chrome-API try/catch, evict the cached `Page` in `BrowserContext`,
+ * and let the outer agent loop see a real failure instead of an
+ * infinitely retriable one.
+ */
+export class TabGoneError extends BrowserError {
+  public readonly tabId: number;
+  constructor(tabId: number, cause?: unknown) {
+    super(`Tab ${tabId} is gone: ${cause instanceof Error ? cause.message : String(cause ?? 'No tab with id')}`);
+    this.name = 'TabGoneError';
+    this.tabId = tabId;
+  }
+}
+
+/**
+ * T2u-runaway-loop — string-level detector. Chrome surfaces the dead
+ * tab condition through multiple error messages depending on the API
+ * surface that triggered it; the canonical one is
+ * `No tab with id: <N>`. We also match `No frame with id` because
+ * `chrome.scripting.executeScript({ target: { frameIds: [...] }})`
+ * raises that variant when the parent tab is alive but a recorded
+ * sub-frame has been torn down. Both indicate the cached Page is no
+ * longer driving anything real and must be evicted.
+ */
+export function isTabGoneErrorMessage(message: string): boolean {
+  return /No tab with id\b/i.test(message) || /No frame with id\b/i.test(message);
+}

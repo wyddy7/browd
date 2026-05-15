@@ -5,6 +5,8 @@ import {
   DEFAULT_BROWSER_CONTEXT_CONFIG,
   type TabInfo,
   URLNotAllowedError,
+  TabGoneError,
+  isTabGoneErrorMessage,
 } from './views';
 import Page, { build_initial_state } from './page';
 import { createLogger } from '@src/background/log';
@@ -264,6 +266,44 @@ export default class BrowserContext {
       // remove page from managed pages
       this._attachedPages.delete(tabId);
     }
+  }
+
+  /**
+   * T2u-runaway-loop — evict every cached reference to a tab that
+   * Chrome has reported as gone ("No tab with id: N"). Without this
+   * call the cached `Page` in `_attachedPages` stays bound to a dead
+   * `tabId`, `getCurrentPage()` keeps resolving to it via the
+   * `cached` early return, `getState()` keeps hitting it, every call
+   * loops through ~N iframes worth of executeScript failures, and
+   * the SW console fills up at ~5–10k log lines/sec.
+   *
+   * Best-effort:
+   *   - detach the puppeteer connection (swallowing errors — the
+   *     underlying CDP target is already gone, but we want the
+   *     attempt logged at debug level for traceability),
+   *   - remove the entry from `_attachedPages`,
+   *   - clear `_agentTabId` and `_currentTabId` iff they point to
+   *     the dead tab. Other tabs in the workspace remain attached.
+   */
+  public handleTabGone(tabId: number): void {
+    const page = this._attachedPages.get(tabId);
+    if (page) {
+      // detachPuppeteer is fire-and-forget here: awaiting it would
+      // block the caller on a CDP cleanup that is guaranteed to
+      // fail (target gone). The promise chain swallows the
+      // expected rejection.
+      void page.detachPuppeteer().catch(err => {
+        logger.debug(`handleTabGone: detachPuppeteer(${tabId}) failed (expected)`, err);
+      });
+      this._attachedPages.delete(tabId);
+    }
+    if (this._agentTabId === tabId) {
+      this._agentTabId = null;
+    }
+    if (this._currentTabId === tabId) {
+      this._currentTabId = null;
+    }
+    logger.warning(`handleTabGone: tab ${tabId} evicted from BrowserContext`);
   }
 
   public async getCurrentPage(): Promise<Page> {
@@ -572,7 +612,12 @@ export default class BrowserContext {
 
     let pageState = !currentPage ? build_initial_state() : currentPage.getCachedState();
     if (!pageState) {
-      pageState = await currentPage.getState(useVision, cacheClickableElementsHashes);
+      try {
+        pageState = await currentPage.getState(useVision, cacheClickableElementsHashes);
+      } catch (err) {
+        this._handleStateError(currentPage?.tabId ?? null, err);
+        throw err;
+      }
     }
 
     const tabInfos = await this.getTabInfos();
@@ -586,9 +631,15 @@ export default class BrowserContext {
   public async getState(useVision = false, cacheClickableElementsHashes = false): Promise<BrowserState> {
     const currentPage = await this.getCurrentPage();
 
-    const pageState = !currentPage
-      ? build_initial_state()
-      : await currentPage.getState(useVision, cacheClickableElementsHashes);
+    let pageState;
+    try {
+      pageState = !currentPage
+        ? build_initial_state()
+        : await currentPage.getState(useVision, cacheClickableElementsHashes);
+    } catch (err) {
+      this._handleStateError(currentPage?.tabId ?? null, err);
+      throw err;
+    }
     const tabInfos = await this.getTabInfos();
     const browserState: BrowserState = {
       ...pageState,
@@ -596,6 +647,28 @@ export default class BrowserContext {
       // browser_errors: [],
     };
     return browserState;
+  }
+
+  /**
+   * T2u-runaway-loop — central place to react to a `TabGoneError`
+   * (or a raw `No tab with id` message escaping from a code path we
+   * have not converted yet). Evicts the dead tab from the attached
+   * cache so the next `getCurrentPage()` does not return the same
+   * stale `Page` instance. We do not swallow the error here — the
+   * caller (agent loop) needs to see it and bubble up to the outer
+   * `runReactAgent` catch which classifies as TASK_FAIL.
+   */
+  private _handleStateError(tabId: number | null, err: unknown): void {
+    if (err instanceof TabGoneError) {
+      this.handleTabGone(err.tabId);
+      return;
+    }
+    if (tabId != null) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (isTabGoneErrorMessage(msg)) {
+        this.handleTabGone(tabId);
+      }
+    }
   }
 
   public async removeHighlight(): Promise<void> {

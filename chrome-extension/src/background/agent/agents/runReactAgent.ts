@@ -58,6 +58,7 @@ import {
   computeStateFingerprint,
   isInnerRecursionLimitError,
 } from '../guardrails/unifiedStuckDetector';
+import { TabGoneError } from '@src/background/browser/views';
 
 const logger = createLogger('runReactAgent');
 
@@ -582,6 +583,15 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
         const liveState = await context.browserContext.getState(false);
         fpNow = computeStateFingerprint(liveState);
       } catch (fpErr) {
+        // T2u-runaway-loop — same logic as the fp_start probe. If
+        // the tab is gone there is nothing to compare against, so
+        // rethrow the original recursion-limit error and let the
+        // outer agentNode catch turn it into a clean stop.
+        const fpMsg = fpErr instanceof Error ? fpErr.message : String(fpErr);
+        if (fpErr instanceof TabGoneError || /No tab with id|No frame with id/i.test(fpMsg)) {
+          logger.warning(`fp_now probe saw tab gone (${fpMsg}); rethrowing recursion-limit error`);
+          throw err;
+        }
         logger.warning('fp_now probe failed during recursion-limit soft-fail check', fpErr);
         fpNow = null;
       }
@@ -686,6 +696,25 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
     if (state.plan.length === 0) {
       return { response: 'no remaining plan steps' };
     }
+    // T2u-runaway-loop — short-circuit the node body if the user
+    // has already pressed Stop OR a previous probe noticed the
+    // agent tab is gone. Without this, the `fpStart` and post-step
+    // `fpNow` probes below kept calling `getState()` after abort,
+    // which hammered a dead tab and generated tens of thousands of
+    // log lines per second in the SW console. Returning a
+    // `response` routes the StateGraph straight to END; the outer
+    // catch in `runReactAgent` classifies the abort/dead-tab case
+    // by inspecting `context.stopped` separately.
+    if (context.controller.signal.aborted || context.stopped) {
+      return { response: 'cancelled' };
+    }
+    if (context.browserContext.agentTabId() === null && state.pastSteps.length > 0) {
+      // Once we've started a task, `agentTabId` becoming `null`
+      // mid-run means `handleTabGone` evicted it — bail rather
+      // than spin on a dead tab. Skipped at step 0 because the
+      // tab is opened lazily on first navigation.
+      return { response: 'agent tab is no longer reachable' };
+    }
     const currentStep = state.plan[0];
     const remainingAfter = state.plan.slice(1);
     logger.info(`executing subgoal ${state.pastSteps.length + 1}: ${currentStep}`);
@@ -707,12 +736,35 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
     // back to `null` and the inner catch treats that as
     // conservative-stuck.
     let fpStart: string | null = null;
+    let tabGoneOnFpStart = false;
     try {
       const liveState = await context.browserContext.getState(false);
       fpStart = computeStateFingerprint(liveState);
     } catch (err) {
-      logger.warning('fp_start probe failed; recursion-limit soft-fail will treat as stuck', err);
+      // T2u-runaway-loop — if the tab vanished before we even
+      // entered the inner ReAct loop there is nothing left to do
+      // for this subgoal. Set a flag so the post-step block below
+      // short-circuits straight to a graceful "tab gone" response
+      // rather than re-probing the dead tab.
+      const msg = err instanceof Error ? err.message : String(err);
+      if (err instanceof TabGoneError || /No tab with id|No frame with id/i.test(msg)) {
+        logger.warning(`fp_start probe saw tab gone (${msg}); will end subgoal gracefully`);
+        tabGoneOnFpStart = true;
+      } else {
+        logger.warning('fp_start probe failed; recursion-limit soft-fail will treat as stuck', err);
+      }
       fpStart = null;
+    }
+    if (tabGoneOnFpStart) {
+      emitPlanChecklist([
+        ...state.pastSteps.map(([s]) => ({ text: s, done: true })),
+        { text: currentStep, done: false },
+        ...remainingAfter.map(s => ({ text: s, done: false })),
+      ]);
+      return {
+        pastSteps: [[currentStep, 'failed: agent tab is no longer available'] as [string, string]],
+        response: 'The agent tab is no longer available (closed or crashed). Run ended.',
+      };
     }
     let stepResult: string;
     let toolCallCount = 0;
@@ -754,6 +806,12 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
     if (innerRecursionExhausted) {
       const partial = state.pastSteps.map(([s, r]) => `- ${s}: ${r}`).join('\n');
       stuckResponse = `I'm stopping because the agent got stuck inside one step: it burned the inner recursion budget on "${currentStep}" without making progress (usually means the target page silently blocks automated clicks).\n\nWhat I did so far:\n${partial || '(no completed subgoals)'}\n\nTry rephrasing the task, opening the target page yourself, or switching to legacy agent mode in Settings.`;
+    } else if (context.controller.signal.aborted || context.stopped) {
+      // T2u-runaway-loop — skip the post-step probe after Stop. The
+      // probe issues another `getState()` which on a freshly-closed
+      // agent tab would re-trigger the executeScript spam we just
+      // patched.
+      stuckResponse = 'cancelled';
     } else {
       try {
         const liveState = await context.browserContext.getState(false);
@@ -765,7 +823,18 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
           stuckResponse = `I'm stopping because the agent appears stuck: ${verdict.message}\n\nWhat I did so far:\n${partial || '(no completed subgoals)'}\n\nTry rephrasing the task, opening the target page yourself, or switching to legacy agent mode in Settings.`;
         }
       } catch (err) {
-        logger.warning('stuckDetector post-subgoal probe failed; skipping this round', err);
+        // T2u-runaway-loop — a TabGoneError from getState should
+        // end the run, not silently continue to the replanner
+        // which would pick the same dead tab. The cache eviction
+        // already happened inside BrowserContext.getState; here we
+        // just need to surface a response so `decide` routes to END.
+        const msg = err instanceof Error ? err.message : String(err);
+        if (err instanceof TabGoneError || /No tab with id|No frame with id/i.test(msg)) {
+          logger.warning(`stuckDetector probe saw tab gone; ending run gracefully: ${msg}`);
+          stuckResponse = 'The agent tab is no longer available (closed or crashed). Run ended.';
+        } else {
+          logger.warning('stuckDetector post-subgoal probe failed; skipping this round', err);
+        }
       }
     }
     // After the step: flip current to done unless it came back as a

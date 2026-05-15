@@ -17,7 +17,14 @@ import {
   getScrollInfo as _getScrollInfo,
 } from './dom/service';
 import { DOMElementNode, type DOMState } from './dom/views';
-import { type BrowserContextConfig, DEFAULT_BROWSER_CONTEXT_CONFIG, type PageState, URLNotAllowedError } from './views';
+import {
+  type BrowserContextConfig,
+  DEFAULT_BROWSER_CONTEXT_CONFIG,
+  type PageState,
+  URLNotAllowedError,
+  TabGoneError,
+  isTabGoneErrorMessage,
+} from './views';
 import { createLogger } from '@src/background/log';
 import { ClickableElementProcessor } from './dom/clickable/service';
 import { isUrlAllowed } from './util';
@@ -456,6 +463,20 @@ export default class Page {
       } catch (error) {
         lastErr = error;
         const msg = error instanceof Error ? error.message : String(error);
+        // T2u-runaway-loop — if the underlying Chrome API reported
+        // the tab is gone (or one of its frames vanished), propagate
+        // a typed error instead of returning a stale cached
+        // `PageState`. The pre-fix path silently returned `_state`
+        // here, which let `BrowserContext.getState` succeed against
+        // a dead tab and the agent loop hammered this code path at
+        // JS speed (~5–10k log lines/sec) after the user pressed
+        // Stop. The throw lets `BrowserContext.getState` catch it,
+        // call `handleTabGone`, evict the cached `Page`, and surface
+        // a real failure to the executor.
+        if (isTabGoneErrorMessage(msg)) {
+          logger.warning(`updateState: tab ${this._tabId} appears gone, surfacing TabGoneError: ${msg}`);
+          throw new TabGoneError(this._tabId, error);
+        }
         if (attempt === 0 && /Frame with ID \d+ is showing error page|Frame is detached|Target closed/.test(msg)) {
           logger.warning(`updateState transient frame error (attempt 1/2), retrying: ${msg}`);
           await new Promise(r => setTimeout(r, 500));
@@ -465,7 +486,14 @@ export default class Page {
         return this._state;
       }
     }
-    if (lastErr) logger.error('updateState exhausted retries:', lastErr);
+    if (lastErr) {
+      const msg = lastErr instanceof Error ? lastErr.message : String(lastErr);
+      if (isTabGoneErrorMessage(msg)) {
+        logger.warning(`updateState exhausted retries on a gone tab ${this._tabId}; surfacing TabGoneError`);
+        throw new TabGoneError(this._tabId, lastErr);
+      }
+      logger.error('updateState exhausted retries:', lastErr);
+    }
     return this._state;
   }
 
