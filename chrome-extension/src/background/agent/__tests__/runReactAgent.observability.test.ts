@@ -8,11 +8,12 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
+const { infoSpy } = vi.hoisted(() => ({ infoSpy: vi.fn() }));
 vi.mock('@src/background/log', () => ({
   createLogger: () => ({
     warning: vi.fn(),
     error: vi.fn(),
-    info: vi.fn(),
+    info: infoSpy,
     debug: vi.fn(),
   }),
 }));
@@ -31,6 +32,7 @@ import type { LLMResult } from '@langchain/core/outputs';
 describe('observabilityCallback (T2m)', () => {
   beforeEach(() => {
     recordSpy.mockClear();
+    infoSpy.mockClear();
   });
 
   it('emits TRACE rows only for LLM calls — chain start/end are LangGraph internals and stay out of the user-visible trace (T2r-observability-2)', () => {
@@ -128,5 +130,106 @@ describe('observabilityCallback (T2m)', () => {
     expect(errorEntry.ok).toBe(false);
     expect(errorEntry.args.errorName).toBe('APIConnectionTimeoutError');
     expect(String(errorEntry.result)).toMatch(/timed out/i);
+  });
+
+  describe('T2r-reasoning: assistant text in handleLLMEnd', () => {
+    it('logs a reasoning preview when the generation has text', () => {
+      const cb = createObservabilityCallback({ taskId: 'task-r1' });
+      cb.handleLLMStart?.(
+        { id: ['langchain', 'chat_models', 'openai'], name: 'ChatOpenAI', kwargs: { model: 'gpt-4o-mini' } } as never,
+        ['hi'],
+        'llm-r1',
+      );
+      cb.handleLLMEnd?.(
+        {
+          generations: [
+            [
+              {
+                text: 'I will click on the Chatbot Arena Graduated link to find the leaderboard.',
+                message: { tool_calls: [{ name: 'click_at' }] } as never,
+              } as never,
+            ],
+          ],
+          llmOutput: { tokenUsage: { promptTokens: 100, completionTokens: 20 } },
+        } as LLMResult,
+        'llm-r1',
+      );
+      const reasoningLogs = infoSpy.mock.calls.filter(c => String(c[0]).includes('llm reasoning'));
+      expect(reasoningLogs).toHaveLength(1);
+      expect(String(reasoningLogs[0][0])).toContain('Chatbot Arena Graduated');
+    });
+
+    it('truncates long reasoning to 200 chars + ellipsis', () => {
+      const cb = createObservabilityCallback({ taskId: 'task-r2' });
+      const longText = 'A'.repeat(500);
+      cb.handleLLMStart?.(
+        { id: ['langchain', 'chat_models', 'openai'], name: 'ChatOpenAI', kwargs: { model: 'gpt-4o-mini' } } as never,
+        ['hi'],
+        'llm-r2',
+      );
+      cb.handleLLMEnd?.(
+        {
+          generations: [[{ text: longText, message: { tool_calls: [] } as never } as never]],
+          llmOutput: { tokenUsage: {} },
+        } as LLMResult,
+        'llm-r2',
+      );
+      const reasoningLogs = infoSpy.mock.calls.filter(c => String(c[0]).includes('llm reasoning'));
+      expect(reasoningLogs).toHaveLength(1);
+      const msg = String(reasoningLogs[0][0]);
+      expect(msg).toContain('…');
+      // 200 As + ellipsis; total length is ~"<prefix>llm reasoning (runId=...): " + 200 + 1
+      expect(msg).toMatch(/A{200}…/);
+    });
+
+    it('stays silent when the round had no narration (pure tool-call)', () => {
+      const cb = createObservabilityCallback({ taskId: 'task-r3' });
+      cb.handleLLMStart?.(
+        { id: ['langchain', 'chat_models', 'openai'], name: 'ChatOpenAI', kwargs: { model: 'gpt-4o-mini' } } as never,
+        ['hi'],
+        'llm-r3',
+      );
+      cb.handleLLMEnd?.(
+        {
+          generations: [[{ text: '', message: { tool_calls: [{ name: 'screenshot' }] } as never } as never]],
+          llmOutput: { tokenUsage: {} },
+        } as LLMResult,
+        'llm-r3',
+      );
+      const reasoningLogs = infoSpy.mock.calls.filter(c => String(c[0]).includes('llm reasoning'));
+      expect(reasoningLogs).toHaveLength(0);
+    });
+
+    it('handles Anthropic-style multimodal content array', () => {
+      const cb = createObservabilityCallback({ taskId: 'task-r4' });
+      cb.handleLLMStart?.(
+        { id: ['langchain', 'chat_models', 'anthropic'], name: 'ChatAnthropic', kwargs: { model: 'claude' } } as never,
+        ['hi'],
+        'llm-r4',
+      );
+      cb.handleLLMEnd?.(
+        {
+          generations: [
+            [
+              {
+                text: '',
+                message: {
+                  content: [
+                    { type: 'text', text: 'Now I will scroll to find the leaderboard.' },
+                    { type: 'tool_use', name: 'scroll_to_percent' },
+                  ],
+                  tool_calls: [{ name: 'scroll_to_percent' }],
+                } as never,
+              } as never,
+            ],
+          ],
+          llmOutput: { tokenUsage: {} },
+        } as LLMResult,
+        'llm-r4',
+      );
+      const reasoningLogs = infoSpy.mock.calls.filter(c => String(c[0]).includes('llm reasoning'));
+      expect(reasoningLogs).toHaveLength(1);
+      expect(String(reasoningLogs[0][0])).toContain('scroll to find the leaderboard');
+    });
   });
 });

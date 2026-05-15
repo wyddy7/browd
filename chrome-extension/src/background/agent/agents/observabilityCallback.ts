@@ -69,6 +69,39 @@ function llmResultHasToolCalls(output: LLMResult | undefined): boolean {
   return false;
 }
 
+/**
+ * T2r-reasoning (2026-05-15): extract the assistant's natural-language
+ * text from the first generation. Used to surface "what the model said
+ * this round" in console — the missing signal in test13.md where we
+ * saw `out=132 toolCalls=true` but had no clue WHICH 132 tokens.
+ *
+ * Handles three shapes the LangChain ChatGeneration can produce:
+ *   - `item.text` (string, the canonical path for OpenAI-compatible)
+ *   - `item.message.content` (string, the BaseMessage shape)
+ *   - `item.message.content` (array of content parts — Anthropic
+ *     multimodal / thinking blocks); we keep only `{type:'text'}`
+ *     entries and join them. Pure tool-call rounds with no
+ *     accompanying narration return ''.
+ *
+ * Returns '' (empty string) — never null — so the caller can do a
+ * `.length` check without a guard.
+ */
+function extractAssistantText(output: LLMResult | undefined): string {
+  if (!output?.generations) return '';
+  const gen = output.generations[0]?.[0] as { text?: string; message?: { content?: unknown } } | undefined;
+  if (!gen) return '';
+  if (typeof gen.text === 'string' && gen.text.length > 0) return gen.text;
+  const content = gen.message?.content;
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    return content
+      .filter(p => p && typeof p === 'object' && (p as { type?: string }).type === 'text')
+      .map(p => (p as { text?: string }).text ?? '')
+      .join('');
+  }
+  return '';
+}
+
 interface ErrorLike {
   name?: string;
   message?: string;
@@ -144,6 +177,18 @@ export function createObservabilityCallback(opts: ObservabilityCallbackOptions =
       logger.info(
         `${prefix}llm call end (runId=${runId.slice(0, 8)} ms=${elapsedMs} in=${inTokens} out=${outTokens} toolCalls=${hasToolCalls})`,
       );
+      // T2r-reasoning: dump the model's natural-language reply (the
+      // text emitted alongside any tool-calls). Without this, console
+      // shows token counts and tool calls but never WHAT the model
+      // said between them — opencode/aider/goose all surface this as
+      // a first-class signal. Truncate to 200 chars, collapse
+      // whitespace so multi-line reasoning fits one line; empty
+      // round (pure tool-call with no narration) is silent.
+      const text = extractAssistantText(output).replace(/\s+/g, ' ').trim();
+      if (text.length > 0) {
+        const preview = text.length > 200 ? `${text.slice(0, 200)}…` : text;
+        logger.info(`${prefix}llm reasoning (runId=${runId.slice(0, 8)}): ${preview}`);
+      }
       try {
         globalTracer.record({
           tool: 'llm_call',
