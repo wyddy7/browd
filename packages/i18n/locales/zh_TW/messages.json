@@ -1208,5 +1208,17 @@
   },
   "options_general_badge_beta": {
     "message": "beta"
+  },
+  "hitl_takeover_title": {
+    "message": "Browd 想接管一個分頁"
+  },
+  "hitl_takeover_reason": {
+    "message": "原因"
+  },
+  "hitl_takeover_allow": {
+    "message": "允許"
+  },
+  "hitl_takeover_deny": {
+    "message": "拒絕"
   }
 }

@@ -1208,5 +1208,17 @@
   },
   "options_general_badge_beta": {
     "message": "beta"
+  },
+  "hitl_takeover_title": {
+    "message": "Browd möchte einen Tab übernehmen"
+  },
+  "hitl_takeover_reason": {
+    "message": "Grund"
+  },
+  "hitl_takeover_allow": {
+    "message": "Erlauben"
+  },
+  "hitl_takeover_deny": {
+    "message": "Ablehnen"
   }
 }

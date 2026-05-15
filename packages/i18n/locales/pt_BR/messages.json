@@ -1208,5 +1208,17 @@
   },
   "options_general_badge_beta": {
     "message": "beta"
+  },
+  "hitl_takeover_title": {
+    "message": "Browd quer assumir o controle de uma aba"
+  },
+  "hitl_takeover_reason": {
+    "message": "Motivo"
+  },
+  "hitl_takeover_allow": {
+    "message": "Permitir"
+  },
+  "hitl_takeover_deny": {
+    "message": "Negar"
   }
 }

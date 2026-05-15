@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { t } from '@extension/i18n';
 import type { HITLDecision, HITLRequest } from '../../../../chrome-extension/src/background/agent/hitl/types';
 
 interface HITLPromptProps {
@@ -18,6 +19,41 @@ export function HITLPrompt({ request, onDecision }: HITLPromptProps) {
   // ring marker over the (x,y) target so the user knows what to
   // click; two buttons drive approve/reject through the same HITL
   // wire as everything else.
+  // T2s-2 — take-over approval. Agent asked to pin to one of the
+  // user's tabs (cross-workspace move). Two-button approve/deny,
+  // identical wire format to the real_user_click branch above.
+  if (request.reason === 'take_over_request' && request.context.takeOverRequest) {
+    const { title, url, reason } = request.context.takeOverRequest;
+    const displayTitle = title || url || '';
+    return (
+      <div className="border border-[var(--browd-border)] rounded-[var(--browd-radius-md)] bg-[var(--browd-panel)] p-3 my-2 text-sm">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-[var(--browd-accent)] font-semibold">{t('hitl_takeover_title')}</span>
+          <span className="text-[var(--browd-muted)] text-xs ml-auto">take over</span>
+        </div>
+        <p className="text-[var(--browd-text)] mb-3 leading-snug">
+          <span className="font-medium">{displayTitle}</span>
+          {url && title ? <span className="text-[var(--browd-muted)]"> — {url}</span> : null}
+        </p>
+        <p className="text-[var(--browd-muted)] mb-3 leading-snug text-xs">
+          {t('hitl_takeover_reason')}: «{reason}»
+        </p>
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => submit({ type: 'approve' })}
+            className="px-3 py-1 rounded text-xs bg-[var(--browd-accent)] text-white hover:opacity-90">
+            {t('hitl_takeover_allow')}
+          </button>
+          <button
+            onClick={() => submit({ type: 'reject', message: 'user denied' })}
+            className="px-3 py-1 rounded text-xs border border-[var(--browd-border)] text-[var(--browd-muted)] hover:border-[var(--browd-accent)] hover:text-[var(--browd-text)]">
+            {t('hitl_takeover_deny')}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (request.reason === 'real_user_click' && request.context.userClick) {
     const { x, y, imageThumbBase64, imageThumbMime } = request.context.userClick;
     const thumbUrl = imageThumbBase64 ? `data:${imageThumbMime ?? 'image/jpeg'};base64,${imageThumbBase64}` : null;

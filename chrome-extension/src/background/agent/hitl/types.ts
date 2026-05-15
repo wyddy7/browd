@@ -10,7 +10,8 @@ export type HITLReason =
   | 'low_confidence' // skill mapping confidence < threshold
   | 'ambiguous_input' // field not found, goal unclear
   | 'repeated_failure' // multiple reasoning failures
-  | 'real_user_click'; // T2f-handover — antibot wall, ask the user to click manually
+  | 'real_user_click' // T2f-handover — antibot wall, ask the user to click manually
+  | 'take_over_request'; // T2s-2 — agent wants to pin to one of the user's tabs
 
 export type HITLRisk = 'low' | 'medium' | 'high';
 
@@ -40,6 +41,17 @@ export interface HITLContext {
     y: number;
     imageThumbBase64?: string;
     imageThumbMime?: string;
+  };
+  /**
+   * T2s-2: optional context for `take_over_request`. Lets the side
+   * panel render the prompt body without re-querying Chrome for the
+   * target tab's title/url.
+   */
+  takeOverRequest?: {
+    tabId: number;
+    title: string;
+    url: string;
+    reason: string;
   };
 }
 

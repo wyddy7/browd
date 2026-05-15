@@ -1208,5 +1208,17 @@
   },
   "options_general_badge_beta": {
     "message": "beta"
+  },
+  "hitl_takeover_title": {
+    "message": "Browd хочет переключиться на вашу вкладку"
+  },
+  "hitl_takeover_reason": {
+    "message": "Причина"
+  },
+  "hitl_takeover_allow": {
+    "message": "Разрешить"
+  },
+  "hitl_takeover_deny": {
+    "message": "Отказать"
   }
 }
