@@ -200,45 +200,27 @@ export function createObservabilityCallback(opts: ObservabilityCallbackOptions =
     handleChainStart(chain, _inputs, runId, _parentRunId, _tags, _metadata, _runType, runName) {
       runStart.set(runId, Date.now());
       const name = runName ?? (chain as SerializedLike | undefined)?.name ?? 'chain';
-      // T2r-observability: chain start/end emit one console line per
-      // LangGraph node — at info this dominates the prod log (~400
-      // lines per task in test11). Demote to debug; the side-panel
-      // TRACE record below stays unchanged so the UI still shows
-      // chain timing. Bump LOG_LEVEL=debug or use a dev build to
-      // restore.
+      // T2r-observability-2 (2026-05-15): chain start/end events
+      // are LangGraph internals (ChannelWrite, prompt, RunnableLambda,
+      // Branch, __start__/__end__, StructuredOutputParser…) — they
+      // describe HOW the graph is wired, not WHAT the agent did.
+      // test12.md showed ~400 such rows in the side-panel TRACE pane
+      // drowning the signal. Drop the tracer record entirely; the
+      // user-visible trace now shows only:
+      //   - tool calls (from actions/builder.ts via Action.call)
+      //   - llm_call start/end (this file, below)
+      //   - tool_error (this file, below)
+      // Console line stays at debug so a dev build can still surface
+      // graph internals when investigating LangGraph plumbing.
       logger.debug(`${prefix}chain start (runId=${runId.slice(0, 8)} name=${name})`);
-      try {
-        globalTracer.record({
-          tool: 'chain_node',
-          args: { runId, state: 'start', name },
-          result: `chain "${name}" started`,
-          ok: true,
-          durationMs: 0,
-          kind: 'meta',
-        });
-      } catch (e) {
-        logger.warning('tracer.record(chain_node start) threw', e);
-      }
     },
 
     handleChainEnd(_outputs, runId) {
       const start = runStart.get(runId);
       const elapsedMs = start ? Date.now() - start : -1;
       runStart.delete(runId);
-      // T2r-observability: see handleChainStart comment.
+      // T2r-observability-2: see handleChainStart comment.
       logger.debug(`${prefix}chain end (runId=${runId.slice(0, 8)} ms=${elapsedMs})`);
-      try {
-        globalTracer.record({
-          tool: 'chain_node',
-          args: { runId, state: 'end', elapsedMs },
-          result: `chain done in ${elapsedMs}ms`,
-          ok: true,
-          durationMs: Math.max(0, elapsedMs),
-          kind: 'meta',
-        });
-      } catch (e) {
-        logger.warning('tracer.record(chain_node end) threw', e);
-      }
     },
 
     handleToolError(err, runId) {

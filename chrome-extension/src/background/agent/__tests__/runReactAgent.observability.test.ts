@@ -33,7 +33,7 @@ describe('observabilityCallback (T2m)', () => {
     recordSpy.mockClear();
   });
 
-  it('fires callbacks in expected order (chainStart → llmStart → llmEnd → chainEnd) for one mocked agent step', () => {
+  it('emits TRACE rows only for LLM calls — chain start/end are LangGraph internals and stay out of the user-visible trace (T2r-observability-2)', () => {
     const cb = createObservabilityCallback({ taskId: 'task-1' });
     const orderedTools: string[] = [];
     const orderedStates: string[] = [];
@@ -44,6 +44,11 @@ describe('observabilityCallback (T2m)', () => {
 
     // Simulate the call order LangGraph would emit on one ReAct step:
     //   chain (agent) start → llm start → llm end → chain end.
+    // Pre-T2r-observability-2 this produced 4 trace rows (2× chain_node,
+    // 2× llm_call). The chain_node rows describe HOW the graph is wired,
+    // not WHAT the agent did, and dominated the panel — see test12.md.
+    // The contract is now: chain start/end produce NO trace record;
+    // only llm_call rows survive.
     cb.handleChainStart?.(
       { id: ['langchain', 'agent'], name: 'agent', kwargs: {} } as never,
       {},
@@ -68,11 +73,9 @@ describe('observabilityCallback (T2m)', () => {
     );
     cb.handleChainEnd?.({}, 'chain-1');
 
-    // Four trace records in the order: chain_node start, llm_call
-    // start, llm_call end, chain_node end.
-    expect(recordSpy).toHaveBeenCalledTimes(4);
-    expect(orderedTools).toEqual(['chain_node', 'llm_call', 'llm_call', 'chain_node']);
-    expect(orderedStates).toEqual(['start', 'start', 'end', 'end']);
+    expect(recordSpy).toHaveBeenCalledTimes(2);
+    expect(orderedTools).toEqual(['llm_call', 'llm_call']);
+    expect(orderedStates).toEqual(['start', 'end']);
   });
 
   it('handleLLMError logs an error TRACE row with state=error and the error message', () => {
