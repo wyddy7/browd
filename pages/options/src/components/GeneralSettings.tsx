@@ -16,9 +16,12 @@ import { t } from '@extension/i18n';
 
 const settingTitleClass = 'text-base font-medium text-[var(--browd-text)]';
 const settingDescriptionClass = 'text-sm font-normal text-[var(--browd-muted)]';
-const numberInputClass = 'browd-input w-20 px-3 py-2';
-const selectInputClass = 'browd-input min-w-[180px] px-3 py-2 text-sm';
-const shortcutButtonClass = 'browd-input min-w-[180px] rounded-full px-4 py-2 text-center text-sm transition-colors';
+const numberInputClass = 'browd-input w-[88px] px-3 py-2 text-right';
+const selectInputClass = 'browd-input w-full min-w-[200px] px-3 py-2 text-sm';
+const shortcutButtonClass = 'browd-input min-w-[160px] rounded-full px-4 py-2 text-center text-sm transition-colors';
+const rowClass = 'flex items-center justify-between gap-6 py-4 first:pt-0 last:pb-0';
+const rowLeftClass = 'min-w-0 flex-1';
+const rowControlClass = 'flex shrink-0 items-center justify-end gap-3 min-w-[240px]';
 const LANGUAGE_OVERRIDE_KEY = 'browd-interface-language';
 
 interface GeneralSettingsProps {
@@ -76,153 +79,169 @@ export const GeneralSettings = ({ onAppearanceThemeChange }: GeneralSettingsProp
       <div className="browd-card p-6 text-left">
         <h2 className="mb-4 text-left text-xl font-semibold text-[var(--browd-text)]">{t('options_general_header')}</h2>
 
-        <div className="space-y-4">
-          <div className="flex items-center justify-between gap-6 border-b border-[var(--browd-border)] pb-4">
-            <div>
+        <div className="divide-y divide-[var(--browd-border)]">
+          <div className={rowClass}>
+            <div className={rowLeftClass}>
               <h3 className={settingTitleClass}>{t('options_general_theme')}</h3>
               <p className={settingDescriptionClass}>{t('options_general_theme_desc')}</p>
             </div>
-            <ToggleTheme
-              value={settings.appearanceTheme}
-              onValueChange={theme => updateSetting('appearanceTheme', theme as AppearanceTheme)}
-              labels={{
-                light: t('options_general_theme_light'),
-                dark: t('options_general_theme_dark'),
-              }}
-            />
+            <div className={rowControlClass}>
+              <ToggleTheme
+                value={settings.appearanceTheme}
+                onValueChange={theme => updateSetting('appearanceTheme', theme as AppearanceTheme)}
+                labels={{
+                  light: t('options_general_theme_light'),
+                  dark: t('options_general_theme_dark'),
+                }}
+              />
+            </div>
           </div>
 
-          <div className="flex items-center justify-between gap-6">
-            <div>
+          <div className={rowClass}>
+            <div className={rowLeftClass}>
               <h3 className={settingTitleClass}>{t('options_general_language')}</h3>
               <p className={settingDescriptionClass}>{t('options_general_language_desc')}</p>
             </div>
-            <label htmlFor="interfaceLanguage" className="sr-only">
-              {t('options_general_language')}
-            </label>
-            <select
-              id="interfaceLanguage"
-              value={settings.interfaceLanguage}
-              onChange={e => updateSetting('interfaceLanguage', e.target.value as InterfaceLanguage)}
-              className={selectInputClass}>
-              <option value="system">{t('options_general_language_system')}</option>
-              <option value="en">{t('options_general_language_en')}</option>
-              <option value="ru">{t('options_general_language_ru')}</option>
-              <option value="es">{t('options_general_language_es')}</option>
-              <option value="fr">{t('options_general_language_fr')}</option>
-              <option value="de">{t('options_general_language_de')}</option>
-              <option value="pt_BR">{t('options_general_language_ptBR')}</option>
-            </select>
+            <div className={rowControlClass}>
+              <label htmlFor="interfaceLanguage" className="sr-only">
+                {t('options_general_language')}
+              </label>
+              <select
+                id="interfaceLanguage"
+                value={settings.interfaceLanguage}
+                onChange={e => updateSetting('interfaceLanguage', e.target.value as InterfaceLanguage)}
+                className={selectInputClass}>
+                <option value="system">{t('options_general_language_system')}</option>
+                <option value="en">{t('options_general_language_en')}</option>
+                <option value="ru">{t('options_general_language_ru')}</option>
+                <option value="es">{t('options_general_language_es')}</option>
+                <option value="fr">{t('options_general_language_fr')}</option>
+                <option value="de">{t('options_general_language_de')}</option>
+                <option value="pt_BR">{t('options_general_language_ptBR')}</option>
+              </select>
+            </div>
           </div>
 
-          <div className="flex items-center justify-between">
-            <div>
+          <div className={rowClass}>
+            <div className={rowLeftClass}>
               <h3 className={settingTitleClass}>{t('options_general_maxSteps')}</h3>
               <p className={settingDescriptionClass}>{t('options_general_maxSteps_desc')}</p>
             </div>
-            <label htmlFor="maxSteps" className="sr-only">
-              {t('options_general_maxSteps')}
-            </label>
-            <input
-              id="maxSteps"
-              type="number"
-              min={1}
-              max={50}
-              value={settings.maxSteps}
-              onChange={e => updateSetting('maxSteps', Number.parseInt(e.target.value, 10))}
-              className={numberInputClass}
-            />
+            <div className={rowControlClass}>
+              <label htmlFor="maxSteps" className="sr-only">
+                {t('options_general_maxSteps')}
+              </label>
+              <input
+                id="maxSteps"
+                type="number"
+                min={1}
+                max={50}
+                value={settings.maxSteps}
+                onChange={e => updateSetting('maxSteps', Number.parseInt(e.target.value, 10))}
+                className={numberInputClass}
+              />
+            </div>
           </div>
 
-          <div className="flex items-center justify-between">
-            <div>
+          <div className={rowClass}>
+            <div className={rowLeftClass}>
               <h3 className={settingTitleClass}>{t('options_general_maxActions')}</h3>
               <p className={settingDescriptionClass}>{t('options_general_maxActions_desc')}</p>
             </div>
-            <label htmlFor="maxActionsPerStep" className="sr-only">
-              {t('options_general_maxActions')}
-            </label>
-            <input
-              id="maxActionsPerStep"
-              type="number"
-              min={1}
-              max={50}
-              value={settings.maxActionsPerStep}
-              onChange={e => updateSetting('maxActionsPerStep', Number.parseInt(e.target.value, 10))}
-              className={numberInputClass}
-            />
+            <div className={rowControlClass}>
+              <label htmlFor="maxActionsPerStep" className="sr-only">
+                {t('options_general_maxActions')}
+              </label>
+              <input
+                id="maxActionsPerStep"
+                type="number"
+                min={1}
+                max={50}
+                value={settings.maxActionsPerStep}
+                onChange={e => updateSetting('maxActionsPerStep', Number.parseInt(e.target.value, 10))}
+                className={numberInputClass}
+              />
+            </div>
           </div>
 
-          <div className="flex items-center justify-between">
-            <div>
+          <div className={rowClass}>
+            <div className={rowLeftClass}>
               <h3 className={settingTitleClass}>{t('options_general_maxFailures')}</h3>
               <p className={settingDescriptionClass}>{t('options_general_maxFailures_desc')}</p>
             </div>
-            <label htmlFor="maxFailures" className="sr-only">
-              {t('options_general_maxFailures')}
-            </label>
-            <input
-              id="maxFailures"
-              type="number"
-              min={1}
-              max={10}
-              value={settings.maxFailures}
-              onChange={e => updateSetting('maxFailures', Number.parseInt(e.target.value, 10))}
-              className={numberInputClass}
-            />
+            <div className={rowControlClass}>
+              <label htmlFor="maxFailures" className="sr-only">
+                {t('options_general_maxFailures')}
+              </label>
+              <input
+                id="maxFailures"
+                type="number"
+                min={1}
+                max={10}
+                value={settings.maxFailures}
+                onChange={e => updateSetting('maxFailures', Number.parseInt(e.target.value, 10))}
+                className={numberInputClass}
+              />
+            </div>
           </div>
 
-          <div className="flex items-center justify-between">
-            <div>
+          <div className={rowClass}>
+            <div className={rowLeftClass}>
               <h3 className={settingTitleClass}>{t('options_general_enableVision')}</h3>
               <p className={settingDescriptionClass}>{t('options_general_enableVision_desc')}</p>
             </div>
-            <ToggleSwitch
-              id="useVision"
-              checked={settings.useVision}
-              onChange={e => updateSetting('useVision', e.target.checked)}
-              label={t('options_general_enableVision')}
-            />
+            <div className={rowControlClass}>
+              <ToggleSwitch
+                id="useVision"
+                checked={settings.useVision}
+                onChange={e => updateSetting('useVision', e.target.checked)}
+                label={t('options_general_enableVision')}
+              />
+            </div>
           </div>
 
-          <div className="flex items-center justify-between">
-            <div>
+          <div className={rowClass}>
+            <div className={rowLeftClass}>
               <h3 className={settingTitleClass}>{t('options_general_displayHighlights')}</h3>
               <p className={settingDescriptionClass}>{t('options_general_displayHighlights_desc')}</p>
             </div>
-            <ToggleSwitch
-              id="displayHighlights"
-              checked={settings.displayHighlights}
-              onChange={e => updateSetting('displayHighlights', e.target.checked)}
-              label={t('options_general_displayHighlights')}
-            />
+            <div className={rowControlClass}>
+              <ToggleSwitch
+                id="displayHighlights"
+                checked={settings.displayHighlights}
+                onChange={e => updateSetting('displayHighlights', e.target.checked)}
+                label={t('options_general_displayHighlights')}
+              />
+            </div>
           </div>
 
-          <div className="flex items-center justify-between">
-            <div>
+          <div className={rowClass}>
+            <div className={rowLeftClass}>
               <h3 className={settingTitleClass}>{t('options_general_planningInterval')}</h3>
               <p className={settingDescriptionClass}>{t('options_general_planningInterval_desc')}</p>
             </div>
-            <label htmlFor="planningInterval" className="sr-only">
-              {t('options_general_planningInterval')}
-            </label>
-            <input
-              id="planningInterval"
-              type="number"
-              min={1}
-              max={20}
-              value={settings.planningInterval}
-              onChange={e => updateSetting('planningInterval', Number.parseInt(e.target.value, 10))}
-              className={numberInputClass}
-            />
+            <div className={rowControlClass}>
+              <label htmlFor="planningInterval" className="sr-only">
+                {t('options_general_planningInterval')}
+              </label>
+              <input
+                id="planningInterval"
+                type="number"
+                min={1}
+                max={20}
+                value={settings.planningInterval}
+                onChange={e => updateSetting('planningInterval', Number.parseInt(e.target.value, 10))}
+                className={numberInputClass}
+              />
+            </div>
           </div>
 
-          <div className="flex items-center justify-between">
-            <div>
+          <div className={rowClass}>
+            <div className={rowLeftClass}>
               <h3 className={settingTitleClass}>{t('options_general_minWaitPageLoad')}</h3>
               <p className={settingDescriptionClass}>{t('options_general_minWaitPageLoad_desc')}</p>
             </div>
-            <div className="flex items-center space-x-2">
+            <div className={rowControlClass}>
               <label htmlFor="minWaitPageLoad" className="sr-only">
                 {t('options_general_minWaitPageLoad')}
               </label>
@@ -239,44 +258,56 @@ export const GeneralSettings = ({ onAppearanceThemeChange }: GeneralSettingsProp
             </div>
           </div>
 
-          <div className="flex items-center justify-between">
-            <div>
+          <div className={rowClass}>
+            <div className={rowLeftClass}>
               <h3 className={settingTitleClass}>{t('options_general_replayHistoricalTasks')}</h3>
               <p className={settingDescriptionClass}>{t('options_general_replayHistoricalTasks_desc')}</p>
             </div>
-            <ToggleSwitch
-              id="replayHistoricalTasks"
-              checked={settings.replayHistoricalTasks}
-              onChange={e => updateSetting('replayHistoricalTasks', e.target.checked)}
-              label={t('options_general_replayHistoricalTasks')}
-            />
+            <div className={rowControlClass}>
+              <ToggleSwitch
+                id="replayHistoricalTasks"
+                checked={settings.replayHistoricalTasks}
+                onChange={e => updateSetting('replayHistoricalTasks', e.target.checked)}
+                label={t('options_general_replayHistoricalTasks')}
+              />
+            </div>
           </div>
 
-          <div className="flex items-center justify-between gap-6">
-            <div>
+          <div className={rowClass}>
+            <div className={rowLeftClass}>
               <h3 className={settingTitleClass}>{t('options_general_agentMode')}</h3>
               <p className={settingDescriptionClass}>{t('options_general_agentMode_desc')}</p>
             </div>
-            <label htmlFor="agentMode" className="sr-only">
-              {t('options_general_agentMode')}
-            </label>
-            <select
-              id="agentMode"
-              value={settings.agentMode}
-              onChange={e => updateSetting('agentMode', e.target.value as AgentMode)}
-              className={selectInputClass}>
-              <option value="unified">{t('options_general_agentMode_unified')}</option>
-              <option value="legacy">{t('options_general_agentMode_legacy')}</option>
-            </select>
+            <div className={rowControlClass}>
+              <label htmlFor="agentMode" className="sr-only">
+                {t('options_general_agentMode')}
+              </label>
+              <select
+                id="agentMode"
+                value={settings.agentMode}
+                onChange={e => updateSetting('agentMode', e.target.value as AgentMode)}
+                className={selectInputClass}>
+                <option value="unified">{t('options_general_agentMode_unified')}</option>
+                <option value="legacy">{t('options_general_agentMode_legacy')}</option>
+              </select>
+            </div>
           </div>
 
           {settings.agentMode === 'unified' && (
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between gap-6">
-                <div>
-                  <h3 className={settingTitleClass}>{t('options_general_visionMode')}</h3>
-                  <p className={settingDescriptionClass}>{t('options_general_visionMode_desc')}</p>
-                </div>
+            <div className={rowClass}>
+              <div className={rowLeftClass}>
+                <h3 className={settingTitleClass}>{t('options_general_visionMode')}</h3>
+                <p className={settingDescriptionClass}>{t('options_general_visionMode_desc')}</p>
+                {!navigatorSupportsVision && settings.visionMode !== 'off' && (
+                  <div className="mt-3 flex items-start gap-2 rounded-[var(--browd-radius-sm)] bg-[hsl(var(--browd-warning-400)/0.14)] px-3 py-2 text-sm text-[hsl(var(--browd-warning-400))]">
+                    <span aria-hidden="true" className="mt-0.5 leading-none">
+                      ⚠
+                    </span>
+                    <span>{t('options_general_visionMode_warning')}</span>
+                  </div>
+                )}
+              </div>
+              <div className={rowControlClass}>
                 <label htmlFor="visionMode" className="sr-only">
                   {t('options_general_visionMode')}
                 </label>
@@ -294,21 +325,16 @@ export const GeneralSettings = ({ onAppearanceThemeChange }: GeneralSettingsProp
                   </option>
                 </select>
               </div>
-              {!navigatorSupportsVision && settings.visionMode !== 'off' && (
-                <p className="text-sm font-normal text-[var(--browd-warning,#c08400)]">
-                  {t('options_general_visionMode_warning')}
-                </p>
-              )}
             </div>
           )}
 
-          <div className="flex items-center justify-between gap-6">
-            <div>
+          <div className={rowClass}>
+            <div className={rowLeftClass}>
               <h3 className={settingTitleClass}>{t('options_general_launchShortcut')}</h3>
               <p className={settingDescriptionClass}>{t('options_general_launchShortcut_desc')}</p>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="browd-input min-w-[120px] rounded-full px-4 py-2 text-center text-sm text-[var(--browd-text)]">
+            <div className={rowControlClass}>
+              <div className="browd-input min-w-[80px] rounded-full px-3 py-2 text-center text-sm text-[var(--browd-text)]">
                 {settings.launchShortcut}
               </div>
               <button
