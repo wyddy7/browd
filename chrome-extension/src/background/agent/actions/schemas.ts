@@ -278,17 +278,16 @@ export const webSearchActionSchema: ActionSchema = {
 };
 
 /**
- * T2f-2 — explicit screenshot tool, registered only when
- * visionMode='fallback'. With visionMode='always' the agent's state
- * message already carries a fresh screenshot every step, so this tool
- * is redundant and is omitted from the registry. With 'off' it is
- * also omitted.
+ * Explicit screenshot tool. Registered when visionMode='on'; omitted
+ * under 'off'. The runtime never auto-attaches images — the LLM
+ * decides when a frame is worth the tokens, matching browser-use /
+ * Stagehand / Operator / Anthropic computer-use behaviour.
  *
- * T2f-coords — `gridOverlay` enables a 10×10 coordinate grid drawn
- * over the JPEG. Set true when about to call `click_at`/`type_at`/
- * `scroll_at` — the labelled grid centres make coordinate prediction
- * meaningfully more accurate (Set-of-Mark / WebVoyager-style
- * grounding). False keeps the screenshot clean.
+ * `gridOverlay` enables a 10×10 coordinate grid drawn over the JPEG.
+ * Set true when about to call `click_at` / `type_at` / `scroll_at`
+ * — the labelled grid centres make coordinate prediction meaningfully
+ * more accurate (Set-of-Mark / WebVoyager-style grounding). False
+ * keeps the screenshot clean.
  */
 export const screenshotActionSchema: ActionSchema = {
   name: 'screenshot',

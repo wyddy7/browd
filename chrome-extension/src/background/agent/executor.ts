@@ -132,10 +132,11 @@ export class Executor {
       if (!this.unifiedMode) return 'off';
       const requested = (extraArgs?.generalSettings?.visionMode ?? 'off') as RunReactAgentVisionMode;
       if (requested === 'off') return 'off';
-      if (extraArgs?.navigatorSupportsVision) return requested;
-      logger.warning(
-        `visionMode='${requested}' requested but Navigator model lacks vision capability — degrading to 'off'`,
-      );
+      // 'on' requires a vision-capable Navigator model — the agent
+      // would emit `screenshot()` calls the model cannot ingest
+      // otherwise. Degrade silently to 'off' so the task still runs.
+      if (extraArgs?.navigatorSupportsVision) return 'on';
+      logger.warning("visionMode='on' requested but Navigator model lacks vision capability — degrading to 'off'");
       return 'off';
     })();
     this.navigatorContextWindow = extraArgs?.navigatorContextWindow ?? 100_000;

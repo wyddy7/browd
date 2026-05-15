@@ -60,18 +60,23 @@ separate `visionMode` toggle:
 - `agentMode='legacy'` (was `'classic'` pre-T2f-1) — inherited
   Planner+Navigator pipeline. `runClassicLoop` in `executor.ts`.
   Safety net; do not refactor.
-- `visionMode='off'|'always'|'fallback'` (T2f-1..T2f-4) — independent
-  switch, only honoured under `agentMode='unified'`. `'always'`
-  attaches a fresh JPEG screenshot to every state message;
-  `'fallback'` exposes a `screenshot()` tool the agent calls on
-  demand. Executor degrades to `'off'` at runtime when the
-  Navigator model has no vision capability
-  (`modelSupportsVision` in `packages/storage/lib/settings/types.ts`).
-- T2f-1.5 contract: vision capture in `'always'` MUST go through
-  the screenshot `Action.call()` so it lands in `globalTracer` and
-  the side-panel TRACE / chat thumbnail. Do not bypass with a
-  direct `getState(useVision=true)` call — the user has explicitly
-  rejected hidden capture paths.
+- `visionMode='off'|'on'` — independent switch, only honoured under
+  `agentMode='unified'`. `'on'` exposes the full tool surface
+  (`screenshot()`, coordinate actions, DOM tools, take_over_user_tab);
+  the LLM decides when to capture a frame. `'off'` strips the
+  `screenshot()` tool and the coordinate tools, leaving a pure DOM
+  surface. State messages are always text-only — the runtime never
+  auto-attaches images. Mirrors browser-use, Stagehand, OpenAI
+  Operator, and Anthropic computer-use, all of which let the agent
+  drive its own perception loop. Executor degrades `'on'` to
+  `'off'` at runtime when the Navigator model has no vision
+  capability (`modelSupportsVision` in
+  `packages/storage/lib/settings/types.ts`).
+- Screenshot capture path: every `screenshot()` call MUST go through
+  the `Action.call()` pipeline so it lands in `globalTracer` and the
+  side-panel TRACE / chat thumbnail. Do not bypass with a direct
+  `getState(useVision=true)` call — hidden capture paths are
+  explicitly rejected.
 - **`MouseEvent.isTrusted` ceiling**: every CDP / extension click
   generates `isTrusted=false` events. Hard antibot
   (LinkedIn `/jobs` filters, some Cloudflare gates) silently
@@ -148,16 +153,17 @@ separate `visionMode` toggle:
   patch surface. A `FORBIDDEN PATTERNS` block was stripped on
   2026-05-05 because it was treating a runtime symptom at the
   wrong layer.
-- **Screenshot triggers in `visionMode='fallback'` are an open
-  question (2026-05-05).** Auto-capture currently fires on
-  `domEmpty || domFault || stepsExpired` and is known to miss
-  overlay-blocking-real-content (cookie banners) and to fire
-  prematurely on still-loading pages. Do not tweak the heuristics
-  ad-hoc until peer-agent research and a sample dataset of
-  good/bad/missed captures has been collected. Industry consensus
-  in browser-agents (browser-use, computer-use class, stagehand)
-  is to screenshot every step; Browd's adaptive choice is exotic
-  and may not be worth preserving.
+- **Screenshot timing is LLM-owned.** The runtime no longer
+  auto-attaches images on any cadence. Under `visionMode='on'` the
+  `screenshot()` tool is in the registry and the system prompt
+  tells the model when it's worth calling (DOM empty / DOM-fault
+  retry / post-navigation verify / non-DOM surfaces). This matches
+  browser-use, Stagehand, OpenAI Operator and Anthropic computer-use.
+  Do not reintroduce auto-capture heuristics — the adaptive triple
+  (`always` / `fallback` / `off`) collapsed into `on` / `off` for
+  this reason. The `pendingForceScreenshot` flag set by `switchTab` /
+  `navigateTo` is preserved for a future cookie-overlay / tab-settle
+  surface (e.g. prompt hint) but is intentionally unread today.
 
 ## MV3 Service Worker Gotchas
 

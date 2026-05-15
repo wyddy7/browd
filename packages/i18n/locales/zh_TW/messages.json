@@ -1102,16 +1102,13 @@
     "message": "Vision mode"
   },
   "options_general_visionMode_desc": {
-    "message": "Always: a fresh screenshot is attached to every step (slower, higher accuracy). Fallback: the agent only takes a screenshot when it explicitly asks for one. Off: no screenshots."
+    "message": "開啟：代理擁有 screenshot 工具與座標動作，自行決定何時截圖。關閉：僅 DOM，無截圖。"
   },
   "options_general_visionMode_off": {
-    "message": "Off"
+    "message": "關閉"
   },
-  "options_general_visionMode_always": {
-    "message": "Always"
-  },
-  "options_general_visionMode_fallback": {
-    "message": "Fallback"
+  "options_general_visionMode_on": {
+    "message": "開啟"
   },
   "options_general_visionMode_warning": {
     "message": "Selected Navigator model has no vision support — vision is inactive at runtime. Pick a vision-capable model to enable."

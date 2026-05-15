@@ -98,12 +98,19 @@ export function priorMessagesToBaseMessages(prior: PriorMessage[]): BaseMessage[
 }
 
 /**
- * T2f-3: vision routing. Independent of agentMode — only honoured when
+ * Vision routing. Independent of agentMode — only honoured when
  * agentMode='unified' (legacy ignores it). Executor is responsible for
  * runtime degradation when the chosen Navigator model has no vision
  * capability.
+ *
+ * - 'off' : screenshot tool and coordinate actions are stripped from
+ *           the registry. DOM-only surface.
+ * - 'on'  : full tool surface — DOM + coord + screenshot +
+ *           take_over_user_tab. State messages stay text-only; the
+ *           LLM calls `screenshot()` when it wants an image. The
+ *           runtime never auto-attaches.
  */
-export type RunReactAgentVisionMode = 'off' | 'always' | 'fallback';
+export type RunReactAgentVisionMode = 'off' | 'on';
 
 export interface RunReactAgentInput {
   context: AgentContext;
@@ -113,10 +120,10 @@ export interface RunReactAgentInput {
   /** Conversation up to (but not including) the current task. Empty for the very first turn of a session. */
   priorMessages?: PriorMessage[];
   /**
-   * Vision mode. 'off' (default) is the pre-T2f behaviour. 'always'
-   * attaches a fresh screenshot to every state message. 'fallback'
-   * leaves state messages text-only but exposes the screenshot()
-   * tool so the agent can capture a frame when DOM is insufficient.
+   * Vision mode. 'off' strips the screenshot tool and coordinate
+   * actions from the registry (DOM-only surface). 'on' exposes the
+   * full tool set including `screenshot()` — the LLM decides when an
+   * image is worth the tokens. The runtime never auto-attaches.
    */
   visionMode?: RunReactAgentVisionMode;
   /**
@@ -134,55 +141,19 @@ export interface RunReactAgentResult {
 }
 
 /**
- * T2n-overlay-handling — pure helper for the screenshot-capture
- * decision at the top of stateModifier. Extracted so the
- * pendingForceScreenshot consume-and-clear interaction with the
- * adaptive fallback heuristic is unit-testable without running a
- * full LangGraph agent. Returns the resolved `{shouldCapture,
- * intent}` for the visionMode='always' base case plus the T2n
- * pending-force override; the visionMode='fallback' adaptive
- * triggers (domEmpty / urlChanged / domFault / stepsExpired)
- * still live inline in stateModifier because they read live
- * BrowserState and the running message history.
- */
-export function resolveBaseCaptureDecision(input: {
-  visionMode: RunReactAgentVisionMode;
-  hasScreenshotAction: boolean;
-  pendingForce: boolean;
-}): { shouldCapture: boolean; intent: string } {
-  const { visionMode, hasScreenshotAction, pendingForce } = input;
-  if (visionMode === 'always') {
-    return { shouldCapture: true, intent: 'auto-attach (visionMode=always)' };
-  }
-  if (pendingForce && hasScreenshotAction) {
-    return {
-      shouldCapture: true,
-      intent: 'tab-settle force-capture (T2n overlay-handling)',
-    };
-  }
-  return { shouldCapture: false, intent: 'auto-attach (visionMode=always)' };
-}
-
-/**
  * Build a fresh "Page state" HumanMessage from the live browser. Called
  * by stateModifier on every agent step so the LLM always sees current
  * DOM/forms/page text rather than a stale snapshot from task start.
  *
- * T2f-1.5: vision capture is now decoupled from `getState`. The caller
- * passes a pre-captured screenshot payload (from `screenshotAction.call()`)
- * when visionMode='always'. That keeps the screenshot on the Action.call
- * path so `globalTracer` sees it as a normal `screenshot` tool entry,
- * matching how `'fallback'` already worked. No separate event channel,
- * no second-class observability.
+ * Always text-only. Image capture is the LLM's decision, made via the
+ * `screenshot()` tool; the runtime no longer auto-attaches images to
+ * state messages. Mirrors browser-use / Stagehand / computer-use which
+ * all let the agent drive its own perception loop.
  */
-async function buildBrowserStateMessage(
-  context: AgentContext,
-  screenshot: { base64: string; mime: string } | null,
-): Promise<HumanMessage> {
-  // Always pass useVision=false here — we either capture independently
-  // through the screenshot Action (for visionMode='always') or skip
-  // capture entirely (for 'off' / 'fallback'). Doing it both places
-  // would double-pay the puppeteer screenshot cost.
+async function buildBrowserStateMessage(context: AgentContext): Promise<HumanMessage> {
+  // useVision=false: we never capture inside getState; the `screenshot`
+  // Action handles all image acquisition and stays inside the regular
+  // tracer pipeline for observability.
   const browserState = await context.browserContext.getState(false);
   const elementsText = browserState.elementTree.clickableElementsToString(context.options.includeAttributes);
   const forms = extractForms(browserState);
@@ -244,14 +215,6 @@ ${formsSection ? `\n${formsSection}\n` : ''}
 Current date: ${timeStr}
 `;
 
-  if (screenshot) {
-    return new HumanMessage({
-      content: [
-        { type: 'text', text },
-        { type: 'image_url', image_url: { url: `data:${screenshot.mime};base64,${screenshot.base64}` } },
-      ],
-    });
-  }
   return new HumanMessage(text);
 }
 
@@ -307,63 +270,32 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
   // we surface it as the StateGraph's terminal response so the outer
   // FailureClassifier path emits TASK_FAIL with a clear reason.
   const stuckDetector = new UnifiedStuckDetector();
-  // T2f-3 / T2f-coords: gate vision-only tools on visionMode.
-  //  - 'screenshot' belongs to 'fallback' only ('always' captures
-  //    via stateModifier, 'off' never).
-  //  - coordinate tools (click_at / type_at / scroll_at) belong to
-  //    'always' and 'fallback' — they need a fresh screenshot to
-  //    reason about, which is exactly what those modes provide.
-  //    Without 'always'/'fallback' the LLM cannot see image pixels
-  //    and would emit hallucinated coordinates.
-  // T2f-handover: hitl_click_at sits next to the regular coord tools
-  // — same gating, since the agent needs the screenshot context to
-  // pick the (x,y) marker before handing off.
-  // T2f-drag: drag_at is also a coordinate tool (canvas shape drawing).
+  // Tool-gating on visionMode. Two modes:
+  //  - 'off': no screenshot, no coordinate tools — pure DOM + read-only
+  //    + navigation surface. Used when the Navigator model lacks vision
+  //    capability or the user opts out.
+  //  - 'on': everything — DOM tools, coordinate tools (which require a
+  //    recent screenshot to reason on), the `screenshot()` tool itself,
+  //    and `take_over_user_tab`. The LLM picks freely.
+  //
+  // Coordinate tools: pixel-grounded actions that need a screenshot
+  // with grid overlay to target accurately. Off in 'off', on in 'on'.
+  // `hitl_click_at` and `drag_at` are coord tools too — same gate.
   const COORDINATE_TOOLS = new Set(['click_at', 'type_at', 'scroll_at', 'hitl_click_at', 'drag_at']);
-  // T2f-replan: in 'always' mode the user's intent is "act through
-  // pixels". Physically remove DOM-interaction tools from the registry
-  // so the model can't fall back to fragile DOM indices when it gets
-  // stuck. Navigation / read-only / screenshot stay available.
-  const DOM_INTERACTION_TOOLS = new Set(['click_element', 'input_text', 'fill_field_by_label']);
-  // T2f-tab-iso-1c: take_over_user_tab only makes sense when the
-  // agent has its own tab pinned (unified mode opens one; legacy
-  // works in the user's active tab so there's no separation to
-  // bridge). We always run unified mode here in this codepath
-  // (legacy goes through runClassicLoop), so the tool is always
-  // available — keep the gate explicit for clarity.
+  // take_over_user_tab only makes sense in unified mode (it bridges
+  // agent-tab → user-tab). runReactAgent is the unified entry point,
+  // so the tool is always available here — keep the gate explicit
+  // for clarity.
   const filteredActions = actions.filter(a => {
     const n = a.name();
-    if (n === 'screenshot') return visionMode === 'fallback';
-    if (COORDINATE_TOOLS.has(n)) return visionMode !== 'off';
-    if (DOM_INTERACTION_TOOLS.has(n)) return visionMode !== 'always';
+    if (n === 'screenshot') return visionMode === 'on';
+    if (COORDINATE_TOOLS.has(n)) return visionMode === 'on';
     if (n === 'take_over_user_tab') return true;
     return true;
   });
   const tools = actionsToTools(filteredActions, { counters, limits: DEFAULT_TOOL_BUDGETS }, dupGuard);
   const checkpointer = new MemorySaver();
-  // T2f-1.5: in 'always' mode the agent calls the SAME screenshot
-  // Action that 'fallback' exposes — just on its own behalf, every
-  // step, before the LLM is invoked. Using Action.call keeps the
-  // capture inside the regular tracer pipeline (one entry per step
-  // in the trace UI, identical shape to a regular tool call,
-  // thumbnail attached automatically).
-  // The screenshot Action handle is needed in two cases now:
-  //   - visionMode='always': autocapture every step (T2f-1.5).
-  //   - visionMode='fallback': adaptive auto-trigger on empty DOM /
-  //     url change / tool error / no-capture-for-N-steps
-  //     (T2f-fallback-smart). The Action is also still exposed in
-  //     the LLM tool registry under 'fallback' so the model can ask
-  //     for an explicit capture too.
-  const screenshotAction =
-    visionMode === 'always' || visionMode === 'fallback' ? actions.find(a => a.name() === 'screenshot') : undefined;
-  // T2f-fallback-smart — trackers for adaptive triggers. Stateful
-  // across all per-step ReAct invocations within this task.
-  const fallbackTriggerState = {
-    lastCapturedUrl: '' as string,
-    stepsSinceCapture: 0,
-  };
-  const FALLBACK_AUTO_CAPTURE_EVERY = 5;
-  const baseSystemPrompt = visionMode === 'off' ? reactSystemPromptTemplate : buildReactVisionPrompt(visionMode);
+  const baseSystemPrompt = visionMode === 'off' ? reactSystemPromptTemplate : buildReactVisionPrompt();
 
   // T2f-plan — minimal Plan-and-Execute pattern from LangGraph docs
   // (https://langchain-ai.github.io/langgraphjs/tutorials/plan-and-execute/).
@@ -548,84 +480,14 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
       checkpointSaver: new MemorySaver(),
       stateModifier: async (state: { messages: BaseMessage[] }) => {
         try {
-          // T2f-fallback-smart: decide whether to capture a screenshot
-          // for this state message.
-          //   - 'always': always.
-          //   - 'fallback': adaptive — capture when DOM extraction is
-          //     empty, URL has changed since the last capture, the
-          //     previous tool message looks like a DOM-fault error,
-          //     or N steps elapsed without a capture.
-          //   - 'off': never.
-          // T2n-overlay-handling — consume the pending-force flag set
-          // by switchTab / navigateTo so the next state message
-          // carries a fresh capture regardless of the adaptive
-          // fallback triggers. The flag is one-shot (read & clears
-          // in `consumePendingForceScreenshot`); under visionMode='off'
-          // we still consume it (preventing leakage across toggles)
-          // but no capture happens because there is no screenshotAction.
-          const pendingForce = context.browserContext.consumePendingForceScreenshot();
-          const base = resolveBaseCaptureDecision({
-            visionMode,
-            hasScreenshotAction: !!screenshotAction,
-            pendingForce,
-          });
-          let shouldCapture = base.shouldCapture;
-          let captureIntent = base.intent;
-          if (visionMode === 'fallback' && screenshotAction) {
-            const browserStateForTriggers = await context.browserContext.getState(false).catch(() => null);
-            const currentUrl = browserStateForTriggers?.url ?? '';
-            // T2f-drag: skip auto-capture on non-web URLs (chrome://,
-            // about:blank, devtools://). takeScreenshot would just
-            // return an error there, polluting the trace.
-            const isWebPage = /^https?:\/\//i.test(currentUrl);
-            const domEmpty = isWebPage && (browserStateForTriggers?.selectorMap?.size ?? 0) === 0;
-            const urlChanged = isWebPage && currentUrl !== fallbackTriggerState.lastCapturedUrl;
-            const lastToolMsg = [...state.messages].reverse().find(m => m.constructor?.name === 'ToolMessage');
-            const lastContent =
-              typeof (lastToolMsg as { content?: unknown })?.content === 'string'
-                ? (lastToolMsg as { content: string }).content
-                : '';
-            const lastWasDomFault = /Element with index \d+ does not exist|had no observable effect/.test(lastContent);
-            const stepsExpired = fallbackTriggerState.stepsSinceCapture >= FALLBACK_AUTO_CAPTURE_EVERY;
-            if (domEmpty || urlChanged || lastWasDomFault || stepsExpired) {
-              shouldCapture = true;
-              captureIntent = `fallback auto-capture (${[
-                domEmpty && 'dom-empty',
-                urlChanged && 'url-changed',
-                lastWasDomFault && 'dom-fault',
-                stepsExpired && 'steps-expired',
-              ]
-                .filter(Boolean)
-                .join(',')})`;
-            }
-          }
-
-          let screenshotPayload: { base64: string; mime: string } | null = null;
-          if (shouldCapture && screenshotAction) {
-            try {
-              const captureResult = await screenshotAction.call({
-                intent: captureIntent,
-                gridOverlay: true,
-              });
-              if (captureResult.imageBase64) {
-                screenshotPayload = {
-                  base64: captureResult.imageBase64,
-                  mime: captureResult.imageMime ?? 'image/jpeg',
-                };
-                if (visionMode === 'fallback') {
-                  const url = (await context.browserContext.getCurrentPage().catch(() => null))?.url() ?? '';
-                  fallbackTriggerState.lastCapturedUrl = url;
-                  fallbackTriggerState.stepsSinceCapture = 0;
-                }
-              }
-            } catch (err) {
-              logger.warning('auto screenshot capture failed; continuing without image', err);
-            }
-          } else if (visionMode === 'fallback') {
-            fallbackTriggerState.stepsSinceCapture += 1;
-          }
-
-          const fresh = await buildBrowserStateMessage(context, screenshotPayload);
+          // The `pendingForceScreenshot` flag set by switchTab /
+          // navigateTo is intentionally NOT consumed here. The runtime
+          // no longer auto-attaches images — screenshot capture is the
+          // LLM's call via the `screenshot()` tool. The flag is left
+          // in BrowserContext for a future cookie-overlay / tab-settle
+          // tier that may surface a hint to the model instead of
+          // bypassing it. Nothing reads the flag for now; that's fine.
+          const fresh = await buildBrowserStateMessage(context);
           return [new SystemMessage(stepSystemPrompt), ...state.messages, fresh];
         } catch (err) {
           logger.warning('buildBrowserStateMessage failed; running without fresh state', err);

@@ -228,10 +228,10 @@ export function actionToTool(action: Action, budget?: ToolBudgetOptions, dupGuar
           return `Error: budget exhausted for ${name} (${next - 1}/${limit}). Stop calling this tool. Write a final answer with what you have.`;
         }
       }
-      // T2i-fix1: tool-family-aware duplicate guard, 3-in-last-5 window.
-      // The autocapture `screenshot` Action runs every step regardless of
-      // LLM choices (visionMode='always'), so we explicitly skip it —
-      // repeats are normal and expected.
+      // Tool-family-aware duplicate guard, 3-in-last-5 window.
+      // `screenshot` is exempt because LLM-driven re-captures after a
+      // page change are legitimate and expected — the dup-guard is for
+      // tool-call thrash, not for repeated perception.
       if (dupGuard && name !== 'screenshot') {
         const key = `${name}:${canonicaliseArgsForGuard(name, input)}`;
         dupGuard.recentKeys.push(key);

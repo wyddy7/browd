@@ -363,9 +363,9 @@ async function setupExecutor(
   // Log the provider config being used for the navigator
   const navigatorProviderConfig = providers[navigatorModel.provider];
   const navigatorLLM = createChatModel(navigatorProviderConfig, navigatorModel);
-  // T2f-4: capability flag for vision input. Resolved here once per
-  // task setup; the Executor uses it to degrade visionMode='always'/
-  // 'fallback' to 'off' when the user picked a non-vision Navigator.
+  // Capability flag for vision input. Resolved here once per task
+  // setup; the Executor uses it to degrade visionMode='on' to 'off'
+  // when the user picked a non-vision Navigator.
   const navigatorSupportsVision = modelSupportsVision(navigatorModel.provider, navigatorModel.modelName);
   // T2f-final-2: model context window for the side-panel token ring.
   const navigatorContextWindow = getModelContextWindow(navigatorModel.provider, navigatorModel.modelName);

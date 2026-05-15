@@ -201,11 +201,8 @@ export const GeneralSettings = ({ onAppearanceThemeChange }: GeneralSettingsProp
                     onChange={e => updateSetting('visionMode', e.target.value as VisionMode)}
                     className={selectInputClass}>
                     <option value="off">{t('options_general_visionMode_off')}</option>
-                    <option value="always" disabled={!navigatorSupportsVision}>
-                      {t('options_general_visionMode_always')}
-                    </option>
-                    <option value="fallback" disabled={!navigatorSupportsVision}>
-                      {t('options_general_visionMode_fallback')}
+                    <option value="on" disabled={!navigatorSupportsVision}>
+                      {t('options_general_visionMode_on')}
                     </option>
                   </select>
                 </div>

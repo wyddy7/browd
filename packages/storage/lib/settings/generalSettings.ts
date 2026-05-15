@@ -19,14 +19,23 @@ export type AgentMode = 'unified' | 'legacy';
 /**
  * Vision mode for `agentMode='unified'`. Independent of the agentMode
  * toggle; the legacy pipeline ignores it.
- * - 'off': no screenshot in the agent message stream.
- * - 'always': screenshot injected into every state message as a
- *   multimodal HumanMessage (DOM text + image_url). Default when the
- *   selected Navigator model supports vision.
- * - 'fallback': screenshot exposed as a `screenshot()` tool the agent
- *   calls explicitly when DOM is insufficient.
+ *
+ * Two modes only — the runtime never auto-attaches an image. Whether
+ * a screenshot lands in the conversation is the LLM's call, made via
+ * the regular `screenshot()` tool, the same way browser-use, Stagehand,
+ * Operator and Anthropic computer-use let the model decide.
+ *
+ * - 'off': the `screenshot()` tool plus all coordinate actions are
+ *   removed from the registry. Pure DOM + read-only + navigation
+ *   surface. Used when the Navigator model has no vision capability
+ *   or the user explicitly opts out.
+ * - 'on': the agent has the full tool surface — DOM tools, coordinate
+ *   actions (`click_at` / `type_at` / `scroll_at` / `drag_at` /
+ *   `hitl_click_at`), `screenshot()` and `take_over_user_tab`. State
+ *   messages stay text-only; the LLM calls `screenshot()` when it
+ *   wants to see the rendered page.
  */
-export type VisionMode = 'off' | 'always' | 'fallback';
+export type VisionMode = 'off' | 'on';
 
 export interface GeneralSettingsConfig {
   appearanceTheme: AppearanceTheme;
@@ -70,11 +79,11 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettingsConfig = {
   replayHistoricalTasks: false,
   launchShortcut: 'Ctrl+E',
   agentMode: 'unified',
-  // T2f-1: 'always' is the recommended default. The Executor degrades
-  // to effective 'off' at runtime when the chosen Navigator model
-  // does not support vision input, so this default is safe for users
-  // on text-only providers.
-  visionMode: 'always',
+  // 'on' is the recommended default. The Executor degrades to
+  // effective 'off' at runtime when the chosen Navigator model does
+  // not support vision input, so this default is safe for users on
+  // text-only providers.
+  visionMode: 'on',
 };
 
 const normalizeAgentMode = (mode: unknown): AgentMode => {
@@ -87,11 +96,14 @@ const normalizeAgentMode = (mode: unknown): AgentMode => {
 };
 
 const normalizeVisionMode = (mode: unknown): VisionMode => {
-  if (mode === 'off' || mode === 'always' || mode === 'fallback') return mode;
-  // Pre-T2f-1 storage has no visionMode; fall back to the recommended
-  // default. Executor degrades to off at runtime if the navigator
-  // model can't accept images.
-  return 'always';
+  if (mode === 'off' || mode === 'on') return mode;
+  // Migration: the three-mode era used 'always' and 'fallback'. Both
+  // intents fold into the new single 'on' mode — runtime no longer
+  // auto-attaches, the LLM decides. Anything else (corrupt / missing)
+  // also lands on the recommended default. Executor degrades to off
+  // at runtime if the navigator model can't accept images.
+  if (mode === 'always' || mode === 'fallback') return 'on';
+  return 'on';
 };
 
 const storage = createStorage<GeneralSettingsConfig>('general-settings', DEFAULT_GENERAL_SETTINGS, {

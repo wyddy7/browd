@@ -1102,16 +1102,13 @@
     "message": "Vision mode"
   },
   "options_general_visionMode_desc": {
-    "message": "Always: a fresh screenshot is attached to every step (slower, higher accuracy). Fallback: the agent only takes a screenshot when it explicitly asks for one. Off: no screenshots."
+    "message": "Ein: Der Agent hat ein Screenshot-Tool plus Koordinaten-Aktionen und entscheidet selbst, wann ein Bild aufgenommen wird. Aus: keine Screenshots, nur DOM."
   },
   "options_general_visionMode_off": {
-    "message": "Off"
+    "message": "Aus"
   },
-  "options_general_visionMode_always": {
-    "message": "Always"
-  },
-  "options_general_visionMode_fallback": {
-    "message": "Fallback"
+  "options_general_visionMode_on": {
+    "message": "Ein"
   },
   "options_general_visionMode_warning": {
     "message": "Selected Navigator model has no vision support — vision is inactive at runtime. Pick a vision-capable model to enable."
