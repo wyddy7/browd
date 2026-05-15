@@ -338,6 +338,11 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
     if (n === 'screenshot') return visionMode === 'on';
     if (COORDINATE_TOOLS.has(n)) return visionMode === 'on';
     if (n === 'take_over_user_tab') return true;
+    // T2w — `task_complete` is the unified-mode sentinel; `done` is
+    // the legacy-only equivalent. Mirror the existing visionMode
+    // gate pattern for clarity: keep one, drop the other.
+    if (n === 'task_complete') return true;
+    if (n === 'done') return false;
     return true;
   });
   const tools = actionsToTools(filteredActions, { counters, limits: DEFAULT_TOOL_BUDGETS }, dupGuard);
@@ -628,13 +633,24 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
     // tool_calls are reasoning or the final answer for this subgoal;
     // they don't count toward "actually acting on the page".
     let toolCallCount = 0;
+    // T2w — scan ToolMessages for the `task_complete` sentinel. The
+    // action handler emits `TASK_COMPLETE: <response>` as extractedContent;
+    // when present we surface it as the finalAnswer (prefix preserved
+    // so agentNode can recognise the sentinel and route to END via
+    // state.response, bypassing the replanner).
+    let taskCompleteAnswer: string | null = null;
     for (const m of stepResult.messages) {
       if (m instanceof AIMessage && Array.isArray(m.tool_calls) && m.tool_calls.length > 0) {
         toolCallCount += 1;
       }
+      if (m instanceof ToolMessage && taskCompleteAnswer === null) {
+        const c = m.content;
+        const text = typeof c === 'string' ? c : '';
+        if (text.startsWith('TASK_COMPLETE: ')) taskCompleteAnswer = text;
+      }
     }
     return {
-      finalAnswer: extractFinalAnswer(stepResult.messages) ?? 'no observable result',
+      finalAnswer: taskCompleteAnswer ?? extractFinalAnswer(stepResult.messages) ?? 'no observable result',
       toolCallCount,
     };
   };
@@ -842,8 +858,15 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
     // "failed:..." marker OR a "partial:..." marker (T2p-3 soft-fail
     // when the inner loop exhausted its recursion budget mid-progress).
     // In both cases the replanner picks up from the pastSteps entry and
-    // decides END or CONTINUE.
-    const stepIsDone = !stepResult.startsWith('failed:') && !stepResult.startsWith('partial:');
+    // decides END or CONTINUE. T2w — a `TASK_COMPLETE: ` prefix means
+    // the agent explicitly called the sentinel termination action;
+    // strip the prefix, mark the subgoal done, and short-circuit to
+    // END via state.response (bypasses the replanner entirely).
+    const taskCompleteMatch = stepResult.startsWith('TASK_COMPLETE: ')
+      ? stepResult.slice('TASK_COMPLETE: '.length)
+      : null;
+    const stepIsDone =
+      taskCompleteMatch !== null || (!stepResult.startsWith('failed:') && !stepResult.startsWith('partial:'));
     emitPlanChecklist([
       ...state.pastSteps.map(([s]) => ({ text: s, done: true })),
       { text: currentStep, done: stepIsDone },
@@ -852,7 +875,8 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
     const update: { pastSteps: Array<[string, string]>; response?: string } = {
       pastSteps: [[currentStep, stepResult] as [string, string]],
     };
-    if (stuckResponse !== null) update.response = stuckResponse;
+    if (taskCompleteMatch !== null) update.response = taskCompleteMatch;
+    else if (stuckResponse !== null) update.response = stuckResponse;
     return update;
   };
 

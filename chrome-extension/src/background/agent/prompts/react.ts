@@ -160,11 +160,12 @@ have rather than thrashing.
 
 # Termination
 
-You finish by writing a final natural-language answer in your last
-message — DO NOT call any tool on that turn. The runtime detects
-termination automatically (no tool calls = done).
+When you have the answer the user asked for, call \`task_complete(response='your answer here')\`. This is the only correct way to finish. Don't just write the answer as text — call the tool.
 
-When you write the final answer:
+The runtime detects termination from that tool call and returns
+\`response\` to the user. No further tools run.
+
+When you write the \`response\` argument to \`task_complete\`:
 - Cite specific evidence inline. Example: "DeepSeek V3.2 — \\$0.28/1M
   tokens (source: vellum.ai leaderboard)".
 - Be honest about what you DID NOT verify. If a tool failed, say so:

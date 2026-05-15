@@ -35,6 +35,7 @@ import {
   hitlClickAtActionSchema,
   dragAtActionSchema,
   takeOverUserTabActionSchema,
+  taskCompleteActionSchema,
 } from './schemas';
 import { webFetchMarkdown, webSearch, extractActiveTabAsMarkdown } from '../tools/webTools';
 import { findFieldByLabel } from '@src/background/browser/dom/fieldFinder';
@@ -271,6 +272,20 @@ export class ActionBuilder {
       });
     }, doneActionSchema);
     actions.push(done);
+
+    // T2w — unified-mode termination sentinel. The handler is pure:
+    // it returns an ActionResult whose extractedContent carries a
+    // `TASK_COMPLETE: ` prefix. runReactAgent inspects the ToolMessage
+    // stream for that prefix and routes the StateGraph directly to END
+    // via `state.response`, bypassing the replanner. No HITL gate, no
+    // tab-isolation check — terminal signal only.
+    const taskComplete = new Action(async (input: z.infer<typeof taskCompleteActionSchema.schema>) => {
+      return new ActionResult({
+        extractedContent: `TASK_COMPLETE: ${input.response}`,
+        includeInMemory: true,
+      });
+    }, taskCompleteActionSchema);
+    actions.push(taskComplete);
 
     const searchGoogle = new Action(async (input: z.infer<typeof searchGoogleActionSchema.schema>) => {
       const context = this.context;

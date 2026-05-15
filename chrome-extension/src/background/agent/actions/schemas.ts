@@ -15,6 +15,29 @@ export const doneActionSchema: ActionSchema = {
   }),
 };
 
+/**
+ * T2w — sentinel termination action for unified mode. The Plan-and-
+ * Execute replanner stays as a fallback finaliser, but it has a
+ * blind spot: when the LLM's reasoning concludes the task is done
+ * yet emits zero tool calls, the next focused subgoal has nothing
+ * to act on and stuckDetector's `silent-step` guard kills the run.
+ * Giving the agent an explicit `task_complete(response)` tool lets
+ * it close the StateGraph cleanly via the existing `state.response`
+ * channel — same idea as browser-use's `DoneAgentOutput` and
+ * Magentic-One's ledger update. The action handler simply returns
+ * an ActionResult with a `TASK_COMPLETE: ` prefix; runReactAgent
+ * detects the sentinel and routes to END.
+ */
+export const taskCompleteActionSchema: ActionSchema = {
+  name: 'task_complete',
+  description:
+    'Call this when you have the final answer for the user. Pass the answer as `response`. This ends the task — no more tools will run after this. Use it the moment you have what the user asked for; do NOT keep reasoning about the answer instead of returning it.',
+  schema: z.object({
+    intent: z.string().default('').describe('purpose of this action'),
+    response: z.string().min(1).describe('the final answer to surface to the user'),
+  }),
+};
+
 // Basic Navigation Actions
 export const searchGoogleActionSchema: ActionSchema = {
   name: 'search_google',
