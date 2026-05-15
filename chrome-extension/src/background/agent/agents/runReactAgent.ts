@@ -40,7 +40,7 @@
  */
 import { createReactAgent } from '@langchain/langgraph/prebuilt';
 import { MemorySaver, StateGraph, Annotation, START, END } from '@langchain/langgraph';
-import { HumanMessage, AIMessage, SystemMessage, BaseMessage } from '@langchain/core/messages';
+import { HumanMessage, AIMessage, SystemMessage, ToolMessage, BaseMessage } from '@langchain/core/messages';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { z } from 'zod';
 import type { AgentContext } from '../types';
@@ -223,6 +223,51 @@ Current date: ${timeStr}
  * terminates when the LLM emits an AIMessage without tool_calls; that
  * message's content is the natural-language answer.
  */
+/**
+ * T2p-3 — soft-fail summary on inner-recursion exhaustion WITH progress.
+ *
+ * Walks `messages` from the end and stitches a 1-2 sentence partial
+ * summary out of the last AIMessage text (the agent's most recent
+ * reasoning) plus the last ToolMessage name (what it actually did).
+ * Exported for unit testing. Does NOT call the LLM — the replanner
+ * runs an LLM round next anyway, that's the polishing layer.
+ *
+ * Returned string is always non-empty; if neither component is present
+ * it falls back to a generic "no observable progress" marker. The
+ * caller is expected to prefix this with `partial: ` before handing
+ * it back to the replanner.
+ */
+export function extractPartialSummary(messages: BaseMessage[]): string {
+  let lastAiText = '';
+  let lastToolName = '';
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (!lastAiText && m instanceof AIMessage) {
+      const content = m.content;
+      let text = '';
+      if (typeof content === 'string') {
+        text = content;
+      } else if (Array.isArray(content)) {
+        text = content
+          .filter(c => typeof c === 'object' && c !== null && 'type' in c && c.type === 'text')
+          .map(c => (c as { text: string }).text)
+          .join('\n');
+      }
+      if (text.trim().length > 0) lastAiText = text.trim();
+    }
+    if (!lastToolName && m instanceof ToolMessage) {
+      // ToolMessage carries `.name` for the tool that produced it.
+      const name = (m as ToolMessage & { name?: string }).name;
+      if (typeof name === 'string' && name.length > 0) lastToolName = name;
+    }
+    if (lastAiText && lastToolName) break;
+  }
+  if (!lastAiText && !lastToolName) return 'no observable progress before budget was exhausted';
+  if (lastAiText && lastToolName) return `${lastAiText} (last action: ${lastToolName})`;
+  if (lastAiText) return lastAiText;
+  return `last action: ${lastToolName}`;
+}
+
 function extractFinalAnswer(messages: BaseMessage[]): string | null {
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i];
@@ -472,6 +517,7 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
     completed: Array<[string, string]>,
     stepIndex: number,
     params: PlanType['taskParameters'],
+    fpStart: string | null,
   ): Promise<{ finalAnswer: string; toolCallCount: number }> => {
     const stepSystemPrompt = buildSystemPromptForStep(currentStep, completed, params);
     const agent = createReactAgent({
@@ -507,16 +553,65 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
     // HumanMessage so a model that ignores the system prompt's
     // <original-user-task> block still sees parameters in chat
     // context. Belt and braces against subgoal-abstraction drift.
-    const stepResult = await agent.invoke(
-      {
-        messages: [
-          new HumanMessage(
-            `Original user task:\n${task}\n\nCurrent subgoal:\n${currentStep}\n\nExecute the current subgoal only. Resolve any abstract reference in the subgoal text (e.g. "the provided URL", "the requested term") by re-reading the original user task above.`,
-          ),
-        ],
-      },
-      stepConfig,
-    );
+    let stepResult: { messages: BaseMessage[] };
+    try {
+      stepResult = await agent.invoke(
+        {
+          messages: [
+            new HumanMessage(
+              `Original user task:\n${task}\n\nCurrent subgoal:\n${currentStep}\n\nExecute the current subgoal only. Resolve any abstract reference in the subgoal text (e.g. "the provided URL", "the requested term") by re-reading the original user task above.`,
+            ),
+          ],
+        },
+        stepConfig,
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      // T2p-3 — distinguish BUDGET signal from STUCK signal. T2p-2 treated
+      // every inner GraphRecursionError as a terminal stuck verdict, but
+      // test20 showed the agent often makes real navigation progress and
+      // exhausts the 25-round budget just before producing its answer.
+      // Compare the page fingerprint captured at agentNode entry against
+      // the fingerprint at exhaustion: same → real stuck (rethrow so the
+      // outer catch flips innerRecursionExhausted), different → real
+      // progress → soft-fail with a "partial:" summary so the replanner
+      // can decide END or CONTINUE on the next round.
+      if (!isInnerRecursionLimitError(msg)) throw err;
+      let fpNow: string | null = null;
+      try {
+        const liveState = await context.browserContext.getState(false);
+        fpNow = computeStateFingerprint(liveState);
+      } catch (fpErr) {
+        logger.warning('fp_now probe failed during recursion-limit soft-fail check', fpErr);
+        fpNow = null;
+      }
+      // Conservative-stuck path: any null fingerprint means we can't
+      // confirm progress, so preserve T2p-2 terminal behaviour.
+      if (fpStart === null || fpNow === null || fpNow === fpStart) {
+        throw err;
+      }
+      // Progress confirmed: stitch a partial summary from the
+      // checkpointer state. Rethrow if the snapshot is unreadable
+      // (we cannot manufacture a useful soft-fail without messages).
+      let snapshotMessages: BaseMessage[] = [];
+      try {
+        const snapshot = await agent.getState(stepConfig);
+        const v = (snapshot as { values?: { messages?: BaseMessage[] } }).values;
+        if (v && Array.isArray(v.messages)) snapshotMessages = v.messages;
+      } catch (snapErr) {
+        logger.warning('agent.getState() failed during recursion-limit soft-fail', snapErr);
+        throw err;
+      }
+      let toolCallCount = 0;
+      for (const m of snapshotMessages) {
+        if (m instanceof AIMessage && Array.isArray(m.tool_calls) && m.tool_calls.length > 0) {
+          toolCallCount += 1;
+        }
+      }
+      const summary = extractPartialSummary(snapshotMessages);
+      logger.info(`recursion-limit soft-fail with progress (fp_start≠fp_now) — handing partial to replanner`);
+      return { finalAnswer: `partial: ${summary}`, toolCallCount };
+    }
     // T2p: count AIMessage entries that emitted at least one tool call.
     // Drives the silent-step guard in stuckDetector. AIMessages without
     // tool_calls are reasoning or the final answer for this subgoal;
@@ -603,11 +698,33 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
       { text: currentStep, done: false, inProgress: true },
       ...remainingAfter.map(s => ({ text: s, done: false })),
     ]);
+    // T2p-3 — capture page fingerprint BEFORE entering the inner ReAct
+    // loop. Passed through to runReactStep so its catch block can
+    // compare against the post-exhaustion fingerprint and distinguish
+    // "burned budget on a frozen page" (real stuck) from "burned budget
+    // mid-progress" (soft-fail with partial). Wrapped in try/catch
+    // because a probe failure must NOT abort the subgoal — we fall
+    // back to `null` and the inner catch treats that as
+    // conservative-stuck.
+    let fpStart: string | null = null;
+    try {
+      const liveState = await context.browserContext.getState(false);
+      fpStart = computeStateFingerprint(liveState);
+    } catch (err) {
+      logger.warning('fp_start probe failed; recursion-limit soft-fail will treat as stuck', err);
+      fpStart = null;
+    }
     let stepResult: string;
     let toolCallCount = 0;
     let innerRecursionExhausted = false;
     try {
-      const stepOut = await runReactStep(currentStep, state.pastSteps, state.pastSteps.length, state.taskParameters);
+      const stepOut = await runReactStep(
+        currentStep,
+        state.pastSteps,
+        state.pastSteps.length,
+        state.taskParameters,
+        fpStart,
+      );
       stepResult = stepOut.finalAnswer;
       toolCallCount = stepOut.toolCallCount;
     } catch (err) {
@@ -651,12 +768,15 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
         logger.warning('stuckDetector post-subgoal probe failed; skipping this round', err);
       }
     }
-    // After the step: flip current to done (or leave at false if it
-    // came back as a "failed:..." marker — replanner picks up from
-    // there).
+    // After the step: flip current to done unless it came back as a
+    // "failed:..." marker OR a "partial:..." marker (T2p-3 soft-fail
+    // when the inner loop exhausted its recursion budget mid-progress).
+    // In both cases the replanner picks up from the pastSteps entry and
+    // decides END or CONTINUE.
+    const stepIsDone = !stepResult.startsWith('failed:') && !stepResult.startsWith('partial:');
     emitPlanChecklist([
       ...state.pastSteps.map(([s]) => ({ text: s, done: true })),
-      { text: currentStep, done: !stepResult.startsWith('failed:') },
+      { text: currentStep, done: stepIsDone },
       ...remainingAfter.map(s => ({ text: s, done: false })),
     ]);
     const update: { pastSteps: Array<[string, string]>; response?: string } = {
