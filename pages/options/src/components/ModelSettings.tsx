@@ -66,9 +66,11 @@ interface ModelSettingsProps {
 
 type ModelSelectionTab = AgentNameEnum | 'stt' | 'judge';
 
-const cardClass = 'browd-card p-6 text-left';
+const cardClass = 'browd-card p-7 text-left';
 const innerCardClass = 'rounded-lg border border-[var(--browd-border)] bg-transparent p-4';
-const titleClass = 'mb-4 text-xl font-semibold text-[var(--browd-text)]';
+const titleClass = 'text-[20px] font-semibold leading-tight tracking-[-0.014em] text-[var(--browd-text)]';
+const cardHeaderClass = 'mb-6';
+const titleLeadClass = 'mt-1.5 text-[13px] font-normal leading-[1.55] text-[var(--browd-muted)]';
 const fieldLabelClass = 'w-32 shrink-0 text-sm font-medium text-[var(--browd-text)]';
 const narrowFieldLabelClass = 'w-20 text-sm font-medium text-[var(--browd-text)]';
 const fieldInputClass = 'browd-input flex-1 px-3 py-2 text-sm';
@@ -1528,10 +1530,13 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
   };
 
   return (
-    <section className="space-y-6">
+    <section className="space-y-8">
       {/* LLM Providers Section */}
       <div className={cardClass}>
-        <h2 className={titleClass}>{t('options_models_providers_header')}</h2>
+        <header className={cardHeaderClass}>
+          <h2 className={titleClass}>{t('options_models_providers_header')}</h2>
+          <p className={titleLeadClass}>{t('options_models_providers_lead')}</p>
+        </header>
         <div className="space-y-6">
           {getSortedProviders().length === 0 ? (
             <div className="py-8 text-center text-[var(--browd-muted)]">
@@ -1975,7 +1980,10 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
 
       {/* Updated Agent Models Section */}
       <div className={cardClass}>
-        <h2 className={titleClass}>{t('options_models_selection_header')}</h2>
+        <header className={cardHeaderClass}>
+          <h2 className={titleClass}>{t('options_models_selection_header')}</h2>
+          <p className={titleLeadClass}>{t('options_models_selection_lead')}</p>
+        </header>
         <div className="mb-4 flex flex-wrap gap-2">
           {[
             { id: AgentNameEnum.Planner, label: 'Planner' },
@@ -1987,7 +1995,7 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
               key={tab.id}
               type="button"
               onClick={() => setActiveModelSelectionTab(tab.id)}
-              className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+              className={`rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors ${
                 activeModelSelectionTab === tab.id ? 'browd-model-tab-active' : 'browd-model-tab-inactive'
               }`}>
               {tab.label}

@@ -335,10 +335,13 @@
     "message": "Browser Shortcut"
   },
   "options_general_launchShortcut_desc": {
-    "message": "Reliable launch shortcuts are managed by the browser. Default is Ctrl+E, and Command+E on macOS. Change it in browser shortcut settings."
+    "message": "Managed by your browser, not by Browd."
   },
   "options_models_providers_header": {
     "message": "LLM Providers"
+  },
+  "options_models_providers_lead": {
+    "message": "Connect API keys for the providers Browd can call."
   },
   "options_models_providers_notConfigured": {
     "message": "No providers configured yet. Add a provider to get started."
@@ -384,6 +387,9 @@
   },
   "options_models_selection_header": {
     "message": "Model Selection"
+  },
+  "options_models_selection_lead": {
+    "message": "Assign a model to each agent role."
   },
   "options_models_speechToText_header": {
     "message": "Speech-to-Text Model"
@@ -493,6 +499,9 @@
   "options_firewall_header": {
     "message": "Firewall"
   },
+  "options_firewall_header_lead": {
+    "message": "Restrict which URLs the agent can visit on your behalf."
+  },
   "options_firewall_enableToggle": {
     "message": "Enable Firewall"
   },
@@ -522,6 +531,9 @@
   },
   "options_firewall_howItWorks_header": {
     "message": "How the Firewall Works"
+  },
+  "options_firewall_howItWorks_lead": {
+    "message": "Allow and deny lists evaluated for every navigation."
   },
   "options_firewall_howItWorks": {
     "message": "The firewall contains a deny list and an allow list.\nIf both lists are empty, all URLs are allowed\nDeny list takes priority - if a URL matches any deny list entry, it's blocked\nWhen allow list is empty, all non-denied URLs are allowed\nWhen allow list is not empty, only matching URLs are allowed\nWildcards are NOT supported yet\nAllow list is preferred over deny list"
@@ -1164,17 +1176,32 @@
   "options_general_section_appearance": {
     "message": "Appearance"
   },
+  "options_general_section_appearance_lead": {
+    "message": "How Browd looks in your browser."
+  },
   "options_general_section_agent": {
     "message": "Agent behavior"
+  },
+  "options_general_section_agent_lead": {
+    "message": "What the agent can see and how cautiously it acts."
   },
   "options_general_section_page": {
     "message": "Page behavior"
   },
+  "options_general_section_page_lead": {
+    "message": "How the agent interacts with pages it visits."
+  },
   "options_general_section_control": {
     "message": "Controls"
   },
+  "options_general_section_control_lead": {
+    "message": "Hotkeys and quick actions to launch Browd."
+  },
   "options_general_section_advanced": {
     "message": "Advanced"
+  },
+  "options_general_section_advanced_lead": {
+    "message": "Telemetry, recovery, and developer toggles."
   },
   "options_general_section_legacyOnly": {
     "message": "Legacy-mode only"

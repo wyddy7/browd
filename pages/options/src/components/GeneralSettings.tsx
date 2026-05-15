@@ -14,18 +14,19 @@ import {
 import { ToggleSwitch, ToggleTheme } from '@extension/ui';
 import { t } from '@extension/i18n';
 
-const settingTitleClass = 'text-base font-medium text-[var(--browd-text)]';
-const settingDescriptionClass = 'text-sm font-normal text-[var(--browd-muted)]';
+const settingTitleClass = 'text-[15px] font-medium leading-tight text-[var(--browd-text)]';
+const settingDescriptionClass = 'mt-1 text-[13px] font-normal leading-[1.55] text-[var(--browd-muted)]';
 const numberInputClass = 'browd-input w-[88px] px-3 py-2 text-right';
 const selectInputClass = 'browd-input w-full min-w-[200px] px-3 py-2 text-sm';
 const shortcutButtonClass = 'browd-input min-w-[160px] rounded-full px-4 py-2 text-center text-sm transition-colors';
-const rowClass = 'flex items-center justify-between gap-6 py-4 first:pt-0 last:pb-0';
+const rowClass = 'flex items-center justify-between gap-6 py-5 first:pt-0 last:pb-0';
 const rowLeftClass = 'min-w-0 flex-1';
 const rowControlClass = 'flex shrink-0 items-center justify-end gap-3 min-w-[240px]';
-const sectionHeadingClass = 'text-sm font-semibold text-[var(--browd-muted)]';
-const sectionListClass = 'mt-2 divide-y divide-[var(--browd-border)]';
+const sectionHeadingClass = 'text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--browd-muted)]';
+const sectionLeadClass = 'mt-1.5 text-[13px] font-normal leading-[1.55] text-[var(--browd-muted)]';
+const sectionListClass = 'mt-4 divide-y divide-[var(--browd-border)]';
 const betaBadgeClass =
-  'ml-2 inline-flex items-center rounded-[var(--browd-radius-sm)] bg-[hsl(var(--browd-warning-400)/0.14)] px-[6px] py-[2px] align-middle text-[11px] font-medium text-[hsl(var(--browd-warning-400))]';
+  'ml-2 inline-flex items-center rounded-[var(--browd-radius-sm)] bg-[var(--browd-panel-strong)] px-[6px] py-[1px] align-middle text-[10px] font-medium uppercase tracking-[0.06em] text-[var(--browd-muted)]';
 const LANGUAGE_OVERRIDE_KEY = 'browd-interface-language';
 
 interface GeneralSettingsProps {
@@ -81,8 +82,8 @@ export const GeneralSettings = ({ onAppearanceThemeChange }: GeneralSettingsProp
   const isLegacy = settings.agentMode === 'legacy';
 
   return (
-    <section className="space-y-6">
-      <div className="browd-card space-y-8 p-6 text-left">
+    <section className="space-y-8">
+      <div className="browd-card space-y-10 p-7 text-left">
         <div>
           <h2 className={sectionHeadingClass}>{t('options_general_section_appearance')}</h2>
           <div className={sectionListClass}>
@@ -132,6 +133,7 @@ export const GeneralSettings = ({ onAppearanceThemeChange }: GeneralSettingsProp
 
         <div>
           <h2 className={sectionHeadingClass}>{t('options_general_section_agent')}</h2>
+          <p className={sectionLeadClass}>{t('options_general_section_agent_lead')}</p>
           <div className={sectionListClass}>
             <div className={rowClass}>
               <div className={rowLeftClass}>
@@ -181,8 +183,8 @@ export const GeneralSettings = ({ onAppearanceThemeChange }: GeneralSettingsProp
                   <h3 className={settingTitleClass}>{t('options_general_visionMode')}</h3>
                   <p className={settingDescriptionClass}>{t('options_general_visionMode_desc')}</p>
                   {!navigatorSupportsVision && settings.visionMode !== 'off' && (
-                    <div className="mt-3 flex items-start gap-2 rounded-[var(--browd-radius-sm)] bg-[hsl(var(--browd-warning-400)/0.14)] px-3 py-2 text-sm text-[hsl(var(--browd-warning-400))]">
-                      <span aria-hidden="true" className="mt-0.5 leading-none">
+                    <div className="mt-3 flex items-start gap-2 border-l-2 border-[hsl(var(--browd-warning-400))] bg-[hsl(var(--browd-warning-400)/0.06)] px-3 py-2 text-[13px] leading-relaxed text-[var(--browd-text)]">
+                      <span aria-hidden="true" className="mt-0.5 leading-none text-[hsl(var(--browd-warning-400))]">
                         ⚠
                       </span>
                       <span>{t('options_general_visionMode_warning')}</span>
@@ -214,6 +216,7 @@ export const GeneralSettings = ({ onAppearanceThemeChange }: GeneralSettingsProp
 
         <div>
           <h2 className={sectionHeadingClass}>{t('options_general_section_page')}</h2>
+          <p className={sectionLeadClass}>{t('options_general_section_page_lead')}</p>
           <div className={sectionListClass}>
             <div className={rowClass}>
               <div className={rowLeftClass}>
@@ -263,9 +266,9 @@ export const GeneralSettings = ({ onAppearanceThemeChange }: GeneralSettingsProp
                 <p className={settingDescriptionClass}>{t('options_general_launchShortcut_desc')}</p>
               </div>
               <div className={rowControlClass}>
-                <div className="browd-input min-w-[80px] rounded-full px-3 py-2 text-center text-sm text-[var(--browd-text)]">
+                <kbd className="inline-flex items-center rounded border border-[var(--browd-border)] bg-[var(--browd-panel-strong)] px-2 py-1 font-mono text-[12px] font-medium text-[var(--browd-text)]">
                   {settings.launchShortcut}
-                </div>
+                </kbd>
                 <button
                   type="button"
                   onClick={() => {
@@ -281,6 +284,7 @@ export const GeneralSettings = ({ onAppearanceThemeChange }: GeneralSettingsProp
 
         <div>
           <h2 className={sectionHeadingClass}>{t('options_general_section_advanced')}</h2>
+          <p className={sectionLeadClass}>{t('options_general_section_advanced_lead')}</p>
           <div className={sectionListClass}>
             <div className={rowClass}>
               <div className={rowLeftClass}>
@@ -325,9 +329,7 @@ export const GeneralSettings = ({ onAppearanceThemeChange }: GeneralSettingsProp
         {isLegacy && (
           <div>
             <h2 className={sectionHeadingClass}>{t('options_general_section_legacyOnly')}</h2>
-            <p className="mt-1 text-sm font-normal text-[var(--browd-muted)]">
-              {t('options_general_section_legacyOnly_desc')}
-            </p>
+            <p className={sectionLeadClass}>{t('options_general_section_legacyOnly_desc')}</p>
             <div className={sectionListClass}>
               <div className={rowClass}>
                 <div className={rowLeftClass}>

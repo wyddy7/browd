@@ -3,13 +3,17 @@ import { firewallStore } from '@extension/storage';
 import { Button, ToggleSwitch } from '@extension/ui';
 import { t } from '@extension/i18n';
 
-const cardClass = 'browd-card p-6 text-left';
+const cardClass = 'browd-card p-7 text-left';
 const insetClass = 'rounded-md border border-[var(--browd-border)] bg-[var(--browd-panel-strong)] p-4';
-const titleClass = 'mb-4 text-xl font-semibold text-[var(--browd-text)]';
-const labelClass = 'text-base font-medium text-[var(--browd-text)]';
+const cardHeaderClass = 'mb-6';
+const titleClass = 'text-[20px] font-semibold leading-tight tracking-[-0.014em] text-[var(--browd-text)]';
+const titleLeadClass = 'mt-1.5 text-[13px] font-normal leading-[1.55] text-[var(--browd-muted)]';
+const labelClass = 'text-[15px] font-medium leading-tight text-[var(--browd-text)]';
 const mutedClass = 'text-[var(--browd-muted)]';
-const activeSegmentClass = 'bg-[var(--browd-accent)] text-[var(--browd-accent-text)]';
-const inactiveSegmentClass = 'browd-button-ghost bg-[var(--browd-panel-strong)] text-[var(--browd-muted)]';
+const activeSegmentClass =
+  'rounded-md border border-[var(--browd-border)] bg-[var(--browd-panel-strong)] text-[var(--browd-text)] shadow-none';
+const inactiveSegmentClass =
+  'rounded-md border border-transparent bg-transparent text-[var(--browd-muted)] shadow-none hover:bg-[var(--browd-panel-strong)] hover:text-[var(--browd-text)]';
 
 export const FirewallSettings = () => {
   const [isEnabled, setIsEnabled] = useState(true);
@@ -58,9 +62,12 @@ export const FirewallSettings = () => {
   };
 
   return (
-    <section className="space-y-6">
+    <section className="space-y-8">
       <div className={cardClass}>
-        <h2 className={titleClass}>{t('options_firewall_header')}</h2>
+        <header className={cardHeaderClass}>
+          <h2 className={titleClass}>{t('options_firewall_header')}</h2>
+          <p className={titleLeadClass}>{t('options_firewall_header_lead')}</p>
+        </header>
 
         <div className="space-y-6">
           <div className={`my-6 ${insetClass}`}>
@@ -81,12 +88,12 @@ export const FirewallSettings = () => {
             <div className="flex space-x-2">
               <Button
                 onClick={() => setActiveList('allow')}
-                className={`px-4 py-2 text-base ${activeList === 'allow' ? activeSegmentClass : inactiveSegmentClass}`}>
+                className={`px-3 py-1.5 text-[13px] font-medium ${activeList === 'allow' ? activeSegmentClass : inactiveSegmentClass}`}>
                 {t('options_firewall_allowList_header')}
               </Button>
               <Button
                 onClick={() => setActiveList('deny')}
-                className={`px-4 py-2 text-base ${activeList === 'deny' ? activeSegmentClass : inactiveSegmentClass}`}>
+                className={`px-3 py-1.5 text-[13px] font-medium ${activeList === 'deny' ? activeSegmentClass : inactiveSegmentClass}`}>
                 {t('options_firewall_denyList_header')}
               </Button>
             </div>
@@ -108,7 +115,7 @@ export const FirewallSettings = () => {
             />
             <Button
               onClick={handleAddUrl}
-              className="bg-[var(--browd-success)] px-4 py-2 text-sm text-[var(--browd-accent-text)] hover:opacity-90">
+              className="rounded-md bg-[var(--browd-text)] px-4 py-2 text-sm font-medium text-[var(--browd-bg)] hover:opacity-90">
               {t('options_firewall_btnAdd')}
             </Button>
           </div>
@@ -124,7 +131,7 @@ export const FirewallSettings = () => {
                       <span className="text-sm text-[var(--browd-text)]">{url}</span>
                       <Button
                         onClick={() => handleRemoveUrl(url, 'allow')}
-                        className="rounded-l-none bg-[var(--browd-danger)] px-2 py-1 text-xs text-white hover:opacity-90">
+                        className="rounded-l-none bg-transparent px-3 py-1 text-[12px] font-normal text-[var(--browd-muted)] shadow-none hover:bg-transparent hover:text-[hsl(var(--browd-danger-400))]">
                         {t('options_firewall_btnRemove')}
                       </Button>
                     </li>
@@ -142,8 +149,8 @@ export const FirewallSettings = () => {
                     <span className="text-sm text-[var(--browd-text)]">{url}</span>
                     <Button
                       onClick={() => handleRemoveUrl(url, 'deny')}
-                      className="rounded-l-none bg-[var(--browd-danger)] px-2 py-1 text-xs text-white hover:opacity-90">
-                      Remove
+                      className="rounded-l-none bg-transparent px-3 py-1 text-[12px] font-normal text-[var(--browd-muted)] shadow-none hover:bg-transparent hover:text-[hsl(var(--browd-danger-400))]">
+                      {t('options_firewall_btnRemove')}
                     </Button>
                   </li>
                 ))}
@@ -156,12 +163,20 @@ export const FirewallSettings = () => {
       </div>
 
       <div className={cardClass}>
-        <h2 className={titleClass}>{t('options_firewall_howItWorks_header')}</h2>
-        <ul className="list-disc space-y-2 pl-5 text-left text-sm text-[var(--browd-muted)]">
+        <header className={cardHeaderClass}>
+          <h2 className={titleClass}>{t('options_firewall_howItWorks_header')}</h2>
+          <p className={titleLeadClass}>{t('options_firewall_howItWorks_lead')}</p>
+        </header>
+        <ul className="list-none space-y-2 text-left text-[13px] leading-[1.55] text-[var(--browd-muted)]">
           {t('options_firewall_howItWorks')
             .split('\n')
             .map((rule, index) => (
-              <li key={index}>{rule}</li>
+              <li key={index} className="flex gap-3">
+                <span aria-hidden="true" className="select-none text-[var(--browd-border-strong)]">
+                  —
+                </span>
+                <span>{rule}</span>
+              </li>
             ))}
         </ul>
       </div>

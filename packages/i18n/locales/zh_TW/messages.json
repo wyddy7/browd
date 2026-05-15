@@ -311,10 +311,13 @@
     "message": "瀏覽器快捷鍵"
   },
   "options_general_launchShortcut_desc": {
-    "message": "可靠的啟動快捷鍵由瀏覽器管理。預設為 Ctrl+E，而在 macOS 上是 Command+E。請到瀏覽器快捷鍵設定中修改。"
+    "message": "由您的瀏覽器管理，而非 Browd。"
   },
   "options_models_providers_header": {
     "message": "LLM 提供者"
+  },
+  "options_models_providers_lead": {
+    "message": "連結 Browd 可呼叫之提供者的 API 金鑰。"
   },
   "options_models_providers_notConfigured": {
     "message": "尚未設定任何提供者。請新增一個提供者以開始使用。"
@@ -360,6 +363,9 @@
   },
   "options_models_selection_header": {
     "message": "模型選擇"
+  },
+  "options_models_selection_lead": {
+    "message": "為每個代理角色指派一個模型。"
   },
   "options_models_speechToText_header": {
     "message": "語音轉文字模型"
@@ -469,6 +475,9 @@
   "options_firewall_header": {
     "message": "防火牆"
   },
+  "options_firewall_header_lead": {
+    "message": "限制代理可以代您造訪哪些網址。"
+  },
   "options_firewall_enableToggle": {
     "message": "啟用防火牆"
   },
@@ -498,6 +507,9 @@
   },
   "options_firewall_howItWorks_header": {
     "message": "防火牆運作原理"
+  },
+  "options_firewall_howItWorks_lead": {
+    "message": "每次導覽時都會評估允許與拒絕清單。"
   },
   "options_firewall_howItWorks": {
     "message": "防火牆包含一個拒絕清單和一個允許清單。\n- 如果兩個清單都為空，則允許所有 URL。\n- 拒絕清單具有較高優先順序。如果一個 URL 符合任何拒絕清單中的項目，它將被封鎖。\n- 當允許清單為空時，所有未被拒絕的 URL 都會被允許。\n- 當允許清單不為空時，只有符合清單中項目的 URL 才被允許。\n- 目前尚不支援萬用字元。\n- 建議優先使用允許清單，而非拒絕清單。"
@@ -1164,17 +1176,32 @@
   "options_general_section_appearance": {
     "message": "外觀"
   },
+  "options_general_section_appearance_lead": {
+    "message": "Browd 在您瀏覽器中的外觀。"
+  },
   "options_general_section_agent": {
     "message": "代理行為"
+  },
+  "options_general_section_agent_lead": {
+    "message": "代理可以看到什麼，以及它的謹慎程度。"
   },
   "options_general_section_page": {
     "message": "頁面行為"
   },
+  "options_general_section_page_lead": {
+    "message": "代理如何與所造訪的頁面互動。"
+  },
   "options_general_section_control": {
     "message": "控制項"
   },
+  "options_general_section_control_lead": {
+    "message": "啟動 Browd 的快捷鍵與快速操作。"
+  },
   "options_general_section_advanced": {
     "message": "進階"
+  },
+  "options_general_section_advanced_lead": {
+    "message": "遙測、復原與開發人員選項。"
   },
   "options_general_section_legacyOnly": {
     "message": "僅限 Legacy 模式"

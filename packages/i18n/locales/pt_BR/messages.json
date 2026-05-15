@@ -311,10 +311,13 @@
     "message": "Atalho do navegador"
   },
   "options_general_launchShortcut_desc": {
-    "message": "Configurar atalho de teclado global para abrir o painel lateral do Browd"
+    "message": "Gerenciado pelo seu navegador, não pelo Browd."
   },
   "options_models_providers_header": {
     "message": "Provedores LLM"
+  },
+  "options_models_providers_lead": {
+    "message": "Conecte chaves de API dos provedores que o Browd pode usar."
   },
   "options_models_providers_notConfigured": {
     "message": "Nenhum provedor configurado ainda. Adicione um para começar."
@@ -360,6 +363,9 @@
   },
   "options_models_selection_header": {
     "message": "Seleção de modelo"
+  },
+  "options_models_selection_lead": {
+    "message": "Atribua um modelo para cada papel do agente."
   },
   "options_models_speechToText_header": {
     "message": "Modelo de fala para texto"
@@ -469,6 +475,9 @@
   "options_firewall_header": {
     "message": "Firewall"
   },
+  "options_firewall_header_lead": {
+    "message": "Restrinja quais URLs o agente pode visitar em seu nome."
+  },
   "options_firewall_enableToggle": {
     "message": "Ativar Firewall"
   },
@@ -498,6 +507,9 @@
   },
   "options_firewall_howItWorks_header": {
     "message": "Como o Firewall Funciona"
+  },
+  "options_firewall_howItWorks_lead": {
+    "message": "As listas de permissão e negação são avaliadas a cada navegação."
   },
   "options_firewall_howItWorks": {
     "message": "O firewall contém uma lista de negações e uma lista de permissões.\nSe ambas as listas estiverem vazias, todos os URLs são permitidos\nA lista de negações tem prioridade - se um URL corresponder a qualquer entrada da lista de negações, ele será bloqueado\nQuando a lista de permissões está vazia, todos os URLs não negados são permitidos\nQuando a lista de permissões não está vazia, apenas os URLs correspondentes são permitidos\nCuringas ainda NÃO são suportados\nA lista de permissões é preferível à lista de negações"
@@ -1164,17 +1176,32 @@
   "options_general_section_appearance": {
     "message": "Aparência"
   },
+  "options_general_section_appearance_lead": {
+    "message": "Como o Browd aparece no seu navegador."
+  },
   "options_general_section_agent": {
     "message": "Comportamento do agente"
+  },
+  "options_general_section_agent_lead": {
+    "message": "O que o agente pode ver e com que cautela ele age."
   },
   "options_general_section_page": {
     "message": "Comportamento da página"
   },
+  "options_general_section_page_lead": {
+    "message": "Como o agente interage com as páginas que visita."
+  },
   "options_general_section_control": {
     "message": "Controles"
   },
+  "options_general_section_control_lead": {
+    "message": "Atalhos de teclado e ações rápidas para abrir o Browd."
+  },
   "options_general_section_advanced": {
     "message": "Avançado"
+  },
+  "options_general_section_advanced_lead": {
+    "message": "Telemetria, recuperação e opções para desenvolvedores."
   },
   "options_general_section_legacyOnly": {
     "message": "Apenas no modo Legacy"

@@ -49,12 +49,12 @@
   }
 
   [data-browd-theme='dark'] {
-    --browd-surface-000: 40 3% 20%;
-    --browd-surface-100: 40 3% 14%;
-    --browd-surface-200: 40 3% 11%;
-    --browd-surface-300: 40 3% 8%;
-    --browd-surface-400: 40 3% 8%;
-    --browd-surface-500: 40 3% 5%;
+    --browd-surface-000: 36 7% 20%;
+    --browd-surface-100: 36 7% 14%;
+    --browd-surface-200: 36 6% 11%;
+    --browd-surface-300: 36 6% 8%;
+    --browd-surface-400: 36 6% 8%;
+    --browd-surface-500: 36 5% 5%;
     --browd-text-000: 48 30% 98%;
     --browd-text-100: 45 22% 95%;
     --browd-text-200: 45 10% 76%;
@@ -75,9 +75,9 @@
     --browd-danger-400: 0 76% 78%;
     --browd-danger-500: 0 82% 83%;
     --browd-shadow: 40 3% 5%;
-    --browd-border-alpha: 0.14;
-    --browd-border-strong-alpha: 0.22;
-    --browd-border-subtle-alpha: 0.08;
+    --browd-border-alpha: 0.18;
+    --browd-border-strong-alpha: 0.28;
+    --browd-border-subtle-alpha: 0.1;
     --browd-control-hover: hsl(var(--browd-surface-000));
     --browd-toggle-track-off: hsl(40 3% 34%);
     --browd-toggle-thumb: hsl(48 30% 98%);
