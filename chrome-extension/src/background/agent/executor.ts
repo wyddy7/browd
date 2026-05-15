@@ -376,8 +376,8 @@ export class Executor {
    *   - context.controller.signal aborts the agent on stop button
    *
    * Why the rewrite was necessary — the bespoke loop produced six
-   * iterations of bug fixes without convergence (T2b → T2c critical).
-   * See auto-docs/browd-agent-evolution.md for the full postmortem.
+   * iterations of bug fixes without convergence; replaced with the
+   * LangGraph-based unified path below.
    */
   private async runUnifiedLoop(): Promise<void> {
     const context = this.context;

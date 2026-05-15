@@ -7,9 +7,9 @@ export type AppearanceTheme = 'light' | 'dark';
 export type InterfaceLanguage = 'system' | 'en' | 'ru' | 'es' | 'fr' | 'de' | 'pt_BR';
 /**
  * Agent runtime topology.
- * - 'unified' (default): single ReAct agent with full tool surface and
- *   structured tracing. T2g enforces tool-call budgets, T2h re-seeds
- *   chat history per task. See auto-docs/browd-agent-evolution.md.
+ * - 'unified' (default): LangGraph Plan-and-Execute with per-subgoal
+ *   ReAct inner loops, full tool surface, structured tracing,
+ *   tool-call budgets, and chat-history re-seeding per task.
  * - 'legacy': inherited Planner+Navigator pipeline (two LLM calls per
  *   step). Safety net; kept available for users who hit a unified
  *   regression. Was called 'classic' before T2f-1.

@@ -10,8 +10,6 @@
  * They never open a tab, never click, and never touch the puppeteer
  * connection. Use them for information-seeking tasks; use the existing
  * browser tools for interactive flows.
- *
- * Read order before editing: auto-docs/browd-agent-evolution.md (Tier 1).
  */
 import { Readability, isProbablyReaderable } from '@mozilla/readability';
 import TurndownService from 'turndown';
@@ -130,8 +128,6 @@ function htmlToMarkdown(html: string, sourceUrl: string): { title: string; markd
  * Fallback: if Jina is unreachable (rate-limit, network), try the local
  * linkedom + Readability path. Best-effort — works for static HTML
  * (blogs, docs) and fails on JS-only SPAs (which Jina handled fine).
- *
- * See auto-docs/browd-agent-evolution.md (Tier 2e).
  */
 export async function webFetchMarkdown(input: {
   url: string;

@@ -30,18 +30,13 @@
  * Why Plan-and-Execute is canonical for browser agents:
  *   - Solo createReactAgent terminates on no-tool-call mid-task; the
  *     replanner is the only place that can ask "are we actually done?".
- *   - Documented as the LangGraph official browser-agent pattern; mirrors
- *     browser-use / Magentic-One / Stagehand internals.
- *   - Full historical context: `docs/browd-lessons-learned.md` Lesson 1
- *     under "T2f day 2 — Plan-and-Execute, tab isolation, UI minimalism".
+ *   - Mirrors the structure used by browser-use, Magentic-One,
+ *     Stagehand and LangGraph's own browser-agent tutorial.
  *
- * Subgoal-level stuck detection (T2p, `72a482d`): post-subgoal env-
- * fingerprint + silent-step guards in `guardrails/unifiedStuckDetector.ts`
- * route reasoning_failure verdicts to a graceful TASK_FAIL via the
- * existing StateGraph response channel.
- *
- * Read order: this file → `docs/browd-lessons-learned.md` (T2f day 2) →
- * `auto-docs/browd-agent-evolution.md` (T2d / T2f-replan / T2p).
+ * Subgoal-level stuck detection: post-subgoal env-fingerprint +
+ * silent-step guards in `guardrails/unifiedStuckDetector.ts` route
+ * reasoning_failure verdicts to a graceful TASK_FAIL via the existing
+ * StateGraph response channel.
  */
 import { createReactAgent } from '@langchain/langgraph/prebuilt';
 import { MemorySaver, StateGraph, Annotation, START, END } from '@langchain/langgraph';

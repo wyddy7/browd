@@ -37,7 +37,6 @@
  * rules. The two checks share a `reset()` semantic — both reset
  * together on a planner-driven plan rewrite.
  *
- * Read order: auto-docs/browd-agent-evolution.md (T2p).
  */
 
 import { makeActionError, type ActionError } from '../agentErrors';

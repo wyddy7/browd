@@ -4,8 +4,8 @@
  * Two entry shapes are supported:
  *   - Legacy: `{ icon, label }` — used by string-only events.
  *   - Structured: `{ tool, ok, durationMs, args, resultSummary, kind }` —
- *     written by the background tracer (auto-docs/browd-agent-evolution.md
- *     T0). Renders one row per tool call with timing and a truncated
+ *     written by the background tracer. Renders one row per tool
+ *     call with timing and a truncated
  *     args/result preview.
  */
 

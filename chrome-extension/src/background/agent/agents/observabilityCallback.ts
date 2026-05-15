@@ -22,7 +22,6 @@
  * mutates agent state, never adds guards. The Caskad halt rule still
  * applies here: this is observability, not control flow.
  *
- * Acceptance: see `auto-docs/browd-agent-evolution.md` → T2m-observability.
  */
 import type { CallbackHandlerMethods } from '@langchain/core/callbacks/base';
 import type { LLMResult } from '@langchain/core/outputs';

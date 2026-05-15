@@ -23,8 +23,7 @@
  * worked examples, the standard prompt-engineering fix.
  *
  * `reactBaseSystemBody` is exported so reactVision.ts can prepend
- * vision-mode rules without duplicating the body. Read order:
- * auto-docs/browd-agent-evolution.md (Tier 2d, T2f).
+ * vision-mode rules without duplicating the body.
  */
 import { commonSecurityRules } from './templates/common';
 

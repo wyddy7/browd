@@ -14,8 +14,6 @@
  * lack of real per-async-stack isolation is a non-issue. If we ever
  * run multiple unified agents concurrently in the same SW, we will
  * need a real polyfill.
- *
- * Read order: auto-docs/browd-agent-evolution.md (Tier 2d-4 risk).
  */
 
 export class AsyncLocalStorage<T = unknown> {

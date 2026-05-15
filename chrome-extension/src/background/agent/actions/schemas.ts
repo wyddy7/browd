@@ -246,8 +246,7 @@ export const fillFieldByLabelActionSchema: ActionSchema = {
  *
  * These three let the agent satisfy information-seeking tasks without
  * opening a browser tab or interacting with the DOM. Prefer these for
- * "find X", "what is Y", "look up Z" style requests. See
- * auto-docs/browd-agent-evolution.md (Tier 1) for context.
+ * "find X", "what is Y", "look up Z" style requests.
  */
 export const webFetchMarkdownActionSchema: ActionSchema = {
   name: 'web_fetch_markdown',

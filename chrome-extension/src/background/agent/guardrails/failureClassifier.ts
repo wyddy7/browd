@@ -24,7 +24,9 @@ const MAX_SCHEMA_REPAIRS = 2;
 /**
  * Classifies failures and decides the next action.
  * Replaces the naive consecutiveFailures++ counter with per-type accounting.
- * Pattern from auto-docs/for-development/agents/failure-policy.md
+ * Different error classes have different retry semantics —
+ * transient errors backoff, schema errors get one repair attempt,
+ * side_effect calls require human approval, etc.
  */
 export class FailureClassifier {
   private counts: TypeCounts = {

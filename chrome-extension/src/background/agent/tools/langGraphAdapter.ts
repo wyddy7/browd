@@ -24,7 +24,6 @@
  * Counters live in JS, not in prompt — prompt manipulation cannot
  * bypass them.
  *
- * Read order: auto-docs/browd-agent-evolution.md (Tier 2d, Tier 2g).
  */
 import { tool } from '@langchain/core/tools';
 import type { z } from 'zod';

@@ -19,8 +19,9 @@
  * planner/replanner/judge models — keep scenarios cheap (small models,
  * short prompts) and rare (manual run, not CI by default).
  *
- * Component-level scope (NOT full-loop with real browser): see
- * `auto-docs/browd-t3-scope.md` for what unit covers vs integration.
+ * Component-level scope (NOT full-loop with real browser): unit
+ * evals exercise pure deterministic logic; integration evals
+ * exercise the full LLM + browser pipeline and live behind a flag.
  */
 
 import { describe, it, expect } from 'vitest';

@@ -1,6 +1,7 @@
 /**
  * HITL (Human-in-the-Loop) types.
- * Pattern from auto-docs/for-development/deepagents.md (interrupt_on / resume).
+ * Interrupt-on-action pattern: pause the loop, surface a structured
+ * decision request to the user, resume on user input.
  * Translated from LangGraph checkpointer model to chrome.runtime.message async model.
  */
 

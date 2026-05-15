@@ -9,13 +9,10 @@
  * shared rules so the LLM knows what the extra modality means and
  * when to use it.
  *
- * Hybrid principle (mirrors auto-docs/browd-tier-pending.md T2f):
- * vision is a fallback to DOM, not a replacement. DOM-driven actions
- * (`click_element`, `fill_field_by_label`, …) stay primary because
- * they're more accurate and cheaper. The screenshot is for cases
- * where DOM does not give the LLM enough to disambiguate.
- *
- * Read order: auto-docs/browd-agent-evolution.md (T2f).
+ * Hybrid principle: vision is a fallback to DOM, not a replacement.
+ * DOM-driven actions (`click_element`, `fill_field_by_label`, …) stay
+ * primary because they're more accurate and cheaper. The screenshot is
+ * for cases where DOM does not give the LLM enough to disambiguate.
  */
 import { reactBaseSystemBody } from './react';
 
