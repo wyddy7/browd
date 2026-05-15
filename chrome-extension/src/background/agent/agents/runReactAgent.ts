@@ -1,33 +1,47 @@
 /**
- * T2d-3 — runReactAgent: the LangGraph.js entry point that replaces
- * runUnifiedLoop in T2d-4.
+ * runReactAgent — LangGraph.js **Plan-and-Execute** agent with per-subgoal
+ * ReAct inner loops. This is the unified-mode entry point. The naming
+ * is historical: T2d (`833f84d`) shipped a solo `createReactAgent` that
+ * terminated on the first no-tool-call AIMessage — even mid-task — and
+ * T2f-replan (May 2026) wrapped it in a Plan-and-Execute StateGraph
+ * because that failure mode is unrecoverable without an outer
+ * orchestrator. The filename and `runReactAgent` symbol stayed for
+ * stability; the architecture changed.
  *
- * Contract:
- *   - Build a createReactAgent with the classic Browd Action set
- *     converted to LangGraph tools (via langGraphAdapter).
- *   - On each agent step LangGraph calls the LLM with the running
- *     message history; we inject the latest browser state as the most
- *     recent HumanMessage via `stateModifier` so the LLM sees fresh
- *     interactive elements / forms / page text.
- *   - Tool execution writes to the structured tracer automatically
- *     (Action.call already records, langGraphAdapter delegates to it).
- *   - Termination: LangGraph stops when the LLM emits an AIMessage
- *     with no tool_calls. That AIMessage's content is the final
- *     answer. We surface it as PLANNER+STEP_OK (so side panel renders
- *     it as a chat message, same as classic) and SYSTEM+TASK_OK.
- *   - Failure modes: recursion limit reached → TASK_FAIL with a
- *     "agent could not finish in N steps" summary.
+ * Outer loop (StateGraph below): planner → agent → replanner ⇄ agent → END.
+ *   - planner: structured-output decomposition into 1-7 subgoals plus
+ *     `taskParameters` (urls/queries/names) captured verbatim from the
+ *     user request — schema-enforced, so subgoal-abstraction drift cannot
+ *     erase concrete inputs.
+ *   - agent: invokes a fresh `createReactAgent` per subgoal via
+ *     `runReactStep`. Subgoal scope = single createReactAgent.invoke()
+ *     with its own `MemorySaver`. Inner `recursionLimit: 25`.
+ *   - replanner: reads pastSteps, decides END (with final response) or
+ *     continue (with rewritten remaining plan). Repeated-failure guard
+ *     finishes honestly with partial result after N `failed:` subgoals.
  *
- * Why this beats T2c hand-written runUnifiedLoop:
- *   - No bespoke termination contract — done() and evidence-validation
- *     are deleted entirely. LangGraph's native "no more tool calls"
- *     is the answer signal.
- *   - No multi-action batching ambiguity — LangGraph runs one tool
- *     call at a time per step.
- *   - No JSON schema gymnastics — LLM uses native tool-calling.
- *   - Built-in checkpointer (MemorySaver) for free pause/resume.
+ * Inner loop (per subgoal, via `createReactAgent` from
+ * `@langchain/langgraph/prebuilt`): standard ReAct — LLM call →
+ * tool dispatch (`langGraphAdapter` wraps each `Action` as a LangChain
+ * tool with budget caps + dupGuard) → state-message rebuild via
+ * `stateModifier`, repeat until no-tool-call AIMessage (subgoal done)
+ * or recursionLimit (subgoal aborts).
  *
- * Read order: auto-docs/browd-agent-evolution.md (Tier 2d).
+ * Why Plan-and-Execute is canonical for browser agents:
+ *   - Solo createReactAgent terminates on no-tool-call mid-task; the
+ *     replanner is the only place that can ask "are we actually done?".
+ *   - Documented as the LangGraph official browser-agent pattern; mirrors
+ *     browser-use / Magentic-One / Stagehand internals.
+ *   - Full historical context: `docs/browd-lessons-learned.md` Lesson 1
+ *     under "T2f day 2 — Plan-and-Execute, tab isolation, UI minimalism".
+ *
+ * Subgoal-level stuck detection (T2p, `72a482d`): post-subgoal env-
+ * fingerprint + silent-step guards in `guardrails/unifiedStuckDetector.ts`
+ * route reasoning_failure verdicts to a graceful TASK_FAIL via the
+ * existing StateGraph response channel.
+ *
+ * Read order: this file → `docs/browd-lessons-learned.md` (T2f day 2) →
+ * `auto-docs/browd-agent-evolution.md` (T2d / T2f-replan / T2p).
  */
 import { createReactAgent } from '@langchain/langgraph/prebuilt';
 import { MemorySaver, StateGraph, Annotation, START, END } from '@langchain/langgraph';
