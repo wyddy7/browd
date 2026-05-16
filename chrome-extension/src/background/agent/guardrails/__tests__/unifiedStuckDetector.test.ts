@@ -1,56 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { UnifiedStuckDetector, computeStateFingerprint, isInnerRecursionLimitError } from '../unifiedStuckDetector';
+import { computeStateFingerprint, isInnerRecursionLimitError } from '../unifiedStuckDetector';
 import type { BrowserState } from '@src/background/browser/views';
-
-describe('UnifiedStuckDetector', () => {
-  describe('env-fingerprint guard', () => {
-    it('does not trip on varied fingerprints', () => {
-      const d = new UnifiedStuckDetector();
-      expect(d.recordSubgoal({ fingerprint: 'a' })).toBeNull();
-      expect(d.recordSubgoal({ fingerprint: 'b' })).toBeNull();
-      expect(d.recordSubgoal({ fingerprint: 'c' })).toBeNull();
-      expect(d.recordSubgoal({ fingerprint: 'd' })).toBeNull();
-    });
-
-    it('trips on three identical fingerprints in window', () => {
-      const d = new UnifiedStuckDetector();
-      expect(d.recordSubgoal({ fingerprint: 'x' })).toBeNull();
-      expect(d.recordSubgoal({ fingerprint: 'x' })).toBeNull();
-      const v = d.recordSubgoal({ fingerprint: 'x' });
-      expect(v).not.toBeNull();
-      expect(v?.kind).toBe('env-fingerprint');
-      expect(v?.error.type).toBe('reasoning_failure');
-    });
-
-    it('replays test10 frozen-page pattern (4× identical screenshot+DOM)', () => {
-      const d = new UnifiedStuckDetector();
-      const fp = 'https://lmsys.org/blog/2023-05-25-arena|0|';
-      expect(d.recordSubgoal({ fingerprint: fp })).toBeNull();
-      expect(d.recordSubgoal({ fingerprint: fp })).toBeNull();
-      expect(d.recordSubgoal({ fingerprint: fp })).not.toBeNull();
-    });
-
-    it('honours window size — repeats outside the window do not stack', () => {
-      const d = new UnifiedStuckDetector({ fingerprintWindow: 3, fingerprintMaxRepeat: 3 });
-      expect(d.recordSubgoal({ fingerprint: 'a' })).toBeNull();
-      expect(d.recordSubgoal({ fingerprint: 'b' })).toBeNull();
-      expect(d.recordSubgoal({ fingerprint: 'b' })).toBeNull();
-      // window now [a,b,b]; a slides out next.
-      expect(d.recordSubgoal({ fingerprint: 'b' })).not.toBeNull();
-    });
-  });
-
-  describe('reset', () => {
-    it('clears the fingerprint window', () => {
-      const d = new UnifiedStuckDetector();
-      d.recordSubgoal({ fingerprint: 'x' });
-      d.recordSubgoal({ fingerprint: 'x' });
-      d.reset();
-      const s = d.getState();
-      expect(s.fpWindow).toEqual([]);
-    });
-  });
-});
 
 describe('computeStateFingerprint', () => {
   function buildState(over: Partial<BrowserState>): BrowserState {
@@ -108,7 +58,7 @@ describe('computeStateFingerprint', () => {
   });
 });
 
-describe('isInnerRecursionLimitError (T2p-2)', () => {
+describe('isInnerRecursionLimitError', () => {
   it('matches the canonical LangGraph GraphRecursionError message', () => {
     expect(isInnerRecursionLimitError('Recursion limit of 25 reached without hitting a stop condition.')).toBe(true);
   });

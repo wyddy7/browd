@@ -53,11 +53,7 @@ import { wrapUntrustedContent } from '../messages/utils';
 import { Actors, ExecutionState } from '../event/types';
 import { createLogger } from '@src/background/log';
 import { createObservabilityCallback } from './observabilityCallback';
-import {
-  UnifiedStuckDetector,
-  computeStateFingerprint,
-  isInnerRecursionLimitError,
-} from '../guardrails/unifiedStuckDetector';
+import { computeStateFingerprint, isInnerRecursionLimitError } from '../guardrails/unifiedStuckDetector';
 import { TabGoneError } from '@src/background/browser/views';
 import { bridgeStreamEvents, type LiveEvent } from './streamBridge';
 
@@ -270,6 +266,58 @@ export function extractPartialSummary(messages: BaseMessage[]): string {
   return `last action: ${lastToolName}`;
 }
 
+/**
+ * T2x phase 0c — find a `task_complete(response=…)` call across the
+ * three shapes a provider might leave it in. Returns the answer
+ * wrapped in `TASK_COMPLETE: ` so the caller can pattern-match the
+ * prefix exactly like the legacy ToolMessage path.
+ *
+ * Shape 1 — ToolMessage.content already prefixed (action handler's
+ *   ActionResult.extractedContent path, normal LangChain.js flow).
+ * Shape 2 — AIMessage.tool_calls (LangChain-canonical slot, populated
+ *   when the provider's tool-call output is normalised).
+ * Shape 3 — AIMessage.additional_kwargs.tool_calls[i].function
+ *   (raw OpenAI/OpenRouter format, sometimes left un-normalised by
+ *   provider adapters — Gemini-2.5-flash via OpenRouter does this).
+ */
+export function findTaskCompleteAnswer(messages: BaseMessage[]): string | null {
+  for (const m of messages) {
+    // Shape 1: ToolMessage with prefix.
+    if (m instanceof ToolMessage) {
+      const c = m.content;
+      const text = typeof c === 'string' ? c : '';
+      if (text.startsWith('TASK_COMPLETE: ')) return text;
+    }
+    if (!(m instanceof AIMessage)) continue;
+    // Shape 2: AIMessage.tool_calls (LangChain-canonical).
+    if (Array.isArray(m.tool_calls)) {
+      for (const tc of m.tool_calls) {
+        if (tc?.name === 'task_complete' && tc.args && typeof tc.args === 'object') {
+          const r = (tc.args as { response?: unknown }).response;
+          if (typeof r === 'string' && r.length > 0) return `TASK_COMPLETE: ${r}`;
+        }
+      }
+    }
+    // Shape 3: additional_kwargs.tool_calls[i].function (raw OpenAI shape).
+    const kwargs = (m as { additional_kwargs?: { tool_calls?: unknown } }).additional_kwargs;
+    if (kwargs && Array.isArray(kwargs.tool_calls)) {
+      for (const tc of kwargs.tool_calls as Array<{ function?: { name?: string; arguments?: string } }>) {
+        if (tc?.function?.name === 'task_complete' && typeof tc.function.arguments === 'string') {
+          try {
+            const parsed = JSON.parse(tc.function.arguments) as { response?: unknown };
+            if (typeof parsed.response === 'string' && parsed.response.length > 0) {
+              return `TASK_COMPLETE: ${parsed.response}`;
+            }
+          } catch {
+            // fall through — malformed args, ignore this tool_call
+          }
+        }
+      }
+    }
+  }
+  return null;
+}
+
 function extractFinalAnswer(messages: BaseMessage[]): string | null {
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i];
@@ -305,18 +353,6 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
   // T2f-final-fix: consecutive-duplicate guard shared across all
   // tool wrappers — see langGraphAdapter for the threshold logic.
   const dupGuard = { recentKeys: [] as string[] };
-  // T2p: subgoal-level stuck detector. dupGuard above catches
-  // tool-call-signature repeats at the tool wrapper level; this
-  // detector catches the orthogonal failure modes from test10.md:
-  //   - env-fingerprint: same post-subgoal URL/DOM/text across ≥3
-  //     subgoals (varied actions but the page never changed —
-  //     e.g. dead-frame or wrong URL grind);
-  //   - silent-step: two consecutive subgoals with zero tool calls
-  //     (e.g. "Wait for X to load completely" no-op planner output).
-  // On either, recordSubgoal returns a reasoning_failure ActionError;
-  // we surface it as the StateGraph's terminal response so the outer
-  // FailureClassifier path emits TASK_FAIL with a clear reason.
-  const stuckDetector = new UnifiedStuckDetector();
   // Tool-gating on visionMode. Two modes:
   //  - 'off': no screenshot, no coordinate tools — pure DOM + read-only
   //    + navigation surface. Used when the Navigator model lacks vision
@@ -622,19 +658,24 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
       logger.info(`recursion-limit soft-fail with progress (fp_start≠fp_now) — handing partial to replanner`);
       return { finalAnswer: `partial: ${summary}` };
     }
-    // T2w — scan ToolMessages for the `task_complete` sentinel. The
-    // action handler emits `TASK_COMPLETE: <response>` as extractedContent;
-    // when present we surface it as the finalAnswer (prefix preserved
-    // so agentNode can recognise the sentinel and route to END via
-    // state.response, bypassing the replanner).
-    let taskCompleteAnswer: string | null = null;
-    for (const m of stepResult.messages) {
-      if (m instanceof ToolMessage && taskCompleteAnswer === null) {
-        const c = m.content;
-        const text = typeof c === 'string' ? c : '';
-        if (text.startsWith('TASK_COMPLETE: ')) taskCompleteAnswer = text;
-      }
-    }
+    // T2w (T2x phase 0c — robust) — scan for the `task_complete`
+    // sentinel across THREE shapes the underlying provider might use:
+    //   1. ToolMessage.content prefixed `TASK_COMPLETE: ` — what the
+    //      action handler emits via ActionResult.extractedContent.
+    //   2. AIMessage.tool_calls[i].name === 'task_complete' — the
+    //      LangChain-canonical normalised slot.
+    //   3. AIMessage.additional_kwargs.tool_calls[i].function — raw
+    //      OpenAI/OpenRouter format that some providers populate
+    //      without normalising to (2). Test25 (Gemini-2.5-flash via
+    //      OpenRouter, 2026-05-16) showed the prefix scan alone is
+    //      not enough — the model called `task_complete` twice with
+    //      a valid `response` arg but the ToolMessage shape didn't
+    //      trigger the prefix match, so the agent burned more rounds
+    //      until the replanner forced a finish.
+    // Whichever shape lands first wins. The returned `finalAnswer`
+    // keeps the `TASK_COMPLETE: ` prefix so agentNode can route to
+    // END via state.response, bypassing the replanner.
+    const taskCompleteAnswer = findTaskCompleteAnswer(stepResult.messages);
     return {
       finalAnswer: taskCompleteAnswer ?? extractFinalAnswer(stepResult.messages) ?? 'no observable result',
     };
@@ -794,46 +835,40 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
         innerRecursionExhausted = true;
       }
     }
-    // T2p — post-subgoal stagnation check. Compute fingerprint of the
-    // current page state and feed it + tool-call count to the detector.
-    // On stuck the detector returns a `reasoning_failure` ActionError;
-    // we short-circuit the StateGraph by writing `response` so `decide`
-    // routes to END and the outer try/catch in runReactAgent emits
-    // TASK_FAIL with the verdict message. Without this, test10's
-    // 4× identical screenshot + "Wait for X" no-toolCall pattern
-    // grinds CPU + tokens with no termination signal.
+    // Post-subgoal terminal-condition check. Two paths can force an
+    // immediate stop here:
+    //   1. T2p-2: the inner createReactAgent exhausted its recursion
+    //      budget AND fp_start == fp_now (no progress) — surface as
+    //      a clean "stuck inside one step" message to the user.
+    //   2. T2u: user pressed Stop OR the agent tab is gone — short
+    //      out before `getState()` re-triggers DOM probes on a dead
+    //      tab. (Tab-gone is checked again below via a probe.)
+    // The previous subgoal-level stuck detector (silent-step +
+    // env-fingerprint) was deleted in T2x phase 0a/0b — see
+    // `auto-docs/for-development/agents/anti-patterns.md` §9.
+    // Remaining stuck coverage: dupGuard at the tool layer +
+    // LangGraph recursionLimit + the schema-forced terminal
+    // `task_complete` tool below.
     let stuckResponse: string | null = null;
     if (innerRecursionExhausted) {
       const partial = state.pastSteps.map(([s, r]) => `- ${s}: ${r}`).join('\n');
       stuckResponse = `I'm stopping because the agent got stuck inside one step: it burned the inner recursion budget on "${currentStep}" without making progress (usually means the target page silently blocks automated clicks).\n\nWhat I did so far:\n${partial || '(no completed subgoals)'}\n\nTry rephrasing the task, opening the target page yourself, or switching to legacy agent mode in Settings.`;
     } else if (context.controller.signal.aborted || context.stopped) {
-      // T2u-runaway-loop — skip the post-step probe after Stop. The
-      // probe issues another `getState()` which on a freshly-closed
-      // agent tab would re-trigger the executeScript spam we just
-      // patched.
       stuckResponse = 'cancelled';
     } else {
+      // Tab-gone probe — `getState()` throws TabGoneError when the
+      // agent tab has been closed/crashed. Surface a clean response
+      // so `decide` routes to END instead of feeding the replanner
+      // a dead tab.
       try {
-        const liveState = await context.browserContext.getState(false);
-        const fp = computeStateFingerprint(liveState);
-        const verdict = stuckDetector.recordSubgoal({ fingerprint: fp });
-        if (verdict) {
-          logger.warning(`stuckDetector: ${verdict.kind} — ${verdict.message}`);
-          const partial = state.pastSteps.map(([s, r]) => `- ${s}: ${r}`).join('\n');
-          stuckResponse = `I'm stopping because the agent appears stuck: ${verdict.message}\n\nWhat I did so far:\n${partial || '(no completed subgoals)'}\n\nTry rephrasing the task, opening the target page yourself, or switching to legacy agent mode in Settings.`;
-        }
+        await context.browserContext.getState(false);
       } catch (err) {
-        // T2u-runaway-loop — a TabGoneError from getState should
-        // end the run, not silently continue to the replanner
-        // which would pick the same dead tab. The cache eviction
-        // already happened inside BrowserContext.getState; here we
-        // just need to surface a response so `decide` routes to END.
         const msg = err instanceof Error ? err.message : String(err);
         if (err instanceof TabGoneError || /No tab with id|No frame with id/i.test(msg)) {
-          logger.warning(`stuckDetector probe saw tab gone; ending run gracefully: ${msg}`);
+          logger.warning(`agentNode probe saw tab gone; ending run gracefully: ${msg}`);
           stuckResponse = 'The agent tab is no longer available (closed or crashed). Run ended.';
         } else {
-          logger.warning('stuckDetector post-subgoal probe failed; skipping this round', err);
+          logger.warning('agentNode post-subgoal probe failed; continuing', err);
         }
       }
     }
