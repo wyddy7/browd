@@ -4,6 +4,91 @@ All notable changes to Browd are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.14] — 2026-05-16
+
+A reliability and trust pass on top of 0.1.13. The agent now stays out of
+your way when it shouldn't be touching your tabs, asks first when it does
+need to, and stops killing itself with false "stuck" alarms during
+legitimate work.
+
+### Added
+
+- **Tab group isolation.** When the agent starts a task, it opens its own
+  tab inside a clearly labelled **Browd** tab group (purple). You can fold
+  the group with one click, drag it to a different window, or watch the
+  agent work without it ever mixing into your other tabs.
+- **Permission prompt before touching your tabs.** If the agent decides it
+  needs to operate inside one of *your* open tabs (for example: "draft an
+  email in this Gmail I already have open"), a side-panel prompt asks for
+  Allow / Deny. No more silent takeover.
+- **Self-termination tool.** The agent has a dedicated `task_complete`
+  action it calls when it has the answer. The runtime detects that call
+  and stops cleanly with the cited result, instead of looping past the
+  finish line.
+- **Live status strip.** A 24 px strip above the trace shows what the
+  agent is doing right now — which LLM is streaming, which tool started,
+  which tool just returned. The side panel no longer feels frozen during
+  long thinking steps.
+- **Reasoning shown per LLM call.** Each model turn's thinking text is
+  surfaced in the side panel and console as it happens, not buried in a
+  collapsed group.
+- **Per-tool-call console log.** Easier to follow what the agent attempted
+  and how it failed — `[tool] click_element intent=... → ok 580ms` style
+  one-liners, with the chain-internal spam moved to debug-only.
+- **Visual judgement hint.** The system prompt now nudges the agent to
+  take a screenshot when the page is image-heavy or visual ranking matters,
+  instead of relying only on DOM text.
+
+### Changed
+
+- **Vision mode is now a simple On / Off toggle** (was `Off / Always /
+  Fallback`). On gives the agent the screenshot tool and coordinate
+  actions to use at its own discretion; Off restricts it to a DOM-only
+  surface. Stored preferences from the old three-mode setting migrate
+  automatically.
+- **Inner step budget is smarter on partial progress.** When the agent
+  hits the per-subgoal recursion cap mid-task, the runtime now checks
+  whether the page actually changed during those rounds. If yes — progress
+  is real, hand a partial summary to the replanner and keep going. If no —
+  end the task honestly with what was done so far. No more burning another
+  25 LLM rounds repeating the same wall.
+
+### Fixed
+
+- **Dead-tab CPU spin.** If the user closed the agent's tab while a DOM
+  probe was running, the extension could log over a million lines and pin
+  a core. The runtime now detects the closed tab, aborts the in-flight
+  probe, evicts the dead page, and ends the task gracefully.
+- **False-positive "stuck" kills on working agents.** Two subgoal-level
+  guards (silent-step and page-fingerprint) were removed: they fired on
+  the agent's own natural exit signal and on legitimate single-page deep
+  reads (leaderboards, docs, long forms). Stuck detection now relies only
+  on the things that *actually* indicate looping — identical tool-call
+  repetition and hard step caps. End-user behaviour: agents that were
+  being killed mid-task with a useless "I'm stopping because the agent
+  appears stuck" message now reach their actual answer.
+- **Stale UI during long LLM calls.** Combined with the live status strip,
+  the side panel now shows token streaming and tool boundaries as they
+  happen, instead of staring blank for 30 seconds.
+
+### Removed
+
+- The `Always` and `Fallback` vision modes (merged into `On`).
+- The subgoal-level stuck detector (`silent-step` and `env-fingerprint`
+  signals).
+
+### Notes
+
+- **Known limit (model-side).** Some model providers occasionally emit
+  the final answer as plain reasoning text instead of calling
+  `task_complete`. The side panel still surfaces a result via the
+  replanner's `finish` step, but it may read as a meta-summary rather than
+  the full content. A planned single-loop refactor will address this end
+  to end.
+- **Chrome Web Store.** The 0.1.13 submission is still under Google's
+  review. 0.1.14 is shipped here as a GitHub release; CWS update will
+  follow once 0.1.13 clears.
+
 ## [0.1.13] — 2026-05-13
 
 First tagged public release. Consolidates a multi-month refactor of the agent
