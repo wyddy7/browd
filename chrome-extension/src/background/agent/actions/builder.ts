@@ -237,6 +237,38 @@ export class Action {
   }
 }
 
+/**
+ * T2f-tab-iso — single source of truth for "did this action open a
+ * background tab as a side effect?". Used by every action that can
+ * trigger target="_blank" / window.open (click_element, click_at,
+ * type_at). Returns the new tab id plus a take-over hint message; the
+ * caller appends the hint to its extractedContent and the LLM decides
+ * cross-over via `take_over_user_tab` next turn.
+ *
+ * CRITICAL: this helper never switches tabs. Auto-switching was the
+ * bug fixed here — it promoted side-effect tabs to _agentTabId (via
+ * context.ts T2o-agent-tab-follow), after which the LLM could close
+ * its own anchor and crash with "agent tab no longer reachable"
+ * (test28/29/31 — Shutterstock/Magnific side-tabs).
+ *
+ * @param context Agent context (for browserContext.getAllTabIds).
+ * @param initialTabIds Snapshot taken BEFORE the side-effecting action.
+ * @returns `{ newTabId, hint }` if a new tab appeared, else `undefined`.
+ */
+async function detectSideEffectNewTab(
+  context: AgentContext,
+  initialTabIds: Set<number>,
+): Promise<{ newTabId: number; hint: string } | undefined> {
+  const currentTabIds = await context.browserContext.getAllTabIds();
+  if (currentTabIds.size <= initialTabIds.size) return undefined;
+  const newTabId = Array.from(currentTabIds).find(id => !initialTabIds.has(id));
+  if (newTabId === undefined) return undefined;
+  const hint =
+    `new tab opened in background with id=${newTabId} — agent stays on current tab. ` +
+    `Call take_over_user_tab(${newTabId}, "<why>") to interact with it.`;
+  return { newTabId, hint };
+}
+
 // TODO: can not make every action optional, don't know why
 export function buildDynamicActionSchema(actions: Action[]): z.ZodType {
   let schema = z.object({});
@@ -374,17 +406,10 @@ export class ActionBuilder {
           let msg = t('act_click_ok', [input.index.toString(), elementNode.getAllTextTillNextClickableElement(2)]);
           logger.info(msg);
 
-          // TODO: could be optimized by chrome extension tab api
-          const currentTabIds = await this.context.browserContext.getAllTabIds();
-          if (currentTabIds.size > initialTabIds.size) {
-            const newTabMsg = t('act_click_newTabOpened');
-            msg += ` - ${newTabMsg}`;
-            logger.info(newTabMsg);
-            // find the tab id that is not in the initial tab ids
-            const newTabId = Array.from(currentTabIds).find(id => !initialTabIds.has(id));
-            if (newTabId) {
-              await this.context.browserContext.switchTab(newTabId);
-            }
+          const sideTab = await detectSideEffectNewTab(this.context, initialTabIds);
+          if (sideTab) {
+            msg += ` — ${sideTab.hint}`;
+            logger.info(`click_element: new tab ${sideTab.newTabId} opened in background (no auto-switch)`);
           }
           this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_OK, msg);
           return new ActionResult({ extractedContent: msg, includeInMemory: true });
@@ -1023,25 +1048,15 @@ export class ActionBuilder {
       try {
         const page = await this.context.browserContext.getCurrentPage();
         const before = await page.readClickSignature();
-        // T2k-tab-follow: snapshot tab ids before/after the click so
-        // target="_blank" opens follow the same switch-to-new-tab
-        // path that click_element has used since inception
-        // (see clickElement above, lines ~357-372). Without this the
-        // signature compare below would mark the click as a no-op
-        // because the original page is unchanged.
         const initialTabIds = await this.context.browserContext.getAllTabIds();
         const m = await page.clickAtImageCoord(input.x, input.y);
         // Brief settle delay so SPAs have a chance to react.
         await new Promise(r => setTimeout(r, 200));
-        const currentTabIds = await this.context.browserContext.getAllTabIds();
-        if (currentTabIds.size > initialTabIds.size) {
-          const newTabId = Array.from(currentTabIds).find(id => !initialTabIds.has(id));
-          if (newTabId !== undefined) {
-            await this.context.browserContext.switchTab(newTabId);
-            const msg = `clicked at image (${input.x},${input.y}) → css (${m.cssX},${m.cssY}) — new tab opened, switched to tabId=${newTabId}`;
-            this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_OK, msg);
-            return new ActionResult({ extractedContent: msg, includeInMemory: true });
-          }
+        const sideTab = await detectSideEffectNewTab(this.context, initialTabIds);
+        if (sideTab) {
+          const msg = `clicked at image (${input.x},${input.y}) → css (${m.cssX},${m.cssY}) — ${sideTab.hint}`;
+          this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_OK, msg);
+          return new ActionResult({ extractedContent: msg, includeInMemory: true });
         }
         const after = await page.readClickSignature();
         const noop = before.url === after.url && before.scrollY === after.scrollY && before.domHash === after.domHash;
@@ -1071,15 +1086,11 @@ export class ActionBuilder {
         // and pre-empts the next mirror bug).
         const initialTabIds = await this.context.browserContext.getAllTabIds();
         const m = await page.typeAtImageCoord(input.x, input.y, input.text);
-        const currentTabIds = await this.context.browserContext.getAllTabIds();
-        if (currentTabIds.size > initialTabIds.size) {
-          const newTabId = Array.from(currentTabIds).find(id => !initialTabIds.has(id));
-          if (newTabId !== undefined) {
-            await this.context.browserContext.switchTab(newTabId);
-            const msg = `typed at image (${input.x},${input.y}) → css (${m.cssX},${m.cssY}) — new tab opened, switched to tabId=${newTabId}`;
-            this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_OK, msg);
-            return new ActionResult({ extractedContent: msg, includeInMemory: true });
-          }
+        const sideTab = await detectSideEffectNewTab(this.context, initialTabIds);
+        if (sideTab) {
+          const msg = `typed at image (${input.x},${input.y}) → css (${m.cssX},${m.cssY}) — ${sideTab.hint}`;
+          this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_OK, msg);
+          return new ActionResult({ extractedContent: msg, includeInMemory: true });
         }
         const msg = `typed at image (${input.x},${input.y}) → css (${m.cssX},${m.cssY})`;
         this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_OK, msg);
