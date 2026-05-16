@@ -1175,12 +1175,12 @@ export class ActionBuilder {
         if (!tab?.id) {
           return new ActionResult({ error: `take_over_user_tab: tab ${input.tabId} not found` });
         }
-        // T2s-3 — permission-mode gate: in 'auto' or 'full' modes the
-        // user has pre-authorised tab take-overs and we skip the HITL
-        // prompt entirely. 'default' keeps the original behaviour
-        // (every take-over requires explicit approval).
+        // T2s-3 — permission-mode gate: in 'full' mode the user has
+        // pre-authorised in-app HITL and we skip the approval prompt.
+        // 'default' keeps the original behaviour (every take-over
+        // requires explicit approval).
         const permissionMode = (await generalSettingsStore.getSettings()).permissionMode;
-        const skipHitlApproval = permissionMode === 'auto' || permissionMode === 'full';
+        const skipHitlApproval = permissionMode === 'full';
         // T2s-2: take-over is a cross-isolation-boundary action.
         // Gate it behind explicit user approval before pinning the
         // agent to a tab the user opened. If no HITL controller is

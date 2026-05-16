@@ -64,20 +64,11 @@
   "chat_buttons_send": {
     "message": "Send"
   },
-  "chat_permissionMode_label": {
-    "message": "Permissions"
-  },
   "chat_permissionMode_default": {
-    "message": "Default permissions"
+    "message": "Default"
   },
   "chat_permissionMode_default_desc": {
-    "message": "Every cross-tab take-over asks you first"
-  },
-  "chat_permissionMode_auto": {
-    "message": "Auto take-over"
-  },
-  "chat_permissionMode_auto_desc": {
-    "message": "Agent auto-switches to tabs it opened. Other prompts still appear."
+    "message": "Every cross-tab take-over asks for your approval first"
   },
   "chat_permissionMode_full": {
     "message": "Full access"

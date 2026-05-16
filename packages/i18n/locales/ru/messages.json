@@ -64,20 +64,11 @@
   "chat_buttons_send": {
     "message": "Отправить"
   },
-  "chat_permissionMode_label": {
-    "message": "Разрешения"
-  },
   "chat_permissionMode_default": {
-    "message": "Разрешения по умолчанию"
+    "message": "По умолчанию"
   },
   "chat_permissionMode_default_desc": {
-    "message": "Каждый переход в чужую вкладку требует подтверждения"
-  },
-  "chat_permissionMode_auto": {
-    "message": "Авто-переходы"
-  },
-  "chat_permissionMode_auto_desc": {
-    "message": "Агент сам переключается во вкладки, которые сам открыл. Другие подтверждения остаются."
+    "message": "Каждое действие, требующее переход в чужую вкладку, спрашивает подтверждение"
   },
   "chat_permissionMode_full": {
     "message": "Полный доступ"

@@ -38,27 +38,17 @@ export type AgentMode = 'unified' | 'legacy';
 export type VisionMode = 'off' | 'on';
 
 /**
- * Per-task permission posture for HITL approval gates. Modeled after
- * Codex's three-tier permission selector. Browd's HITL surface is
- * smaller (currently take_over_user_tab and hitl_click_at), so the
- * three modes map as follows:
- *
- * - 'default'  Every HITL gate prompts the user. Safest. Default.
- * - 'auto'     Skip approval for `take_over_user_tab` (agent freely
- *              cross-overs into background tabs it opened itself).
- *              `hitl_click_at` still prompts — that gate exists for
- *              isTrusted-blocked buttons where the user IS the only
- *              solution (no automation can bypass).
- * - 'full'     Same as 'auto' today. Reserved for future "auto-resolve
- *              capability prompts (camera / mic / file)" semantics
- *              once the runtime can intercept those. Today shown with
- *              a danger-coloured pill so users understand the intent.
+ * Per-task permission posture for HITL approval gates. Two-tier
+ * minimal model — every in-app HITL prompt either fires (default)
+ * or is skipped (full). `hitl_click_at` always fires regardless,
+ * because the user IS the only solution there (isTrusted-blocked
+ * buttons can't be automated).
  *
  * The selector lives in the side-panel input toolbar
  * (`PermissionModeSelector` component). HITL handlers in
- * `actions/builder.ts` read this and skip the approval flow accordingly.
+ * `actions/builder.ts` read this and skip accordingly.
  */
-export type PermissionMode = 'default' | 'auto' | 'full';
+export type PermissionMode = 'default' | 'full';
 
 export interface GeneralSettingsConfig {
   appearanceTheme: AppearanceTheme;
@@ -114,7 +104,10 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettingsConfig = {
 };
 
 const normalizePermissionMode = (mode: unknown): PermissionMode => {
-  if (mode === 'default' || mode === 'auto' || mode === 'full') return mode;
+  if (mode === 'default' || mode === 'full') return mode;
+  // Migration: prior three-mode era had an 'auto' middle tier.
+  // It collapses into 'full' (same skip semantics today).
+  if (mode === 'auto') return 'full';
   return 'default';
 };
 
