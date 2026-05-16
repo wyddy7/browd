@@ -57,8 +57,10 @@ export enum ExecutionState {
   /**
    * T2f-final-2 — token-usage telemetry. Emitted by the unified agent
    * runtime after each agent.invoke() completes. `details` carries a
-   * JSON payload `{inputTokens, outputTokens, contextWindow}` so the
-   * side panel can render the live token ring in the header.
+   * JSON payload `{inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens, contextWindow}` so the
+   * side panel can render the live token ring in the header. Cache fields
+   * stay 0 when the provider/wrapper doesn't surface cache telemetry through
+   * any of the parsed paths in `runReactAgent.ts`.
    */
   TASK_USAGE = 'task.usage',
 

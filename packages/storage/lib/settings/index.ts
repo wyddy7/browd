@@ -1,4 +1,5 @@
 export * from './types';
+export * from './openrouterModels';
 export * from './llmProviders';
 export * from './agentModels';
 export * from './generalSettings';

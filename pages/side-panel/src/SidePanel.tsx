@@ -193,7 +193,13 @@ const SidePanel = () => {
   // T2f-final-2: cumulative token usage for the current chat session.
   // Reset on new chat / history-load. Each TASK_USAGE event from the
   // agent runtime bumps the running totals.
-  const [tokenUsage, setTokenUsage] = useState<{ input: number; output: number; contextWindow: number } | null>(null);
+  const [tokenUsage, setTokenUsage] = useState<{
+    input: number;
+    output: number;
+    cacheRead: number;
+    cacheCreation: number;
+    contextWindow: number;
+  } | null>(null);
   // T2f-final-3 — single shared screenshot lightbox URL. Both
   // MessageList thumbnails and TracePanel previews open this; window.open
   // with a data: URL is blocked in Chromium so we render in-panel.
@@ -714,6 +720,8 @@ const SidePanel = () => {
                 const parsed = JSON.parse(content ?? '{}') as {
                   inputTokens?: number;
                   outputTokens?: number;
+                  cacheReadTokens?: number;
+                  cacheCreationTokens?: number;
                   contextWindow?: number;
                 };
                 const cw = parsed.contextWindow ?? 100_000;
@@ -721,6 +729,8 @@ const SidePanel = () => {
                 setTokenUsage(prev => ({
                   input: (prev?.input ?? 0) + (parsed.inputTokens ?? 0),
                   output: (prev?.output ?? 0) + (parsed.outputTokens ?? 0),
+                  cacheRead: (prev?.cacheRead ?? 0) + (parsed.cacheReadTokens ?? 0),
+                  cacheCreation: (prev?.cacheCreation ?? 0) + (parsed.cacheCreationTokens ?? 0),
                   contextWindow: cw,
                 }));
               } catch (err) {

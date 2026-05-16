@@ -251,17 +251,24 @@ code {
 
 .browd-token-ring-tooltip {
   position: absolute;
-  bottom: calc(100% + 4px);
+  bottom: calc(100% + 6px);
   left: 50%;
   transform: translateX(-50%) translateY(2px);
   background: var(--browd-panel-strong);
   color: var(--browd-text);
   border: 1px solid var(--browd-border);
   border-radius: 6px;
-  padding: 0.25rem 0.5rem;
+  padding: 0.35rem 0.55rem;
   font-size: 11px;
   font-variant-numeric: tabular-nums;
+  /* Two lines max — context tokens (primary) + cache hit (when present).
+     The ring fill IS the context-% indicator; don't duplicate. */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
   white-space: nowrap;
+  line-height: 1.35;
   opacity: 0;
   pointer-events: none;
   transition:
@@ -269,6 +276,20 @@ code {
     transform 160ms ease;
   box-shadow: 0 6px 14px hsl(var(--browd-shadow) / 0.25);
   z-index: 10;
+}
+
+.browd-token-ring-tooltip-line {
+  font-weight: 500;
+}
+
+.browd-token-ring-tooltip-cache {
+  font-size: 10px;
+  color: var(--browd-text-muted, color-mix(in srgb, currentColor 65%, transparent));
+  border-top: 1px solid var(--browd-border);
+  padding-top: 3px;
+  margin-top: 1px;
+  width: 100%;
+  text-align: center;
 }
 
 .browd-token-ring:hover .browd-token-ring-tooltip,

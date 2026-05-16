@@ -60,7 +60,13 @@ interface ChatInputProps {
    * presentational here. Hover surfaces a tooltip with the full
    * "<used>/<context window>" breakdown.
    */
-  tokenUsage?: { input: number; output: number; contextWindow: number } | null;
+  tokenUsage?: {
+    input: number;
+    output: number;
+    cacheRead: number;
+    cacheCreation: number;
+    contextWindow: number;
+  } | null;
 }
 
 // File attachment interface
@@ -503,7 +509,13 @@ export default function ChatInput({
                   attachment button. Stays mounted but invisible
                   until the first TASK_USAGE event arrives. */}
               {tokenUsage && (
-                <TokenRing used={tokenUsage.input + tokenUsage.output} contextWindow={tokenUsage.contextWindow} />
+                <TokenRing
+                  used={tokenUsage.input + tokenUsage.output}
+                  contextWindow={tokenUsage.contextWindow}
+                  cacheRead={tokenUsage.cacheRead}
+                  cacheCreation={tokenUsage.cacheCreation}
+                  inputTokens={tokenUsage.input}
+                />
               )}
             </div>
 

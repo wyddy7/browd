@@ -7,6 +7,7 @@ import {
   llmProviderStore,
   modelSupportsVision,
   getModelContextWindow,
+  preloadOpenRouterModels,
   type InterfaceLanguage,
 } from '@extension/storage';
 import { t } from '@extension/i18n';
@@ -27,6 +28,11 @@ const browserContext = new BrowserContext({});
 let currentExecutor: Executor | null = null;
 let currentPort: chrome.runtime.Port | null = null;
 const SIDE_PANEL_URL = chrome.runtime.getURL('side-panel/index.html');
+
+// Fire-and-forget preload of OpenRouter's models catalog. Powers the live
+// context-window lookup in `getModelContextWindow` for OpenRouter routes.
+// Idempotent + fail-soft — see openrouterModels.ts.
+void preloadOpenRouterModels();
 
 function getInterfaceLanguageInstruction(language: InterfaceLanguage): string | undefined {
   const instructions: Partial<Record<InterfaceLanguage, string>> = {
