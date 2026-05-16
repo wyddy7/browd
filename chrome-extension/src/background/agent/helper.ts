@@ -26,6 +26,12 @@ const maxTokens = 1024 * 4;
 // visible logging instead.
 const LLM_REQUEST_TIMEOUT_MS = 90_000;
 const LLM_MAX_RETRIES = 0;
+// T2v — every chat model is constructed with streaming enabled so
+// LangGraph's `compiled.streamEvents(version:'v2')` consumer sees
+// `on_chat_model_stream` chunks (token deltas). Without this some
+// providers reply via a single non-streaming response and the
+// side-panel status strip stays empty during long rounds.
+const LLM_STREAMING = true;
 
 function assertHeaderSafeValue(label: string, value: string | undefined) {
   if (!value) {
@@ -144,6 +150,7 @@ function createOpenAIChatModel(
     maxTokens?: number;
     timeout?: number;
     maxRetries?: number;
+    streaming?: boolean;
   } = {
     model: modelConfig.modelName,
     apiKey: providerConfig.apiKey,
@@ -151,6 +158,7 @@ function createOpenAIChatModel(
     // declaration at top of file for full rationale (silent-burn fix).
     timeout: LLM_REQUEST_TIMEOUT_MS,
     maxRetries: LLM_MAX_RETRIES,
+    streaming: LLM_STREAMING,
   };
 
   const configuration: Record<string, unknown> = {};
@@ -266,6 +274,7 @@ function createAzureChatModel(providerConfig: ProviderConfig, modelConfig: Model
     // timeout + zero retries to bound the silent-burn window.
     timeout: LLM_REQUEST_TIMEOUT_MS,
     maxRetries: LLM_MAX_RETRIES,
+    streaming: LLM_STREAMING,
     // For O series models, use modelKwargs instead of temperature/topP
     ...(isOSeriesModel
       ? {
@@ -312,6 +321,7 @@ export function createChatModel(providerConfig: ProviderConfig, modelConfig: Mod
         apiKey: providerConfig.apiKey,
         maxTokens,
         temperature,
+        streaming: LLM_STREAMING,
         clientOptions: {},
       };
       return new ChatAnthropic(args);
@@ -322,6 +332,7 @@ export function createChatModel(providerConfig: ProviderConfig, modelConfig: Mod
         apiKey: providerConfig.apiKey,
         temperature,
         topP,
+        streaming: LLM_STREAMING,
       };
       return new ChatDeepSeek(args) as BaseChatModel;
     }
@@ -331,6 +342,7 @@ export function createChatModel(providerConfig: ProviderConfig, modelConfig: Mod
         apiKey: providerConfig.apiKey,
         temperature,
         topP,
+        streaming: LLM_STREAMING,
       };
       return new ChatGoogleGenerativeAI(args);
     }
@@ -341,6 +353,7 @@ export function createChatModel(providerConfig: ProviderConfig, modelConfig: Mod
         temperature,
         topP,
         maxTokens,
+        streaming: LLM_STREAMING,
         configuration: {},
       };
       return new ChatXAI(args) as BaseChatModel;
@@ -352,6 +365,7 @@ export function createChatModel(providerConfig: ProviderConfig, modelConfig: Mod
         temperature,
         topP,
         maxTokens,
+        streaming: LLM_STREAMING,
       };
       return new ChatGroq(args);
     }
@@ -362,6 +376,7 @@ export function createChatModel(providerConfig: ProviderConfig, modelConfig: Mod
         temperature,
         topP,
         maxTokens,
+        streaming: LLM_STREAMING,
       };
       return new ChatCerebras(args);
     }
@@ -375,6 +390,7 @@ export function createChatModel(providerConfig: ProviderConfig, modelConfig: Mod
         temperature?: number;
         maxTokens?: number;
         numCtx: number;
+        streaming?: boolean;
       } = {
         model: modelConfig.modelName,
         // required but ignored by ollama
@@ -383,6 +399,7 @@ export function createChatModel(providerConfig: ProviderConfig, modelConfig: Mod
         topP,
         temperature,
         maxTokens,
+        streaming: LLM_STREAMING,
         // ollama usually has a very small context window, so we need to set a large number for agent to work
         // It was set to 128000 in the original code, but it will cause ollama reload the models frequently if you have multiple models working together
         // not sure why, but setting it to 64000 seems to work fine
@@ -410,12 +427,14 @@ export function createChatModel(providerConfig: ProviderConfig, modelConfig: Mod
         topP?: number;
         temperature?: number;
         maxTokens?: number;
+        streaming?: boolean;
       } = {
         model: modelConfig.modelName,
         apiKey: providerConfig.apiKey,
         topP: (modelConfig.parameters?.topP ?? 0.1) as number,
         temperature: (modelConfig.parameters?.temperature ?? 0.1) as number,
         maxTokens,
+        streaming: LLM_STREAMING,
       };
 
       const configuration: Record<string, unknown> = {};

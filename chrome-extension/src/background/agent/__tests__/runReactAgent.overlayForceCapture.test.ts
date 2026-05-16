@@ -1,17 +1,14 @@
 /**
- * T2n-overlay-handling — verify that the pendingForceScreenshot flag
- * set by BrowserContext.switchTab / navigateTo is consumed and
- * translated into shouldCapture=true at the top of the per-step
- * stateModifier path. Uses the pure `resolveBaseCaptureDecision`
- * helper extracted from runReactAgent so the assertion does not
- * require a real LangGraph harness.
+ * BrowserContext pending-force-screenshot flag — set-side regression
+ * test.
  *
- * Also verifies the one-shot semantic round-trip: BrowserContext
- * sets the flag on switchTab, the helper reads `pendingForce=true`
- * once, and the BrowserContext flag is cleared by the
- * `consumePendingForceScreenshot()` read — second call returns
- * `false`, so the next state-message build reverts to the regular
- * adaptive heuristic.
+ * The flag is set by `switchTab` / `navigateTo` so a future cookie-
+ * overlay / tab-settle tier can surface "page just changed, you may
+ * want a screenshot" to the model. The consume-side currently has no
+ * reader (the runtime no longer auto-attaches images — the LLM owns
+ * screenshot timing via the `screenshot()` tool). This test pins the
+ * set-side contract so the flag is still available when the next tier
+ * needs it.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
@@ -56,7 +53,6 @@ vi.mock('../../browser/page', () => {
 });
 
 import BrowserContext from '../../browser/context';
-import { resolveBaseCaptureDecision } from '../agents/runReactAgent';
 
 function stubChrome() {
   const chromeStub = {
@@ -77,7 +73,7 @@ function stubChrome() {
   vi.stubGlobal('chrome', chromeStub);
 }
 
-describe('T2n-overlay-handling — force-capture consume-and-clear cycle', () => {
+describe('BrowserContext pendingForceScreenshot flag — set-side', () => {
   beforeEach(() => {
     stubChrome();
   });
@@ -86,63 +82,18 @@ describe('T2n-overlay-handling — force-capture consume-and-clear cycle', () =>
     vi.unstubAllGlobals();
   });
 
-  it('switchTab → next stateModifier reads pendingForce=true AND BrowserContext flag clears (visionMode=fallback)', async () => {
+  it('switchTab sets the pending-force flag', async () => {
     const ctx = new BrowserContext({});
+    expect(ctx.hasPendingForceScreenshot()).toBe(false);
     await ctx.switchTab(42);
     expect(ctx.hasPendingForceScreenshot()).toBe(true);
+  });
 
-    // Simulate stateModifier's read.
-    const pendingForce = ctx.consumePendingForceScreenshot();
-    expect(pendingForce).toBe(true);
-
-    // Translated decision: visionMode='fallback' + pendingForce
-    // -> shouldCapture=true with the T2n intent.
-    const decision = resolveBaseCaptureDecision({
-      visionMode: 'fallback',
-      hasScreenshotAction: true,
-      pendingForce,
-    });
-    expect(decision.shouldCapture).toBe(true);
-    expect(decision.intent).toMatch(/T2n overlay-handling/);
-
-    // Next stateModifier pass — flag is cleared, base decision now false
-    // for visionMode='fallback' (the adaptive triggers run separately
-    // and may still flip shouldCapture, but the BASE decision is false).
+  it('consumePendingForceScreenshot is one-shot (true once, then false)', async () => {
+    const ctx = new BrowserContext({});
+    await ctx.switchTab(42);
+    expect(ctx.consumePendingForceScreenshot()).toBe(true);
+    expect(ctx.consumePendingForceScreenshot()).toBe(false);
     expect(ctx.hasPendingForceScreenshot()).toBe(false);
-    const next = resolveBaseCaptureDecision({
-      visionMode: 'fallback',
-      hasScreenshotAction: true,
-      pendingForce: ctx.consumePendingForceScreenshot(),
-    });
-    expect(next.shouldCapture).toBe(false);
-  });
-
-  it('visionMode=always always captures even without pending-force', () => {
-    const decision = resolveBaseCaptureDecision({
-      visionMode: 'always',
-      hasScreenshotAction: true,
-      pendingForce: false,
-    });
-    expect(decision.shouldCapture).toBe(true);
-  });
-
-  it('visionMode=off with pendingForce=true does NOT capture (no screenshotAction available)', () => {
-    const decision = resolveBaseCaptureDecision({
-      visionMode: 'off',
-      hasScreenshotAction: false,
-      pendingForce: true,
-    });
-    expect(decision.shouldCapture).toBe(false);
-  });
-
-  it('per-step system prompt contains the T2n modal-overlay nudge', async () => {
-    // Read the source file and assert the literal nudge string is
-    // present. This is the "bonus" guard from the plan — future
-    // refactors must not silently drop the prompt addition.
-    const fs = await import('node:fs/promises');
-    const { fileURLToPath } = await import('node:url');
-    const url = new URL('../agents/runReactAgent.ts', import.meta.url);
-    const src = await fs.readFile(fileURLToPath(url), 'utf-8');
-    expect(src).toMatch(/If a modal overlay \(cookie banner, newsletter signup, sign-in prompt, paywall dialog\)/);
   });
 });

@@ -1,9 +1,10 @@
 /**
  * Structured action errors for the agent runtime.
- * Pattern from auto-docs/for-development/agents/failure-policy.md
  *
  * Each error carries its type and retryability so the FailureClassifier
- * can route without regex-ing human prose.
+ * can route without regex-ing human prose. Different error classes
+ * have different retry semantics — transient → backoff, schema →
+ * one-shot repair, side_effect → human approval.
  */
 
 export type ActionErrorType =

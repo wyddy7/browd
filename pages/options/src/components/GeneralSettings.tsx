@@ -3,7 +3,6 @@ import {
   type AppearanceTheme,
   type GeneralSettingsConfig,
   type InterfaceLanguage,
-  type VisionMode,
   type AgentMode,
   generalSettingsStore,
   agentModelStore,
@@ -192,22 +191,13 @@ export const GeneralSettings = ({ onAppearanceThemeChange }: GeneralSettingsProp
                   )}
                 </div>
                 <div className={rowControlClass}>
-                  <label htmlFor="visionMode" className="sr-only">
-                    {t('options_general_visionMode')}
-                  </label>
-                  <select
+                  <ToggleSwitch
                     id="visionMode"
-                    value={settings.visionMode}
-                    onChange={e => updateSetting('visionMode', e.target.value as VisionMode)}
-                    className={selectInputClass}>
-                    <option value="off">{t('options_general_visionMode_off')}</option>
-                    <option value="always" disabled={!navigatorSupportsVision}>
-                      {t('options_general_visionMode_always')}
-                    </option>
-                    <option value="fallback" disabled={!navigatorSupportsVision}>
-                      {t('options_general_visionMode_fallback')}
-                    </option>
-                  </select>
+                    checked={settings.visionMode === 'on'}
+                    onChange={e => updateSetting('visionMode', e.target.checked ? 'on' : 'off')}
+                    disabled={!navigatorSupportsVision && settings.visionMode !== 'on'}
+                    label={t('options_general_visionMode')}
+                  />
                 </div>
               </div>
             )}

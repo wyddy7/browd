@@ -15,6 +15,29 @@ export const doneActionSchema: ActionSchema = {
   }),
 };
 
+/**
+ * T2w — sentinel termination action for unified mode. The Plan-and-
+ * Execute replanner stays as a fallback finaliser, but it has a
+ * blind spot: when the LLM's reasoning concludes the task is done
+ * yet emits zero tool calls, the next focused subgoal has nothing
+ * to act on and stuckDetector's `silent-step` guard kills the run.
+ * Giving the agent an explicit `task_complete(response)` tool lets
+ * it close the StateGraph cleanly via the existing `state.response`
+ * channel — same idea as browser-use's `DoneAgentOutput` and
+ * Magentic-One's ledger update. The action handler simply returns
+ * an ActionResult with a `TASK_COMPLETE: ` prefix; runReactAgent
+ * detects the sentinel and routes to END.
+ */
+export const taskCompleteActionSchema: ActionSchema = {
+  name: 'task_complete',
+  description:
+    'Call this when you have the final answer for the user. Pass the answer as `response`. This ends the task — no more tools will run after this. Use it the moment you have what the user asked for; do NOT keep reasoning about the answer instead of returning it.',
+  schema: z.object({
+    intent: z.string().default('').describe('purpose of this action'),
+    response: z.string().min(1).describe('the final answer to surface to the user'),
+  }),
+};
+
 // Basic Navigation Actions
 export const searchGoogleActionSchema: ActionSchema = {
   name: 'search_google',
@@ -246,8 +269,7 @@ export const fillFieldByLabelActionSchema: ActionSchema = {
  *
  * These three let the agent satisfy information-seeking tasks without
  * opening a browser tab or interacting with the DOM. Prefer these for
- * "find X", "what is Y", "look up Z" style requests. See
- * auto-docs/browd-agent-evolution.md (Tier 1) for context.
+ * "find X", "what is Y", "look up Z" style requests.
  */
 export const webFetchMarkdownActionSchema: ActionSchema = {
   name: 'web_fetch_markdown',
@@ -279,17 +301,16 @@ export const webSearchActionSchema: ActionSchema = {
 };
 
 /**
- * T2f-2 — explicit screenshot tool, registered only when
- * visionMode='fallback'. With visionMode='always' the agent's state
- * message already carries a fresh screenshot every step, so this tool
- * is redundant and is omitted from the registry. With 'off' it is
- * also omitted.
+ * Explicit screenshot tool. Registered when visionMode='on'; omitted
+ * under 'off'. The runtime never auto-attaches images — the LLM
+ * decides when a frame is worth the tokens, matching browser-use /
+ * Stagehand / Operator / Anthropic computer-use behaviour.
  *
- * T2f-coords — `gridOverlay` enables a 10×10 coordinate grid drawn
- * over the JPEG. Set true when about to call `click_at`/`type_at`/
- * `scroll_at` — the labelled grid centres make coordinate prediction
- * meaningfully more accurate (Set-of-Mark / WebVoyager-style
- * grounding). False keeps the screenshot clean.
+ * `gridOverlay` enables a 10×10 coordinate grid drawn over the JPEG.
+ * Set true when about to call `click_at` / `type_at` / `scroll_at`
+ * — the labelled grid centres make coordinate prediction meaningfully
+ * more accurate (Set-of-Mark / WebVoyager-style grounding). False
+ * keeps the screenshot clean.
  */
 export const screenshotActionSchema: ActionSchema = {
   name: 'screenshot',

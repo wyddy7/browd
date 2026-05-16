@@ -1144,16 +1144,13 @@
     "message": "Vision-режим"
   },
   "options_general_visionMode_desc": {
-    "message": "Always: на каждом шаге к контексту прикрепляется свежий скриншот (медленнее, точнее). Fallback: агент сам зовёт инструмент screenshot когда нужно. Off: без скриншотов."
+    "message": "Вкл.: у агента есть инструмент screenshot и координатные действия, он сам решает когда сделать снимок. Выкл.: только DOM, без скриншотов."
   },
   "options_general_visionMode_off": {
     "message": "Выкл."
   },
-  "options_general_visionMode_always": {
-    "message": "Всегда"
-  },
-  "options_general_visionMode_fallback": {
-    "message": "По запросу"
+  "options_general_visionMode_on": {
+    "message": "Вкл."
   },
   "options_general_visionMode_warning": {
     "message": "Выбранная Navigator-модель не поддерживает vision — режим неактивен. Выберите модель с поддержкой изображений."
@@ -1211,5 +1208,17 @@
   },
   "options_general_badge_beta": {
     "message": "beta"
+  },
+  "hitl_takeover_title": {
+    "message": "Browd хочет переключиться на вашу вкладку"
+  },
+  "hitl_takeover_reason": {
+    "message": "Причина"
+  },
+  "hitl_takeover_allow": {
+    "message": "Разрешить"
+  },
+  "hitl_takeover_deny": {
+    "message": "Отказать"
   }
 }

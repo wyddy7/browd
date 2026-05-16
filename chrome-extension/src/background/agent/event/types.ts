@@ -61,6 +61,24 @@ export enum ExecutionState {
    * side panel can render the live token ring in the header.
    */
   TASK_USAGE = 'task.usage',
+
+  /**
+   * T2v — token-level live indicator. Emitted by `streamBridge` while
+   * the unified agent driver consumes `compiled.streamEvents()`.
+   * `details` carries a JSON payload `{kind, ...}` where `kind` is one
+   * of:
+   *   - 'llm_streaming' — `{runId, model, tokensSoFar, msElapsed, ratePerSec}`
+   *   - 'tool_start'    — `{runId, name, argsPreview}`
+   *   - 'tool_end'      — `{runId, name, ok, ms}`
+   *   - 'node'          — `{name, state}` where state is 'start'|'end'
+   *                       and name is whitelisted to the
+   *                       planner/agent/replanner graph nodes.
+   *   - 'idle'          — `{}` (strip emptied, no active call)
+   * Side panel renders this as a compact status strip above the TRACE
+   * pane so a long LLM round shows visible activity instead of dead
+   * silence.
+   */
+  TASK_LIVE = 'task.live',
 }
 
 export interface EventData {

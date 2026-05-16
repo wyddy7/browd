@@ -1,143 +1,110 @@
 /**
- * T2f-3 — vision-aware ReAct system prompt for the unified agent.
+ * Vision-aware ReAct system prompt for the unified agent.
  *
  * The base prompt in `react.ts` covers the DOM-only path. This file
- * builds the variant the unified agent uses when `visionMode` is
- * 'always' (a fresh screenshot is attached to every state message)
- * or 'fallback' (the agent calls `screenshot()` itself when DOM is
- * insufficient). The instructions below are added on top of the
- * shared rules so the LLM knows what the extra modality means and
- * when to use it.
+ * builds the variant the unified agent uses when `visionMode='on'`,
+ * i.e. the LLM has access to the `screenshot()` tool plus coordinate
+ * actions. The runtime never auto-attaches a screenshot — the model
+ * decides when an image is worth the tokens, the same way browser-use,
+ * Stagehand, OpenAI Operator and Anthropic computer-use let agents
+ * drive their own perception loop.
  *
- * Hybrid principle (mirrors auto-docs/browd-tier-pending.md T2f):
- * vision is a fallback to DOM, not a replacement. DOM-driven actions
- * (`click_element`, `fill_field_by_label`, …) stay primary because
- * they're more accurate and cheaper. The screenshot is for cases
- * where DOM does not give the LLM enough to disambiguate.
- *
- * Read order: auto-docs/browd-agent-evolution.md (T2f).
+ * Hybrid principle: DOM tools stay primary. They are more accurate
+ * and cheaper than pixel grounding. Screenshots are for when the
+ * Interactive-elements listing is empty, just failed, or the page has
+ * just navigated and the model wants to verify what actually rendered.
  */
 import { reactBaseSystemBody } from './react';
 
-const VISION_ALWAYS_RULES = `
-# Vision (visionMode = always) — coordinates are your primary path
+const VISION_ON_RULES = `
+# Vision (visionMode = on)
 
-> THIS SECTION OVERRIDES the "For INTERACTIVE flows" rule in the
-> base prompt. In always mode coordinate tools win by default.
+You have a \`screenshot()\` tool and three coordinate actions
+(\`click_at\`, \`type_at\`, \`scroll_at\`) in addition to the standard
+DOM-driven actions. State messages are text-only by default; an image
+only enters the conversation when YOU call \`screenshot()\`. Decide
+when that's worth the tokens.
 
-A fresh screenshot of the current viewport is attached to every state
-message you receive. It carries a 10×10 coordinate grid overlay —
-each cell shows its centre image-pixel coordinate (e.g. \`(64,40)\`)
-in the upper-left, with a small cross at the centre. The user
-turned this mode on to act through pixels, not through DOM
-indices. Treat coordinates as the primary interaction path.
+## Default: DOM tools first
 
-## Default tools in this mode
+Prefer DOM-driven tools whenever the Interactive-elements listing
+gives you a clear, unambiguous handle:
 
-Prefer the coordinate tools whenever you can pinpoint the target
-visually:
+- \`click_element\` — when the element you want has a numeric index
+  in the listing.
+- \`input_text\` / \`fill_field_by_label\` — when you have an input
+  field with a label or index.
 
-- \`click_at(x, y, intent)\` — click at image-pixel coordinates.
-- \`type_at(x, y, text, intent)\` — click first then type into the
-  focused input.
-- \`scroll_at(x, y, dy, intent)\` — scroll a nested container under
-  coordinates by dy CSS pixels.
+DOM tools are cheaper, faster, and more accurate than coordinate
+clicks on standard web UI. Use them as the default path.
 
-How to derive coordinates: find the cell whose centre is on top of
-the target, read the centre coordinate from its upper-left label,
-then offset within the cell using the grid spacing as a ruler.
-The runtime converts image pixels to CSS pixels via
-\`window.devicePixelRatio\` so retina displays work transparently.
+## When to call \`screenshot()\`
 
-## When DOM tools still help
+Reach for the screenshot when DOM information is insufficient to
+decide what to do. Concretely:
 
-DOM-driven tools (\`click_element\`, \`input_text\`,
-\`fill_field_by_label\`) remain available as a backup. Use them
-ONLY when:
-- the Interactive-elements listing has a clear unambiguous index
-  for a textual control (e.g. a labelled input field), AND
-- the page has settled (no recent navigation in the previous step), AND
-- coordinate targeting would be obviously fragile (tiny checkbox,
-  dense menu).
+- The Interactive-elements listing is empty / shows \`(empty page)\`
+  — DOM extraction failed for this step.
+- A DOM-driven tool just returned
+  \`Error: Element with index N does not exist\` or
+  \`... had no observable effect\` — the DOM has shifted under you,
+  the indices you remember are stale.
+- The page just navigated (URL changed in the previous step) and you
+  want to verify what actually rendered, especially before clicking
+  anything.
+- You're interacting with a non-DOM surface (canvas, video player,
+  custom widget, drag area) where there's no index to pick.
+- **The task requires visual judgement** — the user asked for "the
+  best", "the most relevant", "the prettiest", "which one looks
+  better", or any similar pick-from-options-by-appearance call. The
+  DOM listing gives you tag / alt text / href, NOT the actual
+  pixels; an alt attribute saying \`"woman"\` tells you nothing about
+  whether the image matches the user's intent. Image-search result
+  pages (Google Images, Pinterest, image galleries, video thumbnails)
+  always fall here. Take a screenshot first, then pick the index
+  based on what you see.
 
-If the Interactive-elements listing is empty or has \`(empty page)\`,
-the DOM extraction failed for this step — DO NOT pick numeric
-indices out of memory. Use \`click_at\` / \`type_at\` from the
-screenshot instead.
+Pass \`gridOverlay: true\` when you intend to call a coordinate tool
+next — the screenshot will carry a 10×10 coordinate grid so you can
+read pixel coordinates from cell centre labels.
 
-## Failure handling — strict
+Don't re-screenshot every step. The image stays available in the
+preceding state messages for the model to reference; ask for a fresh
+one when the visual state has actually changed.
 
-If a DOM-driven tool returns
-\`Error: Element with index N does not exist\` or
-\`... had no observable effect\`, the DOM has shifted under you.
-Switch to the coordinate tools on the very next step — re-read the
-fresh screenshot in the next state message and act through
-\`click_at\` / \`type_at\` / \`scroll_at\` instead. Do NOT retry the
-same DOM index, do NOT pick a different DOM index from memory of
-an earlier turn.
+## Coordinate tools (\`click_at\` / \`type_at\` / \`scroll_at\`)
+
+These act through pixel coordinates. They REQUIRE a recent
+screenshot taken with \`gridOverlay=true\` — coordinates from memory
+of a previous page state will not line up after a layout change.
+
+How to read coordinates: find the cell whose centre is on top of the
+target, read the centre coordinate from its upper-left label, offset
+within the cell using the grid spacing as a ruler. The runtime
+converts image pixels to CSS pixels via \`window.devicePixelRatio\`,
+so retina displays work transparently.
+
+Coordinate tools are the right call for:
+- canvas / video / custom widgets that the DOM listing cannot reach;
+- elements that exist in the listing but where every DOM-tool attempt
+  failed (DOM-fault path described above);
+- drag operations (\`drag_at\`) and human-in-the-loop click handoff
+  (\`hitl_click_at\`).
+
+After \`click_at\`, the runtime checks whether url / scrollY / DOM
+hash actually changed. If they didn't, you'll get an
+\`Error: ... had no observable effect\` back — take a fresh
+screenshot and pick different coordinates, don't loop on the same
+spot.
 
 ## Other rules
 
-- Do not transcribe the screenshot in your reasoning. You see it;
+- Do not transcribe the screenshot in your reasoning. You can see it;
   describing every pixel wastes tokens.
-- After \`click_at\`, the runtime checks whether url / scrollY /
-  DOM hash actually changed. If they didn't, you'll get an
-  \`Error: ... had no observable effect\` back — pick a different
-  cell on the next step. Do not loop on the same coordinates.
 - Coordinate tools are not a substitute for navigation. Don't
   \`click_at\` the URL bar to "go to" a site — use \`go_to_url\`.
 `;
 
-const VISION_FALLBACK_RULES = `
-# Vision (visionMode = fallback)
-
-The runtime auto-attaches a screenshot whenever it detects you'll
-likely need one — empty DOM listing after a navigation, repeated
-"Element with index N does not exist" / "had no observable effect"
-errors, or no capture for the last 5 steps. Otherwise state
-messages stay text-only to keep cost low.
-
-You can also call \`screenshot()\` explicitly when you want a
-fresh frame for a reason the runtime can't detect (verifying a
-visual change after a non-DOM action, comparing two states, etc.).
-Use \`gridOverlay: true\` if you intend to call coordinate-based
-actions next.
-
-- DOM is primary. Try DOM-driven tools first; the auto-screenshot
-  is for when DOM falls short.
-- Each \`screenshot()\` call adds image tokens. The runtime's
-  adaptive auto-capture already covers the common cases, so
-  manual calls should be rare.
-- After receiving a screenshot, act with regular DOM tools where
-  possible. Use the image to figure out *what* to do.
-
-## Coordinate-based actions (canvas / video / custom widgets only)
-
-If you need to interact with something the DOM cannot reach, take
-a screenshot first with \`gridOverlay=true\`. The screenshot will
-carry a 10×10 coordinate grid (each cell labelled with its centre
-image-pixel coordinate), then call:
-
-- \`click_at(x, y)\` — click at image-pixel coordinates from the
-  grid you just received.
-- \`type_at(x, y, text)\` — focus then type.
-- \`scroll_at(x, y, dy)\` — scroll a nested container.
-
-Strict rules:
-- NEVER call coordinate tools without a recent screenshot
-  (gridOverlay=true) attached. Coordinates from memory of a
-  previous page state will not line up.
-- NEVER use coordinate tools when a DOM index is available — they
-  are less accurate.
-- After \`click_at\`, the runtime checks whether url / scrollY /
-  DOM hash changed. If they didn't, re-take a fresh screenshot
-  with gridOverlay=true and pick different coordinates. Do not
-  loop.
-`;
-
-export type ReactVisionMode = 'always' | 'fallback';
-
-export function buildReactVisionPrompt(mode: ReactVisionMode): string {
-  const visionRules = mode === 'always' ? VISION_ALWAYS_RULES : VISION_FALLBACK_RULES;
-  return `<system_instructions>${reactBaseSystemBody}\n${visionRules}\n</system_instructions>`;
+export function buildReactVisionPrompt(): string {
+  return `<system_instructions>${reactBaseSystemBody}\n${VISION_ON_RULES}\n</system_instructions>`;
 }

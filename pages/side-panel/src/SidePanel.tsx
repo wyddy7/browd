@@ -202,6 +202,11 @@ const SidePanel = () => {
   // above the message list, instead of an inline chat message that
   // scrolls away. Cleared between runs.
   const [currentPlan, setCurrentPlan] = useState<{ text: string; done: boolean }[] | null>(null);
+  // T2v — live status strip above TRACE. Holds the agent runtime's
+  // most recent "what's happening right now" signal (token streaming,
+  // tool call in flight, planner/replanner round). Empty between
+  // calls — empty for >5s = stuck. Driven by ExecutionState.TASK_LIVE.
+  const [liveStatus, setLiveStatus] = useState<string | null>(null);
   useEffect(() => {
     if (!lightboxUrl) return;
     const onKey = (e: KeyboardEvent) => {
@@ -579,6 +584,7 @@ const SidePanel = () => {
               // Reset historical session flag and trace when a new task starts
               setIsHistoricalSession(false);
               setTraceEntries([]);
+              setLiveStatus(null);
               // T2f-thinking-live: open the live thinking phase so
               // every appendMessage during this run gets phase
               // 'thinking' immediately (collapsible visible while
@@ -617,6 +623,7 @@ const SidePanel = () => {
               }
               setLiveRunStartIdx(null);
               setCollapseSignal(s => s + 1);
+              setLiveStatus(null);
               break;
             case ExecutionState.TASK_FAIL:
               setIsFollowUpMode(true);
@@ -640,6 +647,7 @@ const SidePanel = () => {
               }
               setLiveRunStartIdx(null);
               setCollapseSignal(s => s + 1);
+              setLiveStatus(null);
               break;
             case ExecutionState.TASK_CANCEL:
               setIsFollowUpMode(false);
@@ -655,11 +663,47 @@ const SidePanel = () => {
               runStartIdxRef.current = null;
               setLiveRunStartIdx(null);
               setCollapseSignal(s => s + 1);
+              setLiveStatus(null);
               break;
             case ExecutionState.TASK_PAUSE:
               break;
             case ExecutionState.TASK_RESUME:
               break;
+            case ExecutionState.TASK_LIVE: {
+              // T2v — token-level live indicator. `details` is a JSON
+              // `LiveEvent` from streamBridge. Render a compact status
+              // string in the strip above TRACE; empty string clears it.
+              try {
+                const ev = JSON.parse(content ?? '{}') as {
+                  kind: string;
+                  model?: string;
+                  tokensSoFar?: number;
+                  ratePerSec?: number;
+                  name?: string;
+                  argsPreview?: string;
+                  ok?: boolean;
+                  ms?: number;
+                  state?: 'start' | 'end';
+                };
+                if (ev.kind === 'llm_streaming') {
+                  const tk = ev.tokensSoFar ?? 0;
+                  const rate = ev.ratePerSec ?? 0;
+                  setLiveStatus(`${ev.model ?? 'model'} · ${tk} tokens · ${rate} t/s`);
+                } else if (ev.kind === 'tool_start') {
+                  const args = ev.argsPreview ? ` ${ev.argsPreview}` : '';
+                  setLiveStatus(`running: ${ev.name ?? 'tool'}${args}`);
+                } else if (ev.kind === 'tool_end') {
+                  setLiveStatus(null);
+                } else if (ev.kind === 'node' && ev.state === 'start') {
+                  setLiveStatus(`${ev.name}…`);
+                } else if (ev.kind === 'idle') {
+                  setLiveStatus(null);
+                }
+              } catch {
+                // ignore malformed payloads — strip just stays as-is
+              }
+              return;
+            }
             case ExecutionState.TASK_USAGE: {
               // T2f-final-2 / T2f-final-fix: parse cumulative token
               // totals for this invoke and add them to the session
@@ -1284,6 +1328,7 @@ const SidePanel = () => {
     setTokenUsage(null);
     setTraceEntries([]);
     setCurrentPlan(null);
+    setLiveStatus(null);
 
     // Disconnect any existing connection
     stopConnection();
@@ -1811,6 +1856,17 @@ const SidePanel = () => {
                 )}
                 {messages.length > 0 && (
                   <div className="border-t border-[var(--browd-border)] bg-[var(--browd-surface)]/80 p-2 backdrop-blur">
+                    {/* T2v — live status strip. 24px tall, single-line,
+                        empty between calls. Empty for >5s = stuck. */}
+                    <div className="browd-live-strip mb-1 flex h-6 items-center px-1 text-xs text-[var(--browd-muted)]">
+                      {liveStatus ? (
+                        <span className="truncate" title={liveStatus}>
+                          {liveStatus}
+                        </span>
+                      ) : (
+                        <span className="opacity-30">·</span>
+                      )}
+                    </div>
                     <TracePanel
                       entries={traceEntries}
                       onThumbClick={setLightboxUrl}

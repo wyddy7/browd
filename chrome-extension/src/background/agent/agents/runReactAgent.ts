@@ -1,37 +1,57 @@
 /**
- * T2d-3 — runReactAgent: the LangGraph.js entry point that replaces
- * runUnifiedLoop in T2d-4.
+ * runReactAgent — LangGraph.js **Plan-and-Execute** agent with per-subgoal
+ * ReAct inner loops. This is the unified-mode entry point. The naming
+ * is historical: T2d (`833f84d`) shipped a solo `createReactAgent` that
+ * terminated on the first no-tool-call AIMessage — even mid-task — and
+ * T2f-replan (May 2026) wrapped it in a Plan-and-Execute StateGraph
+ * because that failure mode is unrecoverable without an outer
+ * orchestrator. The filename and `runReactAgent` symbol stayed for
+ * stability; the architecture changed.
  *
- * Contract:
- *   - Build a createReactAgent with the classic Browd Action set
- *     converted to LangGraph tools (via langGraphAdapter).
- *   - On each agent step LangGraph calls the LLM with the running
- *     message history; we inject the latest browser state as the most
- *     recent HumanMessage via `stateModifier` so the LLM sees fresh
- *     interactive elements / forms / page text.
- *   - Tool execution writes to the structured tracer automatically
- *     (Action.call already records, langGraphAdapter delegates to it).
- *   - Termination: LangGraph stops when the LLM emits an AIMessage
- *     with no tool_calls. That AIMessage's content is the final
- *     answer. We surface it as PLANNER+STEP_OK (so side panel renders
- *     it as a chat message, same as classic) and SYSTEM+TASK_OK.
- *   - Failure modes: recursion limit reached → TASK_FAIL with a
- *     "agent could not finish in N steps" summary.
+ * Outer loop (StateGraph below): planner → agent → replanner ⇄ agent → END.
+ *   - planner: structured-output decomposition into 1-7 subgoals plus
+ *     `taskParameters` (urls/queries/names) captured verbatim from the
+ *     user request — schema-enforced, so subgoal-abstraction drift cannot
+ *     erase concrete inputs.
+ *   - agent: invokes a fresh `createReactAgent` per subgoal via
+ *     `runReactStep`. Subgoal scope = single createReactAgent.invoke()
+ *     with its own `MemorySaver`. Inner `recursionLimit: 25`.
+ *   - replanner: reads pastSteps, decides END (with final response) or
+ *     continue (with rewritten remaining plan). Repeated-failure guard
+ *     finishes honestly with partial result after N `failed:` subgoals.
  *
- * Why this beats T2c hand-written runUnifiedLoop:
- *   - No bespoke termination contract — done() and evidence-validation
- *     are deleted entirely. LangGraph's native "no more tool calls"
- *     is the answer signal.
- *   - No multi-action batching ambiguity — LangGraph runs one tool
- *     call at a time per step.
- *   - No JSON schema gymnastics — LLM uses native tool-calling.
- *   - Built-in checkpointer (MemorySaver) for free pause/resume.
+ * Inner loop (per subgoal, via `createReactAgent` from
+ * `@langchain/langgraph/prebuilt`): standard ReAct — LLM call →
+ * tool dispatch (`langGraphAdapter` wraps each `Action` as a LangChain
+ * tool with budget caps + dupGuard) → state-message rebuild via
+ * `stateModifier`, repeat until no-tool-call AIMessage (subgoal done)
+ * or recursionLimit (subgoal aborts).
  *
- * Read order: auto-docs/browd-agent-evolution.md (Tier 2d).
+ * Why Plan-and-Execute is provisional (slated for migration):
+ *   - Industry 2026 has moved to single-loop `create_agent` +
+ *     middleware + schema-forced terminal/replan tools — see
+ *     `auto-docs/for-development/agents/multi-agent.md` and
+ *     `auto-docs/browd-agent-evolution.md` active tier T2x.
+ *   - Until that migration ships, P&E persists as the safety-net
+ *     architecture: it works on weaker models (Gemini-flash class)
+ *     where solo createReactAgent's no-tool-call exit is too eager.
+ *
+ * Stuck coverage (after T2x phase 0a/0b removed subgoal-level
+ * guards — see anti-patterns.md §9):
+ *   - dupGuard in `tools/langGraphAdapter.ts` — identical
+ *     (tool, args) 3-in-5 → forcing error string to the LLM.
+ *   - LangGraph `recursionLimit` (inner 25, outer ~50) — hard cap.
+ *   - T2p-3 recursion-limit soft-fail — distinguishes inner-loop
+ *     budget exhaustion with progress (→ `partial:` to replanner)
+ *     from genuine stuck (→ rethrow → graceful TASK_FAIL).
+ *   - Schema-forced terminal via `task_complete` action +
+ *     `findTaskCompleteAnswer` scan covering ToolMessage prefix,
+ *     LangChain-canonical tool_calls, and raw OpenAI tool_calls
+ *     (T2x phase 0c).
  */
 import { createReactAgent } from '@langchain/langgraph/prebuilt';
 import { MemorySaver, StateGraph, Annotation, START, END } from '@langchain/langgraph';
-import { HumanMessage, AIMessage, SystemMessage, BaseMessage } from '@langchain/core/messages';
+import { HumanMessage, AIMessage, SystemMessage, ToolMessage, BaseMessage } from '@langchain/core/messages';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { z } from 'zod';
 import type { AgentContext } from '../types';
@@ -44,7 +64,9 @@ import { wrapUntrustedContent } from '../messages/utils';
 import { Actors, ExecutionState } from '../event/types';
 import { createLogger } from '@src/background/log';
 import { createObservabilityCallback } from './observabilityCallback';
-import { UnifiedStuckDetector, computeStateFingerprint } from '../guardrails/unifiedStuckDetector';
+import { computeStateFingerprint, isInnerRecursionLimitError } from '../guardrails/unifiedStuckDetector';
+import { TabGoneError } from '@src/background/browser/views';
+import { bridgeStreamEvents, type LiveEvent } from './streamBridge';
 
 const logger = createLogger('runReactAgent');
 
@@ -85,12 +107,19 @@ export function priorMessagesToBaseMessages(prior: PriorMessage[]): BaseMessage[
 }
 
 /**
- * T2f-3: vision routing. Independent of agentMode — only honoured when
+ * Vision routing. Independent of agentMode — only honoured when
  * agentMode='unified' (legacy ignores it). Executor is responsible for
  * runtime degradation when the chosen Navigator model has no vision
  * capability.
+ *
+ * - 'off' : screenshot tool and coordinate actions are stripped from
+ *           the registry. DOM-only surface.
+ * - 'on'  : full tool surface — DOM + coord + screenshot +
+ *           take_over_user_tab. State messages stay text-only; the
+ *           LLM calls `screenshot()` when it wants an image. The
+ *           runtime never auto-attaches.
  */
-export type RunReactAgentVisionMode = 'off' | 'always' | 'fallback';
+export type RunReactAgentVisionMode = 'off' | 'on';
 
 export interface RunReactAgentInput {
   context: AgentContext;
@@ -100,10 +129,10 @@ export interface RunReactAgentInput {
   /** Conversation up to (but not including) the current task. Empty for the very first turn of a session. */
   priorMessages?: PriorMessage[];
   /**
-   * Vision mode. 'off' (default) is the pre-T2f behaviour. 'always'
-   * attaches a fresh screenshot to every state message. 'fallback'
-   * leaves state messages text-only but exposes the screenshot()
-   * tool so the agent can capture a frame when DOM is insufficient.
+   * Vision mode. 'off' strips the screenshot tool and coordinate
+   * actions from the registry (DOM-only surface). 'on' exposes the
+   * full tool set including `screenshot()` — the LLM decides when an
+   * image is worth the tokens. The runtime never auto-attaches.
    */
   visionMode?: RunReactAgentVisionMode;
   /**
@@ -121,55 +150,19 @@ export interface RunReactAgentResult {
 }
 
 /**
- * T2n-overlay-handling — pure helper for the screenshot-capture
- * decision at the top of stateModifier. Extracted so the
- * pendingForceScreenshot consume-and-clear interaction with the
- * adaptive fallback heuristic is unit-testable without running a
- * full LangGraph agent. Returns the resolved `{shouldCapture,
- * intent}` for the visionMode='always' base case plus the T2n
- * pending-force override; the visionMode='fallback' adaptive
- * triggers (domEmpty / urlChanged / domFault / stepsExpired)
- * still live inline in stateModifier because they read live
- * BrowserState and the running message history.
- */
-export function resolveBaseCaptureDecision(input: {
-  visionMode: RunReactAgentVisionMode;
-  hasScreenshotAction: boolean;
-  pendingForce: boolean;
-}): { shouldCapture: boolean; intent: string } {
-  const { visionMode, hasScreenshotAction, pendingForce } = input;
-  if (visionMode === 'always') {
-    return { shouldCapture: true, intent: 'auto-attach (visionMode=always)' };
-  }
-  if (pendingForce && hasScreenshotAction) {
-    return {
-      shouldCapture: true,
-      intent: 'tab-settle force-capture (T2n overlay-handling)',
-    };
-  }
-  return { shouldCapture: false, intent: 'auto-attach (visionMode=always)' };
-}
-
-/**
  * Build a fresh "Page state" HumanMessage from the live browser. Called
  * by stateModifier on every agent step so the LLM always sees current
  * DOM/forms/page text rather than a stale snapshot from task start.
  *
- * T2f-1.5: vision capture is now decoupled from `getState`. The caller
- * passes a pre-captured screenshot payload (from `screenshotAction.call()`)
- * when visionMode='always'. That keeps the screenshot on the Action.call
- * path so `globalTracer` sees it as a normal `screenshot` tool entry,
- * matching how `'fallback'` already worked. No separate event channel,
- * no second-class observability.
+ * Always text-only. Image capture is the LLM's decision, made via the
+ * `screenshot()` tool; the runtime no longer auto-attaches images to
+ * state messages. Mirrors browser-use / Stagehand / computer-use which
+ * all let the agent drive its own perception loop.
  */
-async function buildBrowserStateMessage(
-  context: AgentContext,
-  screenshot: { base64: string; mime: string } | null,
-): Promise<HumanMessage> {
-  // Always pass useVision=false here — we either capture independently
-  // through the screenshot Action (for visionMode='always') or skip
-  // capture entirely (for 'off' / 'fallback'). Doing it both places
-  // would double-pay the puppeteer screenshot cost.
+async function buildBrowserStateMessage(context: AgentContext): Promise<HumanMessage> {
+  // useVision=false: we never capture inside getState; the `screenshot`
+  // Action handles all image acquisition and stays inside the regular
+  // tracer pipeline for observability.
   const browserState = await context.browserContext.getState(false);
   const elementsText = browserState.elementTree.clickableElementsToString(context.options.includeAttributes);
   const forms = extractForms(browserState);
@@ -231,14 +224,6 @@ ${formsSection ? `\n${formsSection}\n` : ''}
 Current date: ${timeStr}
 `;
 
-  if (screenshot) {
-    return new HumanMessage({
-      content: [
-        { type: 'text', text },
-        { type: 'image_url', image_url: { url: `data:${screenshot.mime};base64,${screenshot.base64}` } },
-      ],
-    });
-  }
   return new HumanMessage(text);
 }
 
@@ -247,6 +232,103 @@ Current date: ${timeStr}
  * terminates when the LLM emits an AIMessage without tool_calls; that
  * message's content is the natural-language answer.
  */
+/**
+ * T2p-3 — soft-fail summary on inner-recursion exhaustion WITH progress.
+ *
+ * Walks `messages` from the end and stitches a 1-2 sentence partial
+ * summary out of the last AIMessage text (the agent's most recent
+ * reasoning) plus the last ToolMessage name (what it actually did).
+ * Exported for unit testing. Does NOT call the LLM — the replanner
+ * runs an LLM round next anyway, that's the polishing layer.
+ *
+ * Returned string is always non-empty; if neither component is present
+ * it falls back to a generic "no observable progress" marker. The
+ * caller is expected to prefix this with `partial: ` before handing
+ * it back to the replanner.
+ */
+export function extractPartialSummary(messages: BaseMessage[]): string {
+  let lastAiText = '';
+  let lastToolName = '';
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (!lastAiText && m instanceof AIMessage) {
+      const content = m.content;
+      let text = '';
+      if (typeof content === 'string') {
+        text = content;
+      } else if (Array.isArray(content)) {
+        text = content
+          .filter(c => typeof c === 'object' && c !== null && 'type' in c && c.type === 'text')
+          .map(c => (c as { text: string }).text)
+          .join('\n');
+      }
+      if (text.trim().length > 0) lastAiText = text.trim();
+    }
+    if (!lastToolName && m instanceof ToolMessage) {
+      // ToolMessage carries `.name` for the tool that produced it.
+      const name = (m as ToolMessage & { name?: string }).name;
+      if (typeof name === 'string' && name.length > 0) lastToolName = name;
+    }
+    if (lastAiText && lastToolName) break;
+  }
+  if (!lastAiText && !lastToolName) return 'no observable progress before budget was exhausted';
+  if (lastAiText && lastToolName) return `${lastAiText} (last action: ${lastToolName})`;
+  if (lastAiText) return lastAiText;
+  return `last action: ${lastToolName}`;
+}
+
+/**
+ * T2x phase 0c — find a `task_complete(response=…)` call across the
+ * three shapes a provider might leave it in. Returns the answer
+ * wrapped in `TASK_COMPLETE: ` so the caller can pattern-match the
+ * prefix exactly like the legacy ToolMessage path.
+ *
+ * Shape 1 — ToolMessage.content already prefixed (action handler's
+ *   ActionResult.extractedContent path, normal LangChain.js flow).
+ * Shape 2 — AIMessage.tool_calls (LangChain-canonical slot, populated
+ *   when the provider's tool-call output is normalised).
+ * Shape 3 — AIMessage.additional_kwargs.tool_calls[i].function
+ *   (raw OpenAI/OpenRouter format, sometimes left un-normalised by
+ *   provider adapters — Gemini-2.5-flash via OpenRouter does this).
+ */
+export function findTaskCompleteAnswer(messages: BaseMessage[]): string | null {
+  for (const m of messages) {
+    // Shape 1: ToolMessage with prefix.
+    if (m instanceof ToolMessage) {
+      const c = m.content;
+      const text = typeof c === 'string' ? c : '';
+      if (text.startsWith('TASK_COMPLETE: ')) return text;
+    }
+    if (!(m instanceof AIMessage)) continue;
+    // Shape 2: AIMessage.tool_calls (LangChain-canonical).
+    if (Array.isArray(m.tool_calls)) {
+      for (const tc of m.tool_calls) {
+        if (tc?.name === 'task_complete' && tc.args && typeof tc.args === 'object') {
+          const r = (tc.args as { response?: unknown }).response;
+          if (typeof r === 'string' && r.length > 0) return `TASK_COMPLETE: ${r}`;
+        }
+      }
+    }
+    // Shape 3: additional_kwargs.tool_calls[i].function (raw OpenAI shape).
+    const kwargs = (m as { additional_kwargs?: { tool_calls?: unknown } }).additional_kwargs;
+    if (kwargs && Array.isArray(kwargs.tool_calls)) {
+      for (const tc of kwargs.tool_calls as Array<{ function?: { name?: string; arguments?: string } }>) {
+        if (tc?.function?.name === 'task_complete' && typeof tc.function.arguments === 'string') {
+          try {
+            const parsed = JSON.parse(tc.function.arguments) as { response?: unknown };
+            if (typeof parsed.response === 'string' && parsed.response.length > 0) {
+              return `TASK_COMPLETE: ${parsed.response}`;
+            }
+          } catch {
+            // fall through — malformed args, ignore this tool_call
+          }
+        }
+      }
+    }
+  }
+  return null;
+}
+
 function extractFinalAnswer(messages: BaseMessage[]): string | null {
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i];
@@ -282,75 +364,37 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
   // T2f-final-fix: consecutive-duplicate guard shared across all
   // tool wrappers — see langGraphAdapter for the threshold logic.
   const dupGuard = { recentKeys: [] as string[] };
-  // T2p: subgoal-level stuck detector. dupGuard above catches
-  // tool-call-signature repeats at the tool wrapper level; this
-  // detector catches the orthogonal failure modes from test10.md:
-  //   - env-fingerprint: same post-subgoal URL/DOM/text across ≥3
-  //     subgoals (varied actions but the page never changed —
-  //     e.g. dead-frame or wrong URL grind);
-  //   - silent-step: two consecutive subgoals with zero tool calls
-  //     (e.g. "Wait for X to load completely" no-op planner output).
-  // On either, recordSubgoal returns a reasoning_failure ActionError;
-  // we surface it as the StateGraph's terminal response so the outer
-  // FailureClassifier path emits TASK_FAIL with a clear reason.
-  const stuckDetector = new UnifiedStuckDetector();
-  // T2f-3 / T2f-coords: gate vision-only tools on visionMode.
-  //  - 'screenshot' belongs to 'fallback' only ('always' captures
-  //    via stateModifier, 'off' never).
-  //  - coordinate tools (click_at / type_at / scroll_at) belong to
-  //    'always' and 'fallback' — they need a fresh screenshot to
-  //    reason about, which is exactly what those modes provide.
-  //    Without 'always'/'fallback' the LLM cannot see image pixels
-  //    and would emit hallucinated coordinates.
-  // T2f-handover: hitl_click_at sits next to the regular coord tools
-  // — same gating, since the agent needs the screenshot context to
-  // pick the (x,y) marker before handing off.
-  // T2f-drag: drag_at is also a coordinate tool (canvas shape drawing).
+  // Tool-gating on visionMode. Two modes:
+  //  - 'off': no screenshot, no coordinate tools — pure DOM + read-only
+  //    + navigation surface. Used when the Navigator model lacks vision
+  //    capability or the user opts out.
+  //  - 'on': everything — DOM tools, coordinate tools (which require a
+  //    recent screenshot to reason on), the `screenshot()` tool itself,
+  //    and `take_over_user_tab`. The LLM picks freely.
+  //
+  // Coordinate tools: pixel-grounded actions that need a screenshot
+  // with grid overlay to target accurately. Off in 'off', on in 'on'.
+  // `hitl_click_at` and `drag_at` are coord tools too — same gate.
   const COORDINATE_TOOLS = new Set(['click_at', 'type_at', 'scroll_at', 'hitl_click_at', 'drag_at']);
-  // T2f-replan: in 'always' mode the user's intent is "act through
-  // pixels". Physically remove DOM-interaction tools from the registry
-  // so the model can't fall back to fragile DOM indices when it gets
-  // stuck. Navigation / read-only / screenshot stay available.
-  const DOM_INTERACTION_TOOLS = new Set(['click_element', 'input_text', 'fill_field_by_label']);
-  // T2f-tab-iso-1c: take_over_user_tab only makes sense when the
-  // agent has its own tab pinned (unified mode opens one; legacy
-  // works in the user's active tab so there's no separation to
-  // bridge). We always run unified mode here in this codepath
-  // (legacy goes through runClassicLoop), so the tool is always
-  // available — keep the gate explicit for clarity.
+  // take_over_user_tab only makes sense in unified mode (it bridges
+  // agent-tab → user-tab). runReactAgent is the unified entry point,
+  // so the tool is always available here — keep the gate explicit
+  // for clarity.
   const filteredActions = actions.filter(a => {
     const n = a.name();
-    if (n === 'screenshot') return visionMode === 'fallback';
-    if (COORDINATE_TOOLS.has(n)) return visionMode !== 'off';
-    if (DOM_INTERACTION_TOOLS.has(n)) return visionMode !== 'always';
+    if (n === 'screenshot') return visionMode === 'on';
+    if (COORDINATE_TOOLS.has(n)) return visionMode === 'on';
     if (n === 'take_over_user_tab') return true;
+    // T2w — `task_complete` is the unified-mode sentinel; `done` is
+    // the legacy-only equivalent. Mirror the existing visionMode
+    // gate pattern for clarity: keep one, drop the other.
+    if (n === 'task_complete') return true;
+    if (n === 'done') return false;
     return true;
   });
   const tools = actionsToTools(filteredActions, { counters, limits: DEFAULT_TOOL_BUDGETS }, dupGuard);
   const checkpointer = new MemorySaver();
-  // T2f-1.5: in 'always' mode the agent calls the SAME screenshot
-  // Action that 'fallback' exposes — just on its own behalf, every
-  // step, before the LLM is invoked. Using Action.call keeps the
-  // capture inside the regular tracer pipeline (one entry per step
-  // in the trace UI, identical shape to a regular tool call,
-  // thumbnail attached automatically).
-  // The screenshot Action handle is needed in two cases now:
-  //   - visionMode='always': autocapture every step (T2f-1.5).
-  //   - visionMode='fallback': adaptive auto-trigger on empty DOM /
-  //     url change / tool error / no-capture-for-N-steps
-  //     (T2f-fallback-smart). The Action is also still exposed in
-  //     the LLM tool registry under 'fallback' so the model can ask
-  //     for an explicit capture too.
-  const screenshotAction =
-    visionMode === 'always' || visionMode === 'fallback' ? actions.find(a => a.name() === 'screenshot') : undefined;
-  // T2f-fallback-smart — trackers for adaptive triggers. Stateful
-  // across all per-step ReAct invocations within this task.
-  const fallbackTriggerState = {
-    lastCapturedUrl: '' as string,
-    stepsSinceCapture: 0,
-  };
-  const FALLBACK_AUTO_CAPTURE_EVERY = 5;
-  const baseSystemPrompt = visionMode === 'off' ? reactSystemPromptTemplate : buildReactVisionPrompt(visionMode);
+  const baseSystemPrompt = visionMode === 'off' ? reactSystemPromptTemplate : buildReactVisionPrompt();
 
   // T2f-plan — minimal Plan-and-Execute pattern from LangGraph docs
   // (https://langchain-ai.github.io/langgraphjs/tutorials/plan-and-execute/).
@@ -527,7 +571,8 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
     completed: Array<[string, string]>,
     stepIndex: number,
     params: PlanType['taskParameters'],
-  ): Promise<{ finalAnswer: string; toolCallCount: number }> => {
+    fpStart: string | null,
+  ): Promise<{ finalAnswer: string }> => {
     const stepSystemPrompt = buildSystemPromptForStep(currentStep, completed, params);
     const agent = createReactAgent({
       llm,
@@ -535,84 +580,14 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
       checkpointSaver: new MemorySaver(),
       stateModifier: async (state: { messages: BaseMessage[] }) => {
         try {
-          // T2f-fallback-smart: decide whether to capture a screenshot
-          // for this state message.
-          //   - 'always': always.
-          //   - 'fallback': adaptive — capture when DOM extraction is
-          //     empty, URL has changed since the last capture, the
-          //     previous tool message looks like a DOM-fault error,
-          //     or N steps elapsed without a capture.
-          //   - 'off': never.
-          // T2n-overlay-handling — consume the pending-force flag set
-          // by switchTab / navigateTo so the next state message
-          // carries a fresh capture regardless of the adaptive
-          // fallback triggers. The flag is one-shot (read & clears
-          // in `consumePendingForceScreenshot`); under visionMode='off'
-          // we still consume it (preventing leakage across toggles)
-          // but no capture happens because there is no screenshotAction.
-          const pendingForce = context.browserContext.consumePendingForceScreenshot();
-          const base = resolveBaseCaptureDecision({
-            visionMode,
-            hasScreenshotAction: !!screenshotAction,
-            pendingForce,
-          });
-          let shouldCapture = base.shouldCapture;
-          let captureIntent = base.intent;
-          if (visionMode === 'fallback' && screenshotAction) {
-            const browserStateForTriggers = await context.browserContext.getState(false).catch(() => null);
-            const currentUrl = browserStateForTriggers?.url ?? '';
-            // T2f-drag: skip auto-capture on non-web URLs (chrome://,
-            // about:blank, devtools://). takeScreenshot would just
-            // return an error there, polluting the trace.
-            const isWebPage = /^https?:\/\//i.test(currentUrl);
-            const domEmpty = isWebPage && (browserStateForTriggers?.selectorMap?.size ?? 0) === 0;
-            const urlChanged = isWebPage && currentUrl !== fallbackTriggerState.lastCapturedUrl;
-            const lastToolMsg = [...state.messages].reverse().find(m => m.constructor?.name === 'ToolMessage');
-            const lastContent =
-              typeof (lastToolMsg as { content?: unknown })?.content === 'string'
-                ? (lastToolMsg as { content: string }).content
-                : '';
-            const lastWasDomFault = /Element with index \d+ does not exist|had no observable effect/.test(lastContent);
-            const stepsExpired = fallbackTriggerState.stepsSinceCapture >= FALLBACK_AUTO_CAPTURE_EVERY;
-            if (domEmpty || urlChanged || lastWasDomFault || stepsExpired) {
-              shouldCapture = true;
-              captureIntent = `fallback auto-capture (${[
-                domEmpty && 'dom-empty',
-                urlChanged && 'url-changed',
-                lastWasDomFault && 'dom-fault',
-                stepsExpired && 'steps-expired',
-              ]
-                .filter(Boolean)
-                .join(',')})`;
-            }
-          }
-
-          let screenshotPayload: { base64: string; mime: string } | null = null;
-          if (shouldCapture && screenshotAction) {
-            try {
-              const captureResult = await screenshotAction.call({
-                intent: captureIntent,
-                gridOverlay: true,
-              });
-              if (captureResult.imageBase64) {
-                screenshotPayload = {
-                  base64: captureResult.imageBase64,
-                  mime: captureResult.imageMime ?? 'image/jpeg',
-                };
-                if (visionMode === 'fallback') {
-                  const url = (await context.browserContext.getCurrentPage().catch(() => null))?.url() ?? '';
-                  fallbackTriggerState.lastCapturedUrl = url;
-                  fallbackTriggerState.stepsSinceCapture = 0;
-                }
-              }
-            } catch (err) {
-              logger.warning('auto screenshot capture failed; continuing without image', err);
-            }
-          } else if (visionMode === 'fallback') {
-            fallbackTriggerState.stepsSinceCapture += 1;
-          }
-
-          const fresh = await buildBrowserStateMessage(context, screenshotPayload);
+          // The `pendingForceScreenshot` flag set by switchTab /
+          // navigateTo is intentionally NOT consumed here. The runtime
+          // no longer auto-attaches images — screenshot capture is the
+          // LLM's call via the `screenshot()` tool. The flag is left
+          // in BrowserContext for a future cookie-overlay / tab-settle
+          // tier that may surface a hint to the model instead of
+          // bypassing it. Nothing reads the flag for now; that's fine.
+          const fresh = await buildBrowserStateMessage(context);
           return [new SystemMessage(stepSystemPrompt), ...state.messages, fresh];
         } catch (err) {
           logger.warning('buildBrowserStateMessage failed; running without fresh state', err);
@@ -632,29 +607,88 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
     // HumanMessage so a model that ignores the system prompt's
     // <original-user-task> block still sees parameters in chat
     // context. Belt and braces against subgoal-abstraction drift.
-    const stepResult = await agent.invoke(
-      {
-        messages: [
-          new HumanMessage(
-            `Original user task:\n${task}\n\nCurrent subgoal:\n${currentStep}\n\nExecute the current subgoal only. Resolve any abstract reference in the subgoal text (e.g. "the provided URL", "the requested term") by re-reading the original user task above.`,
-          ),
-        ],
-      },
-      stepConfig,
-    );
-    // T2p: count AIMessage entries that emitted at least one tool call.
-    // Drives the silent-step guard in stuckDetector. AIMessages without
-    // tool_calls are reasoning or the final answer for this subgoal;
-    // they don't count toward "actually acting on the page".
-    let toolCallCount = 0;
-    for (const m of stepResult.messages) {
-      if (m instanceof AIMessage && Array.isArray(m.tool_calls) && m.tool_calls.length > 0) {
-        toolCallCount += 1;
+    let stepResult: { messages: BaseMessage[] };
+    try {
+      stepResult = await agent.invoke(
+        {
+          messages: [
+            new HumanMessage(
+              `Original user task:\n${task}\n\nCurrent subgoal:\n${currentStep}\n\nExecute the current subgoal only. Resolve any abstract reference in the subgoal text (e.g. "the provided URL", "the requested term") by re-reading the original user task above.`,
+            ),
+          ],
+        },
+        stepConfig,
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      // T2p-3 — distinguish BUDGET signal from STUCK signal. T2p-2 treated
+      // every inner GraphRecursionError as a terminal stuck verdict, but
+      // test20 showed the agent often makes real navigation progress and
+      // exhausts the 25-round budget just before producing its answer.
+      // Compare the page fingerprint captured at agentNode entry against
+      // the fingerprint at exhaustion: same → real stuck (rethrow so the
+      // outer catch flips innerRecursionExhausted), different → real
+      // progress → soft-fail with a "partial:" summary so the replanner
+      // can decide END or CONTINUE on the next round.
+      if (!isInnerRecursionLimitError(msg)) throw err;
+      let fpNow: string | null = null;
+      try {
+        const liveState = await context.browserContext.getState(false);
+        fpNow = computeStateFingerprint(liveState);
+      } catch (fpErr) {
+        // T2u-runaway-loop — same logic as the fp_start probe. If
+        // the tab is gone there is nothing to compare against, so
+        // rethrow the original recursion-limit error and let the
+        // outer agentNode catch turn it into a clean stop.
+        const fpMsg = fpErr instanceof Error ? fpErr.message : String(fpErr);
+        if (fpErr instanceof TabGoneError || /No tab with id|No frame with id/i.test(fpMsg)) {
+          logger.warning(`fp_now probe saw tab gone (${fpMsg}); rethrowing recursion-limit error`);
+          throw err;
+        }
+        logger.warning('fp_now probe failed during recursion-limit soft-fail check', fpErr);
+        fpNow = null;
       }
+      // Conservative-stuck path: any null fingerprint means we can't
+      // confirm progress, so preserve T2p-2 terminal behaviour.
+      if (fpStart === null || fpNow === null || fpNow === fpStart) {
+        throw err;
+      }
+      // Progress confirmed: stitch a partial summary from the
+      // checkpointer state. Rethrow if the snapshot is unreadable
+      // (we cannot manufacture a useful soft-fail without messages).
+      let snapshotMessages: BaseMessage[] = [];
+      try {
+        const snapshot = await agent.getState(stepConfig);
+        const v = (snapshot as { values?: { messages?: BaseMessage[] } }).values;
+        if (v && Array.isArray(v.messages)) snapshotMessages = v.messages;
+      } catch (snapErr) {
+        logger.warning('agent.getState() failed during recursion-limit soft-fail', snapErr);
+        throw err;
+      }
+      const summary = extractPartialSummary(snapshotMessages);
+      logger.info(`recursion-limit soft-fail with progress (fp_start≠fp_now) — handing partial to replanner`);
+      return { finalAnswer: `partial: ${summary}` };
     }
+    // T2w (T2x phase 0c — robust) — scan for the `task_complete`
+    // sentinel across THREE shapes the underlying provider might use:
+    //   1. ToolMessage.content prefixed `TASK_COMPLETE: ` — what the
+    //      action handler emits via ActionResult.extractedContent.
+    //   2. AIMessage.tool_calls[i].name === 'task_complete' — the
+    //      LangChain-canonical normalised slot.
+    //   3. AIMessage.additional_kwargs.tool_calls[i].function — raw
+    //      OpenAI/OpenRouter format that some providers populate
+    //      without normalising to (2). Test25 (Gemini-2.5-flash via
+    //      OpenRouter, 2026-05-16) showed the prefix scan alone is
+    //      not enough — the model called `task_complete` twice with
+    //      a valid `response` arg but the ToolMessage shape didn't
+    //      trigger the prefix match, so the agent burned more rounds
+    //      until the replanner forced a finish.
+    // Whichever shape lands first wins. The returned `finalAnswer`
+    // keeps the `TASK_COMPLETE: ` prefix so agentNode can route to
+    // END via state.response, bypassing the replanner.
+    const taskCompleteAnswer = findTaskCompleteAnswer(stepResult.messages);
     return {
-      finalAnswer: extractFinalAnswer(stepResult.messages) ?? 'no observable result',
-      toolCallCount,
+      finalAnswer: taskCompleteAnswer ?? extractFinalAnswer(stepResult.messages) ?? 'no observable result',
     };
   };
 
@@ -716,6 +750,25 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
     if (state.plan.length === 0) {
       return { response: 'no remaining plan steps' };
     }
+    // T2u-runaway-loop — short-circuit the node body if the user
+    // has already pressed Stop OR a previous probe noticed the
+    // agent tab is gone. Without this, the `fpStart` and post-step
+    // `fpNow` probes below kept calling `getState()` after abort,
+    // which hammered a dead tab and generated tens of thousands of
+    // log lines per second in the SW console. Returning a
+    // `response` routes the StateGraph straight to END; the outer
+    // catch in `runReactAgent` classifies the abort/dead-tab case
+    // by inspecting `context.stopped` separately.
+    if (context.controller.signal.aborted || context.stopped) {
+      return { response: 'cancelled' };
+    }
+    if (context.browserContext.agentTabId() === null && state.pastSteps.length > 0) {
+      // Once we've started a task, `agentTabId` becoming `null`
+      // mid-run means `handleTabGone` evicted it — bail rather
+      // than spin on a dead tab. Skipped at step 0 because the
+      // tab is opened lazily on first navigation.
+      return { response: 'agent tab is no longer reachable' };
+    }
     const currentStep = state.plan[0];
     const remainingAfter = state.plan.slice(1);
     logger.info(`executing subgoal ${state.pastSteps.length + 1}: ${currentStep}`);
@@ -728,50 +781,131 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
       { text: currentStep, done: false, inProgress: true },
       ...remainingAfter.map(s => ({ text: s, done: false })),
     ]);
-    let stepResult: string;
-    let toolCallCount = 0;
+    // T2p-3 — capture page fingerprint BEFORE entering the inner ReAct
+    // loop. Passed through to runReactStep so its catch block can
+    // compare against the post-exhaustion fingerprint and distinguish
+    // "burned budget on a frozen page" (real stuck) from "burned budget
+    // mid-progress" (soft-fail with partial). Wrapped in try/catch
+    // because a probe failure must NOT abort the subgoal — we fall
+    // back to `null` and the inner catch treats that as
+    // conservative-stuck.
+    let fpStart: string | null = null;
+    let tabGoneOnFpStart = false;
     try {
-      const stepOut = await runReactStep(currentStep, state.pastSteps, state.pastSteps.length, state.taskParameters);
+      const liveState = await context.browserContext.getState(false);
+      fpStart = computeStateFingerprint(liveState);
+    } catch (err) {
+      // T2u-runaway-loop — if the tab vanished before we even
+      // entered the inner ReAct loop there is nothing left to do
+      // for this subgoal. Set a flag so the post-step block below
+      // short-circuits straight to a graceful "tab gone" response
+      // rather than re-probing the dead tab.
+      const msg = err instanceof Error ? err.message : String(err);
+      if (err instanceof TabGoneError || /No tab with id|No frame with id/i.test(msg)) {
+        logger.warning(`fp_start probe saw tab gone (${msg}); will end subgoal gracefully`);
+        tabGoneOnFpStart = true;
+      } else {
+        logger.warning('fp_start probe failed; recursion-limit soft-fail will treat as stuck', err);
+      }
+      fpStart = null;
+    }
+    if (tabGoneOnFpStart) {
+      emitPlanChecklist([
+        ...state.pastSteps.map(([s]) => ({ text: s, done: true })),
+        { text: currentStep, done: false },
+        ...remainingAfter.map(s => ({ text: s, done: false })),
+      ]);
+      return {
+        pastSteps: [[currentStep, 'failed: agent tab is no longer available'] as [string, string]],
+        response: 'The agent tab is no longer available (closed or crashed). Run ended.',
+      };
+    }
+    let stepResult: string;
+    let innerRecursionExhausted = false;
+    try {
+      const stepOut = await runReactStep(
+        currentStep,
+        state.pastSteps,
+        state.pastSteps.length,
+        state.taskParameters,
+        fpStart,
+      );
       stepResult = stepOut.finalAnswer;
-      toolCallCount = stepOut.toolCallCount;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       logger.warning(`subgoal "${currentStep}" failed: ${msg}`);
       stepResult = `failed: ${msg}`;
-    }
-    // T2p — post-subgoal stagnation check. Compute fingerprint of the
-    // current page state and feed it + tool-call count to the detector.
-    // On stuck the detector returns a `reasoning_failure` ActionError;
-    // we short-circuit the StateGraph by writing `response` so `decide`
-    // routes to END and the outer try/catch in runReactAgent emits
-    // TASK_FAIL with the verdict message. Without this, test10's
-    // 4× identical screenshot + "Wait for X" no-toolCall pattern
-    // grinds CPU + tokens with no termination signal.
-    let stuckResponse: string | null = null;
-    try {
-      const liveState = await context.browserContext.getState(false);
-      const fp = computeStateFingerprint(liveState);
-      const verdict = stuckDetector.recordSubgoal({ fingerprint: fp, toolCallCount });
-      if (verdict) {
-        logger.warning(`stuckDetector: ${verdict.kind} — ${verdict.message}`);
-        const partial = state.pastSteps.map(([s, r]) => `- ${s}: ${r}`).join('\n');
-        stuckResponse = `I'm stopping because the agent appears stuck: ${verdict.message}\n\nWhat I did so far:\n${partial || '(no completed subgoals)'}\n\nTry rephrasing the task, opening the target page yourself, or switching to legacy agent mode in Settings.`;
+      // T2p-2: when the inner createReactAgent exhausts its own
+      // recursionLimit, the subgoal burned ~25 LLM rounds emitting
+      // tool calls with no progress (typical: isTrusted=false antibot
+      // wall on click_at). Treat it as a structural reasoning failure
+      // and short-circuit the outer StateGraph immediately, BEFORE
+      // the replanner takes another swing and burns another 25
+      // rounds under a new subgoal description.
+      if (isInnerRecursionLimitError(msg)) {
+        innerRecursionExhausted = true;
       }
-    } catch (err) {
-      logger.warning('stuckDetector post-subgoal probe failed; skipping this round', err);
     }
-    // After the step: flip current to done (or leave at false if it
-    // came back as a "failed:..." marker — replanner picks up from
-    // there).
+    // Post-subgoal terminal-condition check. Two paths can force an
+    // immediate stop here:
+    //   1. T2p-2: the inner createReactAgent exhausted its recursion
+    //      budget AND fp_start == fp_now (no progress) — surface as
+    //      a clean "stuck inside one step" message to the user.
+    //   2. T2u: user pressed Stop OR the agent tab is gone — short
+    //      out before `getState()` re-triggers DOM probes on a dead
+    //      tab. (Tab-gone is checked again below via a probe.)
+    // The previous subgoal-level stuck detector (silent-step +
+    // env-fingerprint) was deleted in T2x phase 0a/0b — see
+    // `auto-docs/for-development/agents/anti-patterns.md` §9.
+    // Remaining stuck coverage: dupGuard at the tool layer +
+    // LangGraph recursionLimit + the schema-forced terminal
+    // `task_complete` tool below.
+    let stuckResponse: string | null = null;
+    if (innerRecursionExhausted) {
+      const partial = state.pastSteps.map(([s, r]) => `- ${s}: ${r}`).join('\n');
+      stuckResponse = `I'm stopping because the agent got stuck inside one step: it burned the inner recursion budget on "${currentStep}" without making progress (usually means the target page silently blocks automated clicks).\n\nWhat I did so far:\n${partial || '(no completed subgoals)'}\n\nTry rephrasing the task, opening the target page yourself, or switching to legacy agent mode in Settings.`;
+    } else if (context.controller.signal.aborted || context.stopped) {
+      stuckResponse = 'cancelled';
+    } else {
+      // Tab-gone probe — `getState()` throws TabGoneError when the
+      // agent tab has been closed/crashed. Surface a clean response
+      // so `decide` routes to END instead of feeding the replanner
+      // a dead tab.
+      try {
+        await context.browserContext.getState(false);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (err instanceof TabGoneError || /No tab with id|No frame with id/i.test(msg)) {
+          logger.warning(`agentNode probe saw tab gone; ending run gracefully: ${msg}`);
+          stuckResponse = 'The agent tab is no longer available (closed or crashed). Run ended.';
+        } else {
+          logger.warning('agentNode post-subgoal probe failed; continuing', err);
+        }
+      }
+    }
+    // After the step: flip current to done unless it came back as a
+    // "failed:..." marker OR a "partial:..." marker (T2p-3 soft-fail
+    // when the inner loop exhausted its recursion budget mid-progress).
+    // In both cases the replanner picks up from the pastSteps entry and
+    // decides END or CONTINUE. T2w — a `TASK_COMPLETE: ` prefix means
+    // the agent explicitly called the sentinel termination action;
+    // strip the prefix, mark the subgoal done, and short-circuit to
+    // END via state.response (bypasses the replanner entirely).
+    const taskCompleteMatch = stepResult.startsWith('TASK_COMPLETE: ')
+      ? stepResult.slice('TASK_COMPLETE: '.length)
+      : null;
+    const stepIsDone =
+      taskCompleteMatch !== null || (!stepResult.startsWith('failed:') && !stepResult.startsWith('partial:'));
     emitPlanChecklist([
       ...state.pastSteps.map(([s]) => ({ text: s, done: true })),
-      { text: currentStep, done: !stepResult.startsWith('failed:') },
+      { text: currentStep, done: stepIsDone },
       ...remainingAfter.map(s => ({ text: s, done: false })),
     ]);
     const update: { pastSteps: Array<[string, string]>; response?: string } = {
       pastSteps: [[currentStep, stepResult] as [string, string]],
     };
-    if (stuckResponse !== null) update.response = stuckResponse;
+    if (taskCompleteMatch !== null) update.response = taskCompleteMatch;
+    else if (stuckResponse !== null) update.response = stuckResponse;
     return update;
   };
 
@@ -866,8 +1000,15 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
     callbacks: [usageCallback, observabilityCallback],
   };
 
+  // T2v — `streamEvents(v2)` replaces batch `invoke()` so silence is a real abnormal signal.
+  const emitLive = (msg: LiveEvent) => context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_LIVE, JSON.stringify(msg));
   try {
-    const finalState = await compiled.invoke({}, config);
+    const finalState = await bridgeStreamEvents<typeof PlanExecuteState.State>(
+      compiled.streamEvents({}, { ...config, version: 'v2' }),
+      emitLive,
+      context.controller.signal,
+    );
+    emitLive({ kind: 'idle' });
     emitUsage();
     const finalAnswer =
       finalState.response ??
@@ -882,6 +1023,7 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
     context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_FAIL, msg);
     return { finalAnswer: null, error: msg };
   } catch (err) {
+    emitLive({ kind: 'idle' });
     emitUsage();
     const message = err instanceof Error ? err.message : String(err);
     if (context.stopped || message.includes('aborted')) {

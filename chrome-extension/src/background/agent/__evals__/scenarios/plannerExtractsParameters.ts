@@ -2,8 +2,8 @@
  * T3 — Planner correctness eval.
  *
  * Verifies the planner schema's three-belt defense against subgoal-
- * abstraction drift (see `auto-docs/for-development/agents/structured-
- * output.md::Schema-Level Enforcement For Subgoal Drift`):
+ * abstraction drift via schema-level enforcement (a `withStructuredOutput`
+ * required field), prompt-level repetition, and per-step HumanMessage echo:
  *
  * Given a user task that contains a concrete URL and a concrete query
  * string, the planner MUST:

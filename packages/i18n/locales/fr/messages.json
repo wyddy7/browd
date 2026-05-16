@@ -1102,16 +1102,13 @@
     "message": "Vision mode"
   },
   "options_general_visionMode_desc": {
-    "message": "Always: a fresh screenshot is attached to every step (slower, higher accuracy). Fallback: the agent only takes a screenshot when it explicitly asks for one. Off: no screenshots."
+    "message": "Activé : l'agent dispose d'un outil screenshot et d'actions par coordonnées, et choisit lui-même quand capturer. Désactivé : DOM uniquement, sans captures."
   },
   "options_general_visionMode_off": {
-    "message": "Off"
+    "message": "Désactivé"
   },
-  "options_general_visionMode_always": {
-    "message": "Always"
-  },
-  "options_general_visionMode_fallback": {
-    "message": "Fallback"
+  "options_general_visionMode_on": {
+    "message": "Activé"
   },
   "options_general_visionMode_warning": {
     "message": "Selected Navigator model has no vision support — vision is inactive at runtime. Pick a vision-capable model to enable."
@@ -1211,5 +1208,17 @@
   },
   "options_general_badge_beta": {
     "message": "beta"
+  },
+  "hitl_takeover_title": {
+    "message": "Browd souhaite prendre le contrôle d'un onglet"
+  },
+  "hitl_takeover_reason": {
+    "message": "Raison"
+  },
+  "hitl_takeover_allow": {
+    "message": "Autoriser"
+  },
+  "hitl_takeover_deny": {
+    "message": "Refuser"
   }
 }

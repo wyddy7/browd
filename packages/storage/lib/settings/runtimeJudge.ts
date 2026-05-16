@@ -3,8 +3,8 @@
  *
  * Controls whether the agent runtime invokes the Judge model to verify
  * the final response before shipping it to the user. This is the
- * verifier-subagent pattern from
- * `auto-docs/for-development/agents/multi-agent.md::Scraper vs Researcher`.
+ * verifier-subagent pattern: a second model independently grades the
+ * primary agent's output, separating doing from judging.
  *
  * Modes:
  *  - 'off' — never invoke Judge at runtime. Replanner's `decision='finish'`

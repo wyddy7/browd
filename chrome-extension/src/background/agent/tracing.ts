@@ -8,8 +8,6 @@
  * Storage: chrome.storage.local (`browd:trace:<taskId>` key, ring buffer of
  * up to MAX_ENTRIES_PER_TASK records). The extension already requests
  * `unlimitedStorage`, so this is safe.
- *
- * Read order before editing: auto-docs/browd-agent-evolution.md (Tier 0).
  */
 import { createLogger } from '@src/background/log';
 

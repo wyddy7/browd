@@ -35,6 +35,7 @@ import {
   hitlClickAtActionSchema,
   dragAtActionSchema,
   takeOverUserTabActionSchema,
+  taskCompleteActionSchema,
 } from './schemas';
 import { webFetchMarkdown, webSearch, extractActiveTabAsMarkdown } from '../tools/webTools';
 import { findFieldByLabel } from '@src/background/browser/dom/fieldFinder';
@@ -271,6 +272,20 @@ export class ActionBuilder {
       });
     }, doneActionSchema);
     actions.push(done);
+
+    // T2w — unified-mode termination sentinel. The handler is pure:
+    // it returns an ActionResult whose extractedContent carries a
+    // `TASK_COMPLETE: ` prefix. runReactAgent inspects the ToolMessage
+    // stream for that prefix and routes the StateGraph directly to END
+    // via `state.response`, bypassing the replanner. No HITL gate, no
+    // tab-isolation check — terminal signal only.
+    const taskComplete = new Action(async (input: z.infer<typeof taskCompleteActionSchema.schema>) => {
+      return new ActionResult({
+        extractedContent: `TASK_COMPLETE: ${input.response}`,
+        includeInMemory: true,
+      });
+    }, taskCompleteActionSchema);
+    actions.push(taskComplete);
 
     const searchGoogle = new Action(async (input: z.infer<typeof searchGoogleActionSchema.schema>) => {
       const context = this.context;
@@ -1147,6 +1162,50 @@ export class ActionBuilder {
         const tab = await chrome.tabs.get(input.tabId);
         if (!tab?.id) {
           return new ActionResult({ error: `take_over_user_tab: tab ${input.tabId} not found` });
+        }
+        // T2s-2: take-over is a cross-isolation-boundary action.
+        // Gate it behind explicit user approval before pinning the
+        // agent to a tab the user opened. If no HITL controller is
+        // wired (legacy / test setup), fall through to direct
+        // behavior — this preserves backward-compat for callers
+        // that pre-date the controller.
+        const hitl = this.context.hitlController;
+        if (hitl) {
+          try {
+            const decision = await hitl.requestDecision({
+              id: `hitl-takeover-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+              reason: 'take_over_request',
+              pendingAction: { take_over_user_tab: { tabId: input.tabId, reason: input.reason, intent } },
+              context: {
+                summary: intent,
+                risk: 'medium',
+                confidence: 0.6,
+                takeOverRequest: {
+                  tabId: input.tabId,
+                  title: tab.title ?? '',
+                  url: tab.url ?? '',
+                  reason: input.reason,
+                },
+              },
+            });
+            if (decision.type === 'reject') {
+              return new ActionResult({
+                error: `take_over_user_tab: user refused: ${decision.message || 'no reason given'}`,
+              });
+            }
+            // approve / edit / answer — proceed with take-over.
+          } catch (err) {
+            // Promise rejection from HITLController = timeout / cancel.
+            const message = err instanceof Error ? err.message : String(err);
+            if (/timeout/i.test(message)) {
+              return new ActionResult({
+                error: 'take_over_user_tab: user did not respond within 5 minutes — take-over cancelled.',
+              });
+            }
+            return new ActionResult({ error: `take_over_user_tab: ${message}` });
+          }
+        } else {
+          logger.warning('take_over_user_tab: no HITL controller wired — proceeding without approval gate');
         }
         this.context.browserContext.takeOverTab(input.tabId);
         const msg = `agent now operates in tab ${input.tabId} (${tab.url ?? 'unknown url'}); reason: ${input.reason}`;

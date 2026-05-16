@@ -90,5 +90,5 @@ makes the eval reproducible across runs.
 - Scenario fixtures.
 - CI integration.
 
-When this gets implemented, update `auto-docs/browd-t3-scope.md`
-to mark integration scenarios as "ready".
+When this gets implemented, mark integration scenarios as "ready"
+in whichever scope contract this repo carries.

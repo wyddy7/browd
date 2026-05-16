@@ -3,6 +3,7 @@ import type { BuildDomTreeArgs, RawDomTreeNode, RawDomElementNode, BuildDomTreeR
 import { type DOMState, type DOMBaseNode, DOMElementNode, DOMTextNode } from './views';
 import type { ViewportInfo } from './history/view';
 import { isNewTabPage } from '../util';
+import { TabGoneError, isTabGoneErrorMessage } from '../views';
 
 const logger = createLogger('DOMService');
 
@@ -97,6 +98,7 @@ export async function getClickableElements(
   focusElement = -1,
   viewportExpansion = 0,
   debugMode = false,
+  signal?: AbortSignal,
 ): Promise<DOMState> {
   const [elementTree, selectorMap] = await _buildDomTree(
     tabId,
@@ -105,8 +107,23 @@ export async function getClickableElements(
     focusElement,
     viewportExpansion,
     debugMode,
+    signal,
   );
   return { elementTree, selectorMap };
+}
+
+/**
+ * T2u-abort — bail out a probe that was started against a now-dead
+ * tab. Used at each iframe-loop boundary and before each
+ * `chrome.scripting.executeScript` call so an in-flight DOM tree
+ * build does not iterate through hundreds of cached frame ids
+ * after `BrowserContext.handleTabGone` has already evicted the
+ * `Page`. Reuses `TabGoneError` — same downstream classification.
+ */
+function _throwIfAborted(tabId: number, signal: AbortSignal | undefined): void {
+  if (signal?.aborted) {
+    throw new TabGoneError(tabId, new Error(`Tab ${tabId} probe aborted: tab gone`));
+  }
 }
 
 async function _buildDomTree(
@@ -116,6 +133,7 @@ async function _buildDomTree(
   focusElement = -1,
   viewportExpansion = 0,
   debugMode = false,
+  signal?: AbortSignal,
 ): Promise<[DOMElementNode, Map<number, DOMElementNode>]> {
   // If URL is provided and it's about:blank, return a minimal DOM tree
   if (isNewTabPage(url) || url.startsWith('chrome://')) {
@@ -133,25 +151,43 @@ async function _buildDomTree(
     return [elementTree, new Map<number, DOMElementNode>()];
   }
 
+  _throwIfAborted(tabId, signal);
   await injectBuildDomTreeScripts(tabId);
+  _throwIfAborted(tabId, signal);
 
-  const mainFrameResult = await chrome.scripting.executeScript({
-    target: { tabId },
-    func: args => {
-      // Access buildDomTree from the window context of the target page
-      return window.buildDomTree(args);
-    },
-    args: [
-      {
-        showHighlightElements,
-        focusHighlightIndex: focusElement,
-        viewportExpansion,
-        startId: 0,
-        startHighlightIndex: 0,
-        debugMode,
+  // T2u-runaway-loop — main-frame executeScript is the canonical
+  // place where Chrome reports `No tab with id: N` after the tab has
+  // been destroyed (manual close, crash, navigation to chrome://).
+  // Wrap it in a typed catch so the caller can evict the cached Page
+  // instead of swallowing the error and looping at JS speed against
+  // the same dead tab.
+  let mainFrameResult;
+  try {
+    mainFrameResult = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: args => {
+        // Access buildDomTree from the window context of the target page
+        return window.buildDomTree(args);
       },
-    ],
-  });
+      args: [
+        {
+          showHighlightElements,
+          focusHighlightIndex: focusElement,
+          viewportExpansion,
+          startId: 0,
+          startHighlightIndex: 0,
+          debugMode,
+        },
+      ],
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (isTabGoneErrorMessage(msg)) {
+      logger.warning(`mainFrame buildDomTree: tab ${tabId} gone — ${msg}`);
+      throw new TabGoneError(tabId, err);
+    }
+    throw err;
+  }
 
   // First cast to unknown, then to BuildDomTreeResult
   let mainFramePage = mainFrameResult[0]?.result as unknown as BuildDomTreeResult;
@@ -168,7 +204,17 @@ async function _buildDomTree(
   const visibleIframesFailedLoading = _visibleIFramesFailedLoading(mainFramePage);
   const visibleIframesFailedLoadingCount = Object.values(visibleIframesFailedLoading).length;
   if (visibleIframesFailedLoadingCount > 0) {
-    const tabFrames = await chrome.webNavigation.getAllFrames({ tabId });
+    let tabFrames;
+    try {
+      tabFrames = await chrome.webNavigation.getAllFrames({ tabId });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (isTabGoneErrorMessage(msg)) {
+        logger.warning(`getAllFrames: tab ${tabId} gone — ${msg}`);
+        throw new TabGoneError(tabId, err);
+      }
+      throw err;
+    }
     const subFrames = (tabFrames ?? []).filter(frame => frame.frameId !== mainFrameResult[0].frameId).sort();
 
     // Get sub-frames info, so that we can run the buildDomTree only on the frames that failed,
@@ -183,6 +229,7 @@ async function _buildDomTree(
     const frameInfoResultsRaw = await Promise.all(
       subFrames.map(async frame => {
         try {
+          _throwIfAborted(tabId, signal);
           const result = await chrome.scripting.executeScript({
             target: { tabId, frameIds: [frame.frameId] },
             func: frameId => ({
@@ -198,11 +245,22 @@ async function _buildDomTree(
           return result[0].result;
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
+          // T2u-runaway-loop — preserve tab-gone signal across the
+          // per-frame `Promise.all`. Returning `null` here would
+          // silently drop every frame, log N warnings, and then
+          // fall through to the (also-failing) frame-tree
+          // construction — exactly the burst the screenshot showed.
+          if (isTabGoneErrorMessage(msg)) {
+            throw new TabGoneError(tabId, err);
+          }
           logger.warning(`skipping frame ${frame.frameId}: ${msg}`);
           return null;
         }
       }),
-    );
+    ).catch(err => {
+      if (err instanceof TabGoneError) throw err;
+      throw err;
+    });
     const frameInfoResults = frameInfoResultsRaw.filter(isNotNull);
 
     const frameTreeResult = await constructFrameTree(
@@ -215,6 +273,7 @@ async function _buildDomTree(
       frameInfoResults,
       _getMaxID(mainFramePage),
       _getMaxHighlighIndex(mainFramePage),
+      signal,
     );
     mainFramePage = frameTreeResult.resultPage;
   }
@@ -232,6 +291,7 @@ async function constructFrameTree(
   allFramesInfo: FrameInfo[],
   startingNodeId: number,
   startingHighlightIndex: number,
+  signal?: AbortSignal,
 ): Promise<{ maxNodeId: number; maxHighlightIndex: number; resultPage: BuildDomTreeResult }> {
   const parentIframesFailedLoading = _visibleIFramesFailedLoading(parentFramePage);
   const failedLoadingFrames = allFramesInfo.filter(frameInfo => {
@@ -251,6 +311,12 @@ async function constructFrameTree(
   let maxHighlightIndex = startingHighlightIndex;
 
   for (const subFrame of failedLoadingFrames) {
+    // T2u-abort — the iframe loop is the original burst-amplifier:
+    // one dead tab × ~900 cached frame ids produced the 3660-line
+    // log spew in the screenshot. Checking the signal at the top
+    // of every iteration short-circuits the loop before another
+    // executeScript fires against the dead tab.
+    _throwIfAborted(tabId, signal);
     // Processing one frame at a time, to start from the proper highlightIndex and element id.
     // T2f-final-fix-3: any one frame can land in chrome-error://
     // (cross-origin redirect, X-Frame-Options block, captcha) and
@@ -277,6 +343,17 @@ async function constructFrameTree(
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
+      // T2u-runaway-loop — when the tab itself is gone, every
+      // remaining iframe in `failedLoadingFrames` will throw the
+      // same "No tab with id" error. The pre-fix `continue` here
+      // generated tens of thousands of identical warnings per
+      // second by walking the full subframe list against a dead
+      // tab. Break out as a typed error so the caller can evict
+      // the cached `Page`.
+      if (isTabGoneErrorMessage(msg)) {
+        logger.warning(`tab ${tabId} gone during subFrame ${subFrame.frameId} build, aborting tree build: ${msg}`);
+        throw new TabGoneError(tabId, err);
+      }
       logger.warning(`skipping subFrame ${subFrame.frameId} during tree build: ${msg}`);
       continue;
     }
@@ -329,6 +406,7 @@ async function constructFrameTree(
         allFramesInfo,
         maxNodeId,
         maxHighlightIndex,
+        signal,
       );
       maxNodeId = Math.max(maxNodeId, result.maxNodeId);
       maxHighlightIndex = Math.max(maxHighlightIndex, result.maxHighlightIndex);
