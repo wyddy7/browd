@@ -321,39 +321,46 @@ code {
   color: var(--browd-danger);
 }
 
+/* Open menu DOES carry chrome — popover elevation needs all three
+   of {bg shift, border, shadow}. The closed pill stays borderless
+   because it lives inside the toolbar; the open menu floats above
+   that plane and needs the separation. */
 .browd-permission-menu {
   position: absolute;
-  bottom: calc(100% + 6px);
+  bottom: calc(100% + 8px);
   left: 0;
-  min-width: 160px;
+  min-width: 180px;
   background: var(--browd-panel-strong, var(--browd-panel));
-  border-radius: 8px;
-  padding: 3px;
+  border: 1px solid var(--browd-border);
+  border-radius: 10px;
+  padding: 4px;
   display: flex;
   flex-direction: column;
   gap: 1px;
-  box-shadow: 0 8px 24px hsl(var(--browd-shadow) / 0.22);
+  box-shadow:
+    0 1px 2px hsl(var(--browd-shadow) / 0.08),
+    0 12px 28px hsl(var(--browd-shadow) / 0.18);
   z-index: 30;
 }
 .browd-permission-menu-item {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.35rem 0.5rem;
-  border-radius: 5px;
+  padding: 0.5rem 0.6rem;
+  border-radius: 6px;
   background: transparent;
   color: var(--browd-text);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.2;
   text-align: left;
   cursor: pointer;
   transition: background 120ms ease;
 }
 .browd-permission-menu-item:hover {
-  background: color-mix(in srgb, var(--browd-accent) 8%, transparent);
+  background: color-mix(in srgb, var(--browd-accent) 7%, transparent);
 }
 .browd-permission-menu-item.is-selected {
-  background: color-mix(in srgb, var(--browd-accent) 12%, transparent);
+  background: color-mix(in srgb, var(--browd-accent) 9%, transparent);
 }
 .browd-permission-menu-item.is-danger {
   color: var(--browd-danger);
