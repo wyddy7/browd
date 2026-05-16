@@ -111,6 +111,25 @@ separate `visionMode` toggle:
   Cross-over to a user tab happens only via `take_over_user_tab(tabId, reason)`
   Action — explicit, never implicit. Title prefix `[Browd] ` is
   injected so the user sees which tab is the agent's.
+  - **Side-effect new-tab handling (fixed 2026-05-17, commit `094f56f`).**
+    `click_element` / `click_at` / `type_at` previously auto-switched
+    to any new tab spawned by the click (target="_blank", window.open).
+    That promoted the new tab to `_agentTabId` via context.ts
+    T2o-agent-tab-follow, and the LLM could then close its own anchor
+    and crash with "agent tab no longer reachable" (test28-31). All
+    three handlers now use the shared `detectSideEffectNewTab` helper
+    in `actions/builder.ts` — they only REPORT the new tab id with an
+    explicit `take_over_user_tab(id, "<why>")` hint and never switch.
+    Cross-over decision moves to the LLM via the standard action.
+- **Permission posture — Default vs Full access.** The side-panel
+  input toolbar shows a `PermissionModeSelector` pill driving the
+  `generalSettings.permissionMode: 'default' | 'full'` field.
+  `take_over_user_tab` reads it per call and skips its HITL approval
+  prompt when posture is `'full'`. `hitl_click_at` always prompts
+  regardless — that gate exists for isTrusted-blocked buttons where
+  the user IS the only solution (no automation can bypass). Add new
+  HITL gates by checking `(await generalSettingsStore.getSettings()).permissionMode`
+  at decision time, mirroring the take-over handler.
 - **All third-party text sources MUST go through
   `wrapUntrustedContent`** before reaching the LLM:
   `Interactive elements`, `pageText`, `web_fetch_markdown`,
