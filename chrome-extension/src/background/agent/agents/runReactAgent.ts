@@ -525,7 +525,7 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
     stepIndex: number,
     params: PlanType['taskParameters'],
     fpStart: string | null,
-  ): Promise<{ finalAnswer: string; toolCallCount: number }> => {
+  ): Promise<{ finalAnswer: string }> => {
     const stepSystemPrompt = buildSystemPromptForStep(currentStep, completed, params);
     const agent = createReactAgent({
       llm,
@@ -618,21 +618,10 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
         logger.warning('agent.getState() failed during recursion-limit soft-fail', snapErr);
         throw err;
       }
-      let toolCallCount = 0;
-      for (const m of snapshotMessages) {
-        if (m instanceof AIMessage && Array.isArray(m.tool_calls) && m.tool_calls.length > 0) {
-          toolCallCount += 1;
-        }
-      }
       const summary = extractPartialSummary(snapshotMessages);
       logger.info(`recursion-limit soft-fail with progress (fp_start≠fp_now) — handing partial to replanner`);
-      return { finalAnswer: `partial: ${summary}`, toolCallCount };
+      return { finalAnswer: `partial: ${summary}` };
     }
-    // T2p: count AIMessage entries that emitted at least one tool call.
-    // Drives the silent-step guard in stuckDetector. AIMessages without
-    // tool_calls are reasoning or the final answer for this subgoal;
-    // they don't count toward "actually acting on the page".
-    let toolCallCount = 0;
     // T2w — scan ToolMessages for the `task_complete` sentinel. The
     // action handler emits `TASK_COMPLETE: <response>` as extractedContent;
     // when present we surface it as the finalAnswer (prefix preserved
@@ -640,9 +629,6 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
     // state.response, bypassing the replanner).
     let taskCompleteAnswer: string | null = null;
     for (const m of stepResult.messages) {
-      if (m instanceof AIMessage && Array.isArray(m.tool_calls) && m.tool_calls.length > 0) {
-        toolCallCount += 1;
-      }
       if (m instanceof ToolMessage && taskCompleteAnswer === null) {
         const c = m.content;
         const text = typeof c === 'string' ? c : '';
@@ -651,7 +637,6 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
     }
     return {
       finalAnswer: taskCompleteAnswer ?? extractFinalAnswer(stepResult.messages) ?? 'no observable result',
-      toolCallCount,
     };
   };
 
@@ -784,7 +769,6 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
       };
     }
     let stepResult: string;
-    let toolCallCount = 0;
     let innerRecursionExhausted = false;
     try {
       const stepOut = await runReactStep(
@@ -795,7 +779,6 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
         fpStart,
       );
       stepResult = stepOut.finalAnswer;
-      toolCallCount = stepOut.toolCallCount;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       logger.warning(`subgoal "${currentStep}" failed: ${msg}`);
@@ -833,7 +816,7 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
       try {
         const liveState = await context.browserContext.getState(false);
         const fp = computeStateFingerprint(liveState);
-        const verdict = stuckDetector.recordSubgoal({ fingerprint: fp, toolCallCount });
+        const verdict = stuckDetector.recordSubgoal({ fingerprint: fp });
         if (verdict) {
           logger.warning(`stuckDetector: ${verdict.kind} — ${verdict.message}`);
           const partial = state.pastSteps.map(([s, r]) => `- ${s}: ${r}`).join('\n');

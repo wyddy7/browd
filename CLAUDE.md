@@ -89,11 +89,20 @@ separate `visionMode` toggle:
   (`linkedin.com/jobs/search?...`). The model already knows URL
   conventions from training; our prompt is not the source of
   truth and hardcoded paths drift.
-- **Plan-and-Execute is the architecture, not solo
-  `createReactAgent`.** `runReactAgent` builds a `StateGraph`
-  with planner → agent → replanner nodes. No-tool-call AIMessage
-  inside a focused agent step is a STEP completion, not a TASK
-  completion — replanner decides whether to continue.
+- **Current architecture: Plan-and-Execute (provisional, slated for
+  migration).** `runReactAgent` builds a `StateGraph` with planner →
+  agent → replanner nodes. A no-tool-call AIMessage inside the inner
+  `createReactAgent` step is the EXPECTED exit signal (natural ReAct
+  termination per LangGraph.js semantics), not a failure. Migration
+  to single-loop (one `createReactAgent` as the top-level loop +
+  `task_complete` / `replan` as schema-forced sentinel tools) is
+  planned as a separate tier — this is the 2026 industry convergence
+  across browser-use (github.com/browser-use/browser-use), Anthropic
+  computer-use (docs.anthropic.com/en/docs/agents-and-tools/tool-use/computer-use-tool),
+  and OpenAI Computer-Using Agent (openai.com/index/computer-using-agent).
+  Until migration ships, do not add new guards that try to "detect"
+  a silent inner-step exit — that signal is the framework's
+  termination, not a stall.
 - **Tab isolation contract (T2f-tab-iso).** In `agentMode='unified'`
   the Executor opens an `agentTab` via `BrowserContext.openAgentTab()`
   on TASK_START. `getCurrentPage()` resolves to that tab even if

@@ -1,42 +1,29 @@
 /**
- * T2p — unified-mode stuck detector.
+ * Unified-mode stuck detector.
  *
- * The legacy Navigator already has tool-call dedup (`LoopDetector`),
- * failure routing (`FailureClassifier`), and HITL handoff
- * (`HITLController`). The unified ReAct path
- * (`agents/runReactAgent.ts`, default since T2f-1) bypasses all
- * three: the only guard wired in unified mode is the tool-level
- * `dupGuard` (T2i-fix1) inside `tools/langGraphAdapter.ts`, which
- * returns a forcing error string to the LLM but never escalates
- * to HITL.
+ * Single subgoal-level guard: **env-fingerprint**. Hash of the
+ * post-subgoal browser state (URL + interactive-element count +
+ * first 200 chars of page text). When the same fingerprint appears
+ * `fingerprintMaxRepeat` times within `fingerprintWindow` subgoals
+ * → real stall (page is frozen across multiple LLM rounds).
  *
- * test10.md (2026-05-15) demonstrates the gap: identical screenshot
- * + DOM 4× in a row (action varied, so dupGuard didn't trip; the
- * `screenshot` action is exempt anyway), swallowed `go_back` throw,
- * `no-toolCall` planner reply "Wait for X to load completely",
- * silent CPU burn with no termination.
+ * **What this file no longer does (T2x phase 0, 2026-05-16).** The
+ * silent-step guard ("≥N consecutive subgoals with zero tool calls")
+ * was removed: a no-tool-call AIMessage is the natural exit signal
+ * of `createReactAgent`, not a stall. Five surveyed production
+ * systems (browser-use, Stagehand, OpenAI Operator, Anthropic
+ * computer-use, Magentic-One) do NOT use that signal. The full
+ * 4-day T2p arc was patching the wrong layer — see
+ * `auto-docs/for-development/agents/anti-patterns.md` §9 for the
+ * industry verdict and `auto-docs/browd-agent-evolution.md` for
+ * the T2x migration plan.
  *
- * This file adds TWO subgoal-level guards on top of the existing
- * tool-level dupGuard:
- *
- *   1. **Env-fingerprint** — hash of the post-subgoal browser state
- *      (URL + interactive-element count + first 200 chars of page
- *      text). When the same fingerprint appears `fingerprintMaxRepeat`
- *      times within `fingerprintWindow` subgoals → stuck.
- *
- *   2. **Silent-step** — count consecutive subgoals that produced
- *      zero tool calls. ≥ `silentMaxConsecutive` → stuck.
- *
- * Both verdicts produce an `ActionError` of type `reasoning_failure`
+ * The verdict produces an `ActionError` of type `reasoning_failure`
  * that the caller routes through the existing `FailureClassifier` /
- * `HITLController` rails (FailureClassifier already maps
- * `reasoning_failure` to `hitl_handoff` on first occurrence).
- *
- * Caskad contract: ONE new file, ONE composite interface
- * (`recordSubgoal`), composes existing classes only. No new prompt
- * rules. The two checks share a `reset()` semantic — both reset
- * together on a planner-driven plan rewrite.
- *
+ * `HITLController` rails. dupGuard at the tool layer
+ * (`tools/langGraphAdapter.ts`) plus the LangGraph `recursionLimit`
+ * cover the remaining stall classes (identical-args repetition,
+ * runaway inner loop).
  */
 
 import { makeActionError, type ActionError } from '../agentErrors';
@@ -45,12 +32,10 @@ import type { BrowserState } from '@src/background/browser/views';
 export interface SubgoalRecord {
   /** Stable hash of post-subgoal browser state. Use `computeStateFingerprint`. */
   fingerprint: string;
-  /** Number of tool calls emitted by the agent inside this subgoal. */
-  toolCallCount: number;
 }
 
 export interface StuckVerdict {
-  kind: 'env-fingerprint' | 'silent-step';
+  kind: 'env-fingerprint';
   message: string;
   error: ActionError;
 }
@@ -60,31 +45,22 @@ export interface UnifiedStuckDetectorOptions {
   fingerprintWindow?: number;
   /** Required identical fingerprints in the window to trigger. Default 3. */
   fingerprintMaxRepeat?: number;
-  /** Required consecutive zero-tool-call subgoals to trigger. Default 2. */
-  silentMaxConsecutive?: number;
 }
 
 export class UnifiedStuckDetector {
   private readonly fpWindowSize: number;
   private readonly fpMaxRepeat: number;
-  private readonly silentMaxConsecutive: number;
   private fpWindow: string[] = [];
-  private silentRun = 0;
 
   constructor(opts: UnifiedStuckDetectorOptions = {}) {
     this.fpWindowSize = opts.fingerprintWindow ?? 5;
     this.fpMaxRepeat = opts.fingerprintMaxRepeat ?? 3;
-    this.silentMaxConsecutive = opts.silentMaxConsecutive ?? 2;
   }
 
   /**
-   * Record one subgoal's outcome. Returns a `StuckVerdict` when the
-   * detector wants the caller to abort the StateGraph; returns `null`
-   * when the subgoal looks healthy.
-   *
-   * Order of checks is deliberate: env-fingerprint first because a
-   * frozen page is the higher-confidence signal (silent steps can
-   * legitimately happen mid-load and self-correct on the next round).
+   * Record one subgoal's post-step fingerprint. Returns a
+   * `StuckVerdict` when the page state has frozen across the window;
+   * `null` otherwise.
    */
   recordSubgoal(rec: SubgoalRecord): StuckVerdict | null {
     this.fpWindow.push(rec.fingerprint);
@@ -106,30 +82,17 @@ export class UnifiedStuckDetector {
       }
     }
 
-    if (rec.toolCallCount === 0) this.silentRun += 1;
-    else this.silentRun = 0;
-
-    if (this.silentRun >= this.silentMaxConsecutive) {
-      const msg = `${this.silentRun} consecutive subgoals produced no tool calls — agent is stalling without acting.`;
-      return {
-        kind: 'silent-step',
-        message: msg,
-        error: makeActionError('reasoning_failure', msg),
-      };
-    }
-
     return null;
   }
 
-  /** Reset both windows. Call when the planner rewrites the plan. */
+  /** Reset the fingerprint window. Call when the planner rewrites the plan. */
   reset(): void {
     this.fpWindow = [];
-    this.silentRun = 0;
   }
 
   /** Test-introspection. */
-  getState(): Readonly<{ fpWindow: readonly string[]; silentRun: number }> {
-    return { fpWindow: [...this.fpWindow], silentRun: this.silentRun };
+  getState(): Readonly<{ fpWindow: readonly string[] }> {
+    return { fpWindow: [...this.fpWindow] };
   }
 }
 
