@@ -27,16 +27,27 @@
  * `stateModifier`, repeat until no-tool-call AIMessage (subgoal done)
  * or recursionLimit (subgoal aborts).
  *
- * Why Plan-and-Execute is canonical for browser agents:
- *   - Solo createReactAgent terminates on no-tool-call mid-task; the
- *     replanner is the only place that can ask "are we actually done?".
- *   - Mirrors the structure used by browser-use, Magentic-One,
- *     Stagehand and LangGraph's own browser-agent tutorial.
+ * Why Plan-and-Execute is provisional (slated for migration):
+ *   - Industry 2026 has moved to single-loop `create_agent` +
+ *     middleware + schema-forced terminal/replan tools — see
+ *     `auto-docs/for-development/agents/multi-agent.md` and
+ *     `auto-docs/browd-agent-evolution.md` active tier T2x.
+ *   - Until that migration ships, P&E persists as the safety-net
+ *     architecture: it works on weaker models (Gemini-flash class)
+ *     where solo createReactAgent's no-tool-call exit is too eager.
  *
- * Subgoal-level stuck detection: post-subgoal env-fingerprint +
- * silent-step guards in `guardrails/unifiedStuckDetector.ts` route
- * reasoning_failure verdicts to a graceful TASK_FAIL via the existing
- * StateGraph response channel.
+ * Stuck coverage (after T2x phase 0a/0b removed subgoal-level
+ * guards — see anti-patterns.md §9):
+ *   - dupGuard in `tools/langGraphAdapter.ts` — identical
+ *     (tool, args) 3-in-5 → forcing error string to the LLM.
+ *   - LangGraph `recursionLimit` (inner 25, outer ~50) — hard cap.
+ *   - T2p-3 recursion-limit soft-fail — distinguishes inner-loop
+ *     budget exhaustion with progress (→ `partial:` to replanner)
+ *     from genuine stuck (→ rethrow → graceful TASK_FAIL).
+ *   - Schema-forced terminal via `task_complete` action +
+ *     `findTaskCompleteAnswer` scan covering ToolMessage prefix,
+ *     LangChain-canonical tool_calls, and raw OpenAI tool_calls
+ *     (T2x phase 0c).
  */
 import { createReactAgent } from '@langchain/langgraph/prebuilt';
 import { MemorySaver, StateGraph, Annotation, START, END } from '@langchain/langgraph';
