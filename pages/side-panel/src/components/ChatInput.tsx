@@ -3,8 +3,9 @@ import { FaMicrophone, FaEye, FaEyeSlash } from 'react-icons/fa';
 import { AiOutlineLoading3Quarters } from 'react-icons/ai';
 import { FiPaperclip } from 'react-icons/fi';
 import { t } from '@extension/i18n';
-import { chatInputDraftStorage } from '@extension/storage';
+import { chatInputDraftStorage, type PermissionMode } from '@extension/storage';
 import { TokenRing } from './TokenRing';
+import { PermissionModeSelector } from './PermissionModeSelector';
 
 type QuickAgent = 'planner' | 'navigator';
 // T2f-clean-finish-3 — Judge is a service config (used by runtime
@@ -44,6 +45,14 @@ interface ChatInputProps {
    */
   agentTabFocusMode?: 'background' | 'foreground';
   onAgentTabFocusToggle?: () => void;
+  /**
+   * T2s-3 — per-task permission posture. Drives the dropdown in the
+   * input toolbar that lets the user switch between Default / Auto /
+   * Full approval flows for in-app HITL gates (currently only
+   * `take_over_user_tab`). Owned by SidePanel.
+   */
+  permissionMode?: PermissionMode;
+  onPermissionModeChange?: (mode: PermissionMode) => void;
   preferredModelMenuDirection?: 'up' | 'down';
   isRecording?: boolean;
   isProcessingSpeech?: boolean;
@@ -90,6 +99,8 @@ export default function ChatInput({
   onSpeechToTextModelChange,
   agentTabFocusMode = 'background',
   onAgentTabFocusToggle,
+  permissionMode = 'default',
+  onPermissionModeChange,
   preferredModelMenuDirection = 'up',
   isRecording = false,
   isProcessingSpeech = false,
@@ -516,6 +527,13 @@ export default function ChatInput({
                   cacheCreation={tokenUsage.cacheCreation}
                   inputTokens={tokenUsage.input}
                 />
+              )}
+
+              {/* T2s-3 — permission-mode dropdown (default / auto / full).
+                  Only rendered when the parent wires the handler — keeps
+                  any future "minimal mode" surface free of the pill. */}
+              {onPermissionModeChange && (
+                <PermissionModeSelector mode={permissionMode} onChange={onPermissionModeChange} disabled={disabled} />
               )}
             </div>
 

@@ -282,6 +282,88 @@ code {
   font-weight: 500;
 }
 
+/* T2s-3 — Permission-mode selector: pill button + popup menu growing
+   UP from the input toolbar. 'full' mode renders in danger colour to
+   make the autonomy posture visible without being alarming. */
+.browd-permission-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--browd-border);
+  background: var(--browd-panel);
+  color: var(--browd-text);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    background 140ms ease,
+    color 140ms ease;
+}
+.browd-permission-pill:hover:not(:disabled) {
+  border-color: var(--browd-border-strong);
+  background: var(--browd-surface, var(--browd-panel));
+}
+.browd-permission-pill:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.browd-permission-pill.is-danger {
+  color: var(--browd-danger);
+  border-color: color-mix(in srgb, var(--browd-danger) 35%, var(--browd-border));
+  background: var(--browd-danger-soft);
+}
+.browd-permission-pill.is-danger:hover:not(:disabled) {
+  border-color: var(--browd-danger);
+  background: color-mix(in srgb, var(--browd-danger-soft) 75%, var(--browd-panel));
+}
+
+.browd-permission-menu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  min-width: 240px;
+  max-width: 320px;
+  background: var(--browd-panel-strong, var(--browd-panel));
+  border: 1px solid var(--browd-border);
+  border-radius: 10px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  box-shadow: 0 10px 24px hsl(var(--browd-shadow) / 0.18);
+  z-index: 30;
+}
+.browd-permission-menu-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.5rem 0.6rem;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--browd-text);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.browd-permission-menu-item:hover {
+  background: color-mix(in srgb, var(--browd-accent) 8%, transparent);
+}
+.browd-permission-menu-item.is-selected {
+  background: color-mix(in srgb, var(--browd-accent) 12%, transparent);
+}
+.browd-permission-menu-item.is-danger {
+  color: var(--browd-danger);
+}
+.browd-permission-menu-item.is-danger:hover,
+.browd-permission-menu-item.is-danger.is-selected {
+  background: var(--browd-danger-soft);
+}
+
 .browd-token-ring-tooltip-cache {
   font-size: 10px;
   color: var(--browd-text-muted, color-mix(in srgb, currentColor 65%, transparent));

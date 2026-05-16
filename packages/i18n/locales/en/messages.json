@@ -64,6 +64,27 @@
   "chat_buttons_send": {
     "message": "Send"
   },
+  "chat_permissionMode_label": {
+    "message": "Permissions"
+  },
+  "chat_permissionMode_default": {
+    "message": "Default permissions"
+  },
+  "chat_permissionMode_default_desc": {
+    "message": "Every cross-tab take-over asks you first"
+  },
+  "chat_permissionMode_auto": {
+    "message": "Auto take-over"
+  },
+  "chat_permissionMode_auto_desc": {
+    "message": "Agent auto-switches to tabs it opened. Other prompts still appear."
+  },
+  "chat_permissionMode_full": {
+    "message": "Full access"
+  },
+  "chat_permissionMode_full_desc": {
+    "message": "Skip all in-app approvals. Browser permission prompts may still appear."
+  },
   "chat_input_placeholder": {
     "message": "What can I help you with?"
   },

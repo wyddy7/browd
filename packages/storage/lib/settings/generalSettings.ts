@@ -37,6 +37,29 @@ export type AgentMode = 'unified' | 'legacy';
  */
 export type VisionMode = 'off' | 'on';
 
+/**
+ * Per-task permission posture for HITL approval gates. Modeled after
+ * Codex's three-tier permission selector. Browd's HITL surface is
+ * smaller (currently take_over_user_tab and hitl_click_at), so the
+ * three modes map as follows:
+ *
+ * - 'default'  Every HITL gate prompts the user. Safest. Default.
+ * - 'auto'     Skip approval for `take_over_user_tab` (agent freely
+ *              cross-overs into background tabs it opened itself).
+ *              `hitl_click_at` still prompts — that gate exists for
+ *              isTrusted-blocked buttons where the user IS the only
+ *              solution (no automation can bypass).
+ * - 'full'     Same as 'auto' today. Reserved for future "auto-resolve
+ *              capability prompts (camera / mic / file)" semantics
+ *              once the runtime can intercept those. Today shown with
+ *              a danger-coloured pill so users understand the intent.
+ *
+ * The selector lives in the side-panel input toolbar
+ * (`PermissionModeSelector` component). HITL handlers in
+ * `actions/builder.ts` read this and skip the approval flow accordingly.
+ */
+export type PermissionMode = 'default' | 'auto' | 'full';
+
 export interface GeneralSettingsConfig {
   appearanceTheme: AppearanceTheme;
   interfaceLanguage: InterfaceLanguage;
@@ -52,6 +75,7 @@ export interface GeneralSettingsConfig {
   launchShortcut: string;
   agentMode: AgentMode;
   visionMode: VisionMode;
+  permissionMode: PermissionMode;
 }
 
 export type GeneralSettingsStorage = BaseStorage<GeneralSettingsConfig> & {
@@ -84,6 +108,14 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettingsConfig = {
   // not support vision input, so this default is safe for users on
   // text-only providers.
   visionMode: 'on',
+  // 'default' = every HITL approval prompts the user. Safest first
+  // experience; users opt into looser modes from the input toolbar.
+  permissionMode: 'default',
+};
+
+const normalizePermissionMode = (mode: unknown): PermissionMode => {
+  if (mode === 'default' || mode === 'auto' || mode === 'full') return mode;
+  return 'default';
 };
 
 const normalizeAgentMode = (mode: unknown): AgentMode => {
@@ -154,6 +186,7 @@ export const generalSettingsStore: GeneralSettingsStorage = {
     updatedSettings.launchShortcut = normalizeShortcut(updatedSettings.launchShortcut);
     updatedSettings.agentMode = normalizeAgentMode(updatedSettings.agentMode);
     updatedSettings.visionMode = normalizeVisionMode(updatedSettings.visionMode);
+    updatedSettings.permissionMode = normalizePermissionMode(updatedSettings.permissionMode);
 
     // If useVision is true, displayHighlights must also be true
     if (updatedSettings.useVision && !updatedSettings.displayHighlights) {
@@ -172,6 +205,7 @@ export const generalSettingsStore: GeneralSettingsStorage = {
       launchShortcut: normalizeShortcut(settings?.launchShortcut),
       agentMode: normalizeAgentMode(settings?.agentMode),
       visionMode: normalizeVisionMode(settings?.visionMode),
+      permissionMode: normalizePermissionMode(settings?.permissionMode),
     };
   },
   async resetToDefaults() {

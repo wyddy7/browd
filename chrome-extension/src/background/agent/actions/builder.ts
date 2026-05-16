@@ -1,6 +1,7 @@
 import { ActionResult, type AgentContext } from '@src/background/agent/types';
 import { DOMHistoryElement } from '@src/background/browser/dom/history/view';
 import { t } from '@extension/i18n';
+import { generalSettingsStore } from '@extension/storage';
 import {
   clickElementActionSchema,
   doneActionSchema,
@@ -1174,6 +1175,12 @@ export class ActionBuilder {
         if (!tab?.id) {
           return new ActionResult({ error: `take_over_user_tab: tab ${input.tabId} not found` });
         }
+        // T2s-3 — permission-mode gate: in 'auto' or 'full' modes the
+        // user has pre-authorised tab take-overs and we skip the HITL
+        // prompt entirely. 'default' keeps the original behaviour
+        // (every take-over requires explicit approval).
+        const permissionMode = (await generalSettingsStore.getSettings()).permissionMode;
+        const skipHitlApproval = permissionMode === 'auto' || permissionMode === 'full';
         // T2s-2: take-over is a cross-isolation-boundary action.
         // Gate it behind explicit user approval before pinning the
         // agent to a tab the user opened. If no HITL controller is
@@ -1181,7 +1188,7 @@ export class ActionBuilder {
         // behavior — this preserves backward-compat for callers
         // that pre-date the controller.
         const hitl = this.context.hitlController;
-        if (hitl) {
+        if (hitl && !skipHitlApproval) {
           try {
             const decision = await hitl.requestDecision({
               id: `hitl-takeover-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -1215,8 +1222,10 @@ export class ActionBuilder {
             }
             return new ActionResult({ error: `take_over_user_tab: ${message}` });
           }
-        } else {
+        } else if (!hitl) {
           logger.warning('take_over_user_tab: no HITL controller wired — proceeding without approval gate');
+        } else {
+          logger.info(`take_over_user_tab: HITL skipped (permissionMode=${permissionMode})`);
         }
         this.context.browserContext.takeOverTab(input.tabId);
         const msg = `agent now operates in tab ${input.tabId} (${tab.url ?? 'unknown url'}); reason: ${input.reason}`;

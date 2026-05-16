@@ -5,6 +5,7 @@ import { PiPlusBold } from 'react-icons/pi';
 import { GrHistory } from 'react-icons/gr';
 import {
   type AppearanceTheme,
+  type PermissionMode,
   type ProviderConfig,
   type Message,
   Actors,
@@ -184,6 +185,7 @@ const SidePanel = () => {
   const [isProcessingSpeech, setIsProcessingSpeech] = useState(false);
   const [isReplaying, setIsReplaying] = useState(false);
   const [replayEnabled, setReplayEnabled] = useState(false);
+  const [permissionMode, setPermissionMode] = useState<PermissionMode>('default');
   const [hitlRequest, setHitlRequest] = useState<HITLRequest | null>(null);
   const [traceEntries, setTraceEntries] = useState<TraceEntry[]>([]);
   // T2f-1.5: bumped each time a screenshot trace event arrives so the
@@ -279,11 +281,13 @@ const SidePanel = () => {
       const settings = await generalSettingsStore.getSettings();
       setReplayEnabled(settings.replayHistoricalTasks);
       setAppearanceTheme(settings.appearanceTheme);
+      setPermissionMode(settings.permissionMode);
       window.localStorage.setItem(LANGUAGE_OVERRIDE_KEY, settings.interfaceLanguage);
     } catch (error) {
       console.error('Error loading general settings:', error);
       setReplayEnabled(false);
       setAppearanceTheme('light');
+      setPermissionMode('default');
     }
   }, []);
 
@@ -515,6 +519,18 @@ const SidePanel = () => {
       void agentTabFocusStore.setMode(next);
       return next;
     });
+  }, []);
+
+  // T2s-3 — permission-mode handler. Persists to general settings;
+  // the in-app HITL gates (currently only `take_over_user_tab`) read
+  // the latest value from storage at decision time.
+  const handlePermissionModeChange = useCallback(async (mode: PermissionMode) => {
+    setPermissionMode(mode);
+    try {
+      await generalSettingsStore.updateSettings({ permissionMode: mode });
+    } catch (error) {
+      console.error('Error saving permission mode:', error);
+    }
   }, []);
 
   // T3-judge — handler mirrors STT. Persists eval grader choice.
@@ -1811,6 +1827,8 @@ const SidePanel = () => {
                         onSpeechToTextModelChange={handleSpeechToTextModelChange}
                         agentTabFocusMode={agentTabFocusMode}
                         onAgentTabFocusToggle={handleAgentTabFocusToggle}
+                        permissionMode={permissionMode}
+                        onPermissionModeChange={handlePermissionModeChange}
                         preferredModelMenuDirection="down"
                         isRecording={isRecording}
                         isProcessingSpeech={isProcessingSpeech}
