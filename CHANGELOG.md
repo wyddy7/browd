@@ -4,6 +4,61 @@ All notable changes to Browd are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.15] — 2026-05-20
+
+User-facing controls, observability, and complete localization on top of
+v0.1.14's reliability pass. No behavior changes for existing
+configurations; settings storage shapes are unchanged.
+
+### Added
+
+- **Permission-mode selector in the input toolbar.** A compact 2-tier
+  picker on the chat input row sets the agent's authority for the next
+  task: **Default** (every cross-tab take-over asks for your approval
+  first) or **Full access** (skip in-app approvals — browser permission
+  prompts still apply). Replaces the implicit always-prompt behaviour
+  introduced in v0.1.14.
+- **Live prompt-cache telemetry in the side panel.** Per-turn read /
+  write counters surface what the provider's cache actually saved you —
+  instead of inferring it from billing. Works across OpenAI-compatible
+  providers via a provider-agnostic context resolver, so it lights up
+  whether you route through OpenRouter, OpenAI directly, or a custom
+  endpoint.
+- **Native-quality UI in 7 languages.** Previously DE / ES / FR were
+  ~65% English fallthrough — Settings looked localised but the chat
+  shell, role tooltips, action logs and error messages stayed English.
+  Every UI string now ships natively in EN / RU / DE / ES / FR / PT-BR
+  / ZH-CN. Brand terms (Browd, Planner, Navigator, Judge, STT,
+  OpenRouter, etc.) intentionally remain English.
+
+### Changed
+
+- **Replaced Traditional Chinese (zh_TW) with Simplified Chinese
+  (zh_CN).** Mainland-Simplified serves a much larger Chinese-speaking
+  audience and now uses Mainland vocabulary throughout: 设置 / 默认 /
+  标签页 / 添加 / 点击 / 视频 / 软件 / 白名单 / 黑名单 / 取消, etc.
+
+### Fixed
+
+- **Agent no longer jumps into side-effect tabs.** When a click
+  incidentally opened a third-party tab (auth redirect, popup, ad), the
+  agent could promote that new tab to its workspace and crash trying
+  to operate inside it. The runtime now keeps the agent pinned to its
+  own tab and treats side-effect tabs as read-only metadata until
+  explicitly handed over via `take_over_user_tab`.
+
+### Notes
+
+- **Storage migration:** anyone previously running the zh_TW interface
+  will see their language setting fall back to **System** on next
+  launch (no data lost; just one settings tap to pick a new language).
+- **Translation methodology:** the seven locales were brought to
+  parity by a multi-agent pipeline — per-language translator subagents
+  generated the missing strings; native-speaker reviewer subagents then
+  flagged MT calques, false friends, and tone drift across two passes.
+  Brand terms, placeholders, and Chrome i18n `placeholders` definitions
+  preserved verbatim throughout.
+
 ## [0.1.14] — 2026-05-16
 
 A reliability and trust pass on top of 0.1.13. The agent now stays out of
