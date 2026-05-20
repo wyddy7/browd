@@ -8,7 +8,7 @@ import esMessage from '../locales/es/messages.json';
 import frMessage from '../locales/fr/messages.json';
 import pt_BRMessage from '../locales/pt_BR/messages.json';
 import ruMessage from '../locales/ru/messages.json';
-import zh_TWMessage from '../locales/zh_TW/messages.json';
+import zh_CNMessage from '../locales/zh_CN/messages.json';
 
 export function getMessageFromLocale(locale: string) {
   switch (locale) {
@@ -24,15 +24,15 @@ export function getMessageFromLocale(locale: string) {
       return pt_BRMessage;
     case 'ru':
       return ruMessage;
-    case 'zh_TW':
-      return zh_TWMessage;
+    case 'zh_CN':
+      return zh_CNMessage;
     default:
       throw new Error('Unsupported locale');
   }
 }
 
 export const defaultLocale = (() => {
-  const locales = ['en', 'de', 'es', 'fr', 'pt_BR', 'ru', 'zh_TW'];
+  const locales = ['en', 'de', 'es', 'fr', 'pt_BR', 'ru', 'zh_CN'];
   const firstLocale = locales[0];
   const defaultLocale = Intl.DateTimeFormat().resolvedOptions().locale.replace('-', '_');
   if (locales.includes(defaultLocale)) {

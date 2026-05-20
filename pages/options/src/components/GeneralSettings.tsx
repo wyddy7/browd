@@ -124,7 +124,7 @@ export const GeneralSettings = ({ onAppearanceThemeChange }: GeneralSettingsProp
                   <option value="fr">{t('options_general_language_fr')}</option>
                   <option value="de">{t('options_general_language_de')}</option>
                   <option value="pt_BR">{t('options_general_language_ptBR')}</option>
-                  <option value="zh_TW">{t('options_general_language_zhTW')}</option>
+                  <option value="zh_CN">{t('options_general_language_zhCN')}</option>
                 </select>
               </div>
             </div>

@@ -8,7 +8,7 @@ import type esMessage from '../locales/es/messages.json';
 import type frMessage from '../locales/fr/messages.json';
 import type pt_BRMessage from '../locales/pt_BR/messages.json';
 import type ruMessage from '../locales/ru/messages.json';
-import type zh_TWMessage from '../locales/zh_TW/messages.json';
+import type zh_CNMessage from '../locales/zh_CN/messages.json';
 
 export type MessageKey = keyof typeof enMessage &
   keyof typeof deMessage &
@@ -16,6 +16,6 @@ export type MessageKey = keyof typeof enMessage &
   keyof typeof frMessage &
   keyof typeof pt_BRMessage &
   keyof typeof ruMessage &
-  keyof typeof zh_TWMessage;
+  keyof typeof zh_CNMessage;
 
-export type DevLocale = 'en' | 'de' | 'es' | 'fr' | 'pt_BR' | 'ru' | 'zh_TW';
+export type DevLocale = 'en' | 'de' | 'es' | 'fr' | 'pt_BR' | 'ru' | 'zh_CN';
