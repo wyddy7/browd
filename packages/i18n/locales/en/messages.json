@@ -1077,6 +1077,9 @@
   "options_general_language_ptBR": {
     "message": "Portuguese (Brazil)"
   },
+  "options_general_language_zhTW": {
+    "message": "Chinese (Traditional)"
+  },
   "chat_bookmarks_default1": {
     "message": "Explore Browd"
   },

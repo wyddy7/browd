@@ -4,7 +4,7 @@ import type { BaseStorage } from '../base/types';
 
 // Interface for general settings configuration
 export type AppearanceTheme = 'light' | 'dark';
-export type InterfaceLanguage = 'system' | 'en' | 'ru' | 'es' | 'fr' | 'de' | 'pt_BR';
+export type InterfaceLanguage = 'system' | 'en' | 'ru' | 'es' | 'fr' | 'de' | 'pt_BR' | 'zh_TW';
 /**
  * Agent runtime topology.
  * - 'unified' (default): LangGraph Plan-and-Execute with per-subgoal
@@ -158,7 +158,8 @@ const normalizeInterfaceLanguage = (language: unknown): InterfaceLanguage => {
     language === 'es' ||
     language === 'fr' ||
     language === 'de' ||
-    language === 'pt_BR'
+    language === 'pt_BR' ||
+    language === 'zh_TW'
   ) {
     return language;
   }
