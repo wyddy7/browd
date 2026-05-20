@@ -89,7 +89,7 @@
     "message": "快速入門"
   },
   "chat_bookmarks_description": {
-    "message": "使用已儲存的提示，或建立你自己的起始提示。"
+    "message": "使用已儲存的提示，或建立您自己的起始提示。"
   },
   "chat_bookmarks_new": {
     "message": "新增"
@@ -110,7 +110,7 @@
     "message": "標題"
   },
   "chat_bookmarks_contentPlaceholder": {
-    "message": "描述你想重複使用的任務。"
+    "message": "描述您想重複使用的任務。"
   },
   "chat_replay_starting": {
     "message": "開始重播任務：\n\n\"$TASK$\"",
@@ -1099,7 +1099,7 @@
     "message": "Legacy"
   },
   "options_general_visionMode": {
-    "message": "Vision mode"
+    "message": "Vision 模式"
   },
   "options_general_visionMode_desc": {
     "message": "開啟：代理擁有 screenshot 工具與座標動作，自行決定何時截圖。關閉：僅 DOM，無截圖。"
@@ -1111,19 +1111,19 @@
     "message": "開啟"
   },
   "options_general_visionMode_warning": {
-    "message": "Selected Navigator model has no vision support — vision is inactive at runtime. Pick a vision-capable model to enable."
+    "message": "所選的 Navigator 模型不支援 vision —— 執行時 vision 為停用狀態。請選擇具備 vision 能力的模型以啟用。"
   },
   "chat_input_role_planner_tip": {
-    "message": "Planner — decomposes your task into a focused 1–7 step plan that the Navigator will walk."
+    "message": "Planner —— 將您的任務拆解為聚焦的 1–7 步計畫，由 Navigator 執行。"
   },
   "chat_input_role_navigator_tip": {
-    "message": "Navigator — the executor. Picks browser tools (click, type, scroll, web fetch) one step at a time and decides when the task is done."
+    "message": "Navigator —— 執行者。每次挑選一項瀏覽器工具（點擊、輸入、捲動、web fetch）並決定任務何時完成。"
   },
   "chat_input_role_stt_tip": {
-    "message": "STT — speech-to-text. Used by the microphone button to transcribe your voice into the chat input."
+    "message": "STT —— 語音轉文字。由麥克風按鈕使用，將您的語音轉錄至對話輸入欄。"
   },
   "chat_input_role_judge_tip": {
-    "message": "Judge — eval-time grader. Used only by the eval suite (pnpm test:eval) to score scenario outputs against a rubric. Optional; defaults to your Navigator model when unset."
+    "message": "Judge —— 評估時的評分者。僅由 eval 套件 (pnpm test:eval) 使用，根據評分標準對情境輸出進行評分。為選填；未設定時預設使用您的 Navigator 模型。"
   },
   "chat_input_role_label_short_planner": {
     "message": "Plan"
@@ -1138,37 +1138,37 @@
     "message": "Judge"
   },
   "chat_input_role_group_agents": {
-    "message": "Agents"
+    "message": "代理"
   },
   "chat_input_role_group_services": {
-    "message": "Services"
+    "message": "服務"
   },
   "chat_input_tabFocus_background_label": {
-    "message": "Run agent in background tab (current)"
+    "message": "在背景分頁中執行代理（目前）"
   },
   "chat_input_tabFocus_foreground_label": {
-    "message": "Show agent tab when it works (current)"
+    "message": "代理工作時顯示其分頁（目前）"
   },
   "chat_input_tabFocus_background_tip": {
-    "message": "Agent works in a separate tab in the background. Click to switch: bring the agent tab to the foreground at task start."
+    "message": "代理在背景的獨立分頁中運作。點擊以切換：任務開始時將代理分頁帶至前景。"
   },
   "chat_input_tabFocus_foreground_tip": {
-    "message": "Agent tab is brought to the foreground at task start so you can watch. Click to switch: keep agent tab in the background (safer default)."
+    "message": "任務開始時代理分頁會被帶至前景以便觀看。點擊以切換：讓代理分頁保留在背景（較安全的預設值）。"
   },
   "options_models_judge_header": {
     "message": "Judge"
   },
   "options_models_judge_desc": {
-    "message": "Optional grader. Used by the runtime verifier (annotates final answers with quality concerns) and the eval suite (pnpm test:eval). Costs +1 LLM call per finish when verifier is on."
+    "message": "選填的評分者。由執行時驗證器（為最終答案標註品質疑慮）以及 eval 套件 (pnpm test:eval) 使用。啟用驗證器時，每次完成會增加 1 次 LLM 呼叫。"
   },
   "options_models_judge_runtime_mode_label": {
-    "message": "Runtime verifier"
+    "message": "執行時驗證器"
   },
   "options_models_judge_runtime_mode_off": {
-    "message": "Off (no verifier)"
+    "message": "關閉（無驗證器）"
   },
   "options_models_judge_runtime_mode_verify_once": {
-    "message": "Verify once (annotate concerns)"
+    "message": "驗證一次（標註疑慮）"
   },
   "options_general_section_appearance": {
     "message": "外觀"
@@ -1220,5 +1220,17 @@
   },
   "hitl_takeover_deny": {
     "message": "拒絕"
+  },
+  "chat_permissionMode_default": {
+    "message": "預設"
+  },
+  "chat_permissionMode_default_desc": {
+    "message": "每次跨分頁接管前都會先請求您的核准"
+  },
+  "chat_permissionMode_full": {
+    "message": "完整存取"
+  },
+  "chat_permissionMode_full_desc": {
+    "message": "略過所有應用程式內的核准。瀏覽器權限提示仍可能出現。"
   }
 }

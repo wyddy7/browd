@@ -107,10 +107,10 @@
     "message": "Excluir favorito"
   },
   "chat_bookmarks_titlePlaceholder": {
-    "message": "Título (máx 30 car.)"
+    "message": "Título"
   },
   "chat_bookmarks_contentPlaceholder": {
-    "message": "Descreva a tarefa..."
+    "message": "Descreva a tarefa que você quer reutilizar."
   },
   "chat_replay_starting": {
     "message": "Iniciando reprodução da tarefa:\n\n\"$TASK$\"",
@@ -170,7 +170,7 @@
     "message": "Falha ao acessar o microfone. "
   },
   "chat_stt_microphone_grantPermission": {
-    "message": "Por favor, conceda permissão ao microfone."
+    "message": "Permita o acesso ao microfone."
   },
   "chat_stt_microphone_notFound": {
     "message": "Nenhum microfone encontrado."
@@ -227,7 +227,7 @@
     "message": "Geral"
   },
   "options_general_theme": {
-    "message": "Tema de Aparência"
+    "message": "Tema"
   },
   "options_general_theme_desc": {
     "message": "Escolha o tom visual usado nos painéis do Browd"
@@ -296,7 +296,7 @@
     "message": "Tempo mínimo de espera após carregar a página (250-5000ms)"
   },
   "options_general_replayHistoricalTasks": {
-    "message": "Repetir tarefas históricas"
+    "message": "Repetir tarefas do histórico"
   },
   "options_general_replayHistoricalTasks_desc": {
     "message": "Ativar armazenamento e repetição do histórico de passos do agente"
@@ -365,7 +365,7 @@
     "message": "Seleção de modelo"
   },
   "options_models_selection_lead": {
-    "message": "Atribua um modelo para cada papel do agente."
+    "message": "Atribua um modelo para cada função do agente."
   },
   "options_models_speechToText_header": {
     "message": "Modelo de fala para texto"
@@ -802,22 +802,10 @@
     }
   },
   "act_cache_start": {
-    "message": "Armazenando em cache os resultados: $CONTENT$",
-    "placeholders": {
-      "content": {
-        "content": "$1",
-        "example": "Preferências do usuário salvas"
-      }
-    }
+    "message": "Armazenando descobertas em cache: $CONTENT$"
   },
   "act_cache_ok": {
-    "message": "Resultados armazenados em cache: $CONTENT$",
-    "placeholders": {
-      "content": {
-        "content": "$1",
-        "example": "Preferências do usuário salvas"
-      }
-    }
+    "message": "Descobertas armazenadas em cache: $CONTENT$"
   },
   "act_scrollToPercent_start": {
     "message": "Rolar para a porcentagem: $PERCENT$",
@@ -1099,7 +1087,7 @@
     "message": "Legacy"
   },
   "options_general_visionMode": {
-    "message": "Vision mode"
+    "message": "Modo de visão"
   },
   "options_general_visionMode_desc": {
     "message": "Ativado: o agente tem a ferramenta screenshot e ações por coordenadas, e decide quando capturar. Desativado: somente DOM, sem capturas."
@@ -1111,19 +1099,19 @@
     "message": "Ativado"
   },
   "options_general_visionMode_warning": {
-    "message": "Selected Navigator model has no vision support — vision is inactive at runtime. Pick a vision-capable model to enable."
+    "message": "O modelo Navigator selecionado não tem suporte a visão — a visão está inativa em tempo de execução. Escolha um modelo com suporte a visão para ativar."
   },
   "chat_input_role_planner_tip": {
-    "message": "Planner — decomposes your task into a focused 1–7 step plan that the Navigator will walk."
+    "message": "Planner — decompõe sua tarefa em um plano focado de 1–7 passos que o Navigator vai executar."
   },
   "chat_input_role_navigator_tip": {
-    "message": "Navigator — the executor. Picks browser tools (click, type, scroll, web fetch) one step at a time and decides when the task is done."
+    "message": "Navigator — o executor. Escolhe ferramentas do navegador (clicar, digitar, rolar, buscar na web) um passo de cada vez e decide quando a tarefa está concluída."
   },
   "chat_input_role_stt_tip": {
-    "message": "STT — speech-to-text. Used by the microphone button to transcribe your voice into the chat input."
+    "message": "STT — speech-to-text. Usado pelo botão do microfone para transcrever sua voz para a entrada do chat."
   },
   "chat_input_role_judge_tip": {
-    "message": "Judge — eval-time grader. Used only by the eval suite (pnpm test:eval) to score scenario outputs against a rubric. Optional; defaults to your Navigator model when unset."
+    "message": "Judge — avaliador em tempo de eval. Usado apenas pela suíte de eval (pnpm test:eval) para pontuar resultados de cenários com base em uma rubrica. Opcional; usa o modelo Navigator por padrão quando não definido."
   },
   "chat_input_role_label_short_planner": {
     "message": "Plan"
@@ -1138,37 +1126,37 @@
     "message": "Judge"
   },
   "chat_input_role_group_agents": {
-    "message": "Agents"
+    "message": "Agentes"
   },
   "chat_input_role_group_services": {
-    "message": "Services"
+    "message": "Serviços"
   },
   "chat_input_tabFocus_background_label": {
-    "message": "Run agent in background tab (current)"
+    "message": "Executar agente em aba em segundo plano (atual)"
   },
   "chat_input_tabFocus_foreground_label": {
-    "message": "Show agent tab when it works (current)"
+    "message": "Mostrar a aba do agente quando estiver trabalhando (atual)"
   },
   "chat_input_tabFocus_background_tip": {
-    "message": "Agent works in a separate tab in the background. Click to switch: bring the agent tab to the foreground at task start."
+    "message": "O agente trabalha em uma aba separada em segundo plano. Clique para alternar: trazer a aba do agente para o primeiro plano no início da tarefa."
   },
   "chat_input_tabFocus_foreground_tip": {
-    "message": "Agent tab is brought to the foreground at task start so you can watch. Click to switch: keep agent tab in the background (safer default)."
+    "message": "A aba do agente é trazida para o primeiro plano no início da tarefa para você acompanhar. Clique para alternar: manter a aba do agente em segundo plano (padrão mais seguro)."
   },
   "options_models_judge_header": {
     "message": "Judge"
   },
   "options_models_judge_desc": {
-    "message": "Optional grader. Used by the runtime verifier (annotates final answers with quality concerns) and the eval suite (pnpm test:eval). Costs +1 LLM call per finish when verifier is on."
+    "message": "Avaliador opcional. Usado pelo verificador em tempo de execução (registra observações de qualidade nas respostas finais) e pela suíte de eval (pnpm test:eval). Custa +1 chamada de LLM a cada conclusão quando o verificador está ativo."
   },
   "options_models_judge_runtime_mode_label": {
-    "message": "Runtime verifier"
+    "message": "Verificador em tempo de execução"
   },
   "options_models_judge_runtime_mode_off": {
-    "message": "Off (no verifier)"
+    "message": "Desativado (sem verificador)"
   },
   "options_models_judge_runtime_mode_verify_once": {
-    "message": "Verify once (annotate concerns)"
+    "message": "Verificar uma vez (registrar observações)"
   },
   "options_general_section_appearance": {
     "message": "Aparência"
@@ -1220,5 +1208,17 @@
   },
   "hitl_takeover_deny": {
     "message": "Negar"
+  },
+  "chat_permissionMode_default": {
+    "message": "Padrão"
+  },
+  "chat_permissionMode_default_desc": {
+    "message": "Cada tomada de controle entre abas exige sua aprovação"
+  },
+  "chat_permissionMode_full": {
+    "message": "Acesso total"
+  },
+  "chat_permissionMode_full_desc": {
+    "message": "Ignorar todas as aprovações dentro da extensão. Solicitações de permissão do navegador ainda podem aparecer."
   }
 }
