@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/wyddy7/browd"><img src="https://img.shields.io/badge/GitHub-wyddy7%2Fbrowd-181717?logo=github" alt="GitHub"></a>
+  <a href="https://chromewebstore.google.com/detail/browd-ai-browser-agent/kgjeibjpgopjomghegdpelbnjgmddobb"><img src="https://img.shields.io/chrome-web-store/v/kgjeibjpgopjomghegdpelbnjgmddobb?label=Chrome%20Web%20Store&logo=googlechrome&logoColor=white&color=4285F4" alt="Chrome Web Store"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License"></a>
 </p>
 
@@ -45,9 +45,16 @@ Legacy Planner+Navigator pipeline is still selectable via Options → Agent Mode
 
 ## Install
 
+### From the Chrome Web Store (recommended)
+
+1. Open the [Browd listing on the Chrome Web Store](https://chromewebstore.google.com/detail/browd-ai-browser-agent/kgjeibjpgopjomghegdpelbnjgmddobb).
+2. Click **Add to Chrome** (works in Chrome / Edge / Brave / Arc).
+3. Pin Browd to your toolbar, click the icon to open the side panel.
+4. Add your provider keys in **Options → Models** — any OpenAI-compatible endpoint works; OpenRouter is convenient for routing Anthropic / Google / Meta / local through one key.
+
 ### From a release (no build step)
 
-1. Download `browd-0.1.13.zip` from the [latest release](https://github.com/wyddy7/browd/releases/latest).
+1. Download the latest zip from the [releases page](https://github.com/wyddy7/browd/releases/latest).
 2. Unzip it anywhere.
 3. Open the extensions page (`chrome://extensions` in Chrome/Edge/Brave).
 4. Toggle **Developer mode**.
