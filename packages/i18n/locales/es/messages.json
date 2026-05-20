@@ -1,14 +1,14 @@
 {
   "app_metadata_description": {
     "description": "Extension description",
-    "message": "Agente de navegador con IA de código abierto. Ejecuta tareas web en el panel lateral de Chrome: extracción de datos, rellenado de formularios y más."
+    "message": "Agente de navegador con IA de código abierto. Realiza tareas web desde el panel lateral de Chrome: extraer datos, rellenar formularios y más."
   },
   "app_metadata_name": {
     "description": "Extension name",
     "message": "Browd: agente de navegador con IA"
   },
   "errors_unknown": {
-    "message": "Ocurrió un error desconocido"
+    "message": "Se produjo un error desconocido"
   },
   "errors_conn_serviceWorker": {
     "message": "Error al conectar con el service worker"
@@ -86,7 +86,7 @@
     "message": "Eliminar sesión"
   },
   "chat_bookmarks_header": {
-    "message": "Inicio Rápido"
+    "message": "Inicio rápido"
   },
   "chat_bookmarks_description": {
     "message": "Usa un prompt guardado o crea el tuyo."
@@ -107,7 +107,7 @@
     "message": "Eliminar marcador"
   },
   "chat_bookmarks_titlePlaceholder": {
-    "message": "Título (máx 30 car.)"
+    "message": "Título (máx. 30 caracteres)"
   },
   "chat_bookmarks_contentPlaceholder": {
     "message": "Describe la tarea..."
@@ -134,10 +134,10 @@
     "message": "Argumentos inválidos. Usa el formato: /replay <historySessionId>"
   },
   "chat_replay_disabled": {
-    "message": "La repetición está desactivada en la configuración general. Activa \"Repetir tareas históricas\" en la configuración de la extensión para usar esta función."
+    "message": "La repetición está desactivada. Activa \"Repetir tareas históricas\" en la configuración de la extensión para usar esta función."
   },
   "chat_replay_noHistory": {
-    "message": "No se encontró historial de acciones para la sesión \"$SESSION_ID$...\". Esta sesión puede no contener acciones repetibles.\n\nEs una sesión de repetición en sí misma (las sesiones de repetición no se pueden volver a repetir), o se creó antes de que la función de repetición estuviera disponible.",
+    "message": "No se encontró historial de acciones para la sesión \"$SESSION_ID$...\". Esta sesión puede no contener acciones repetibles.\n\nO bien es una sesión de repetición (las sesiones de repetición no se pueden volver a repetir), o se creó antes de que la función de repetición estuviera disponible.",
     "placeholders": {
       "session_id": {
         "content": "$1",
@@ -158,7 +158,7 @@
     "message": "Error al procesar la grabación de voz"
   },
   "chat_stt_model_notFound": {
-    "message": "No hay ningún proveedor/modelo de STT compatible en tu configuración. Elige una opción de Gemini, OpenRouter o Grok en los ajustes."
+    "message": "No hay ningún proveedor/modelo de STT compatible en tu configuración. Elige una opción de Gemini, OpenRouter o Grok en la configuración."
   },
   "chat_stt_recognitionFailed": {
     "message": "Falló el reconocimiento de voz"
@@ -230,7 +230,7 @@
     "message": "Tema de apariencia"
   },
   "options_general_theme_desc": {
-    "message": "Elige el tono visual usado en los paneles de Browd"
+    "message": "Elige la apariencia que usan los paneles de Browd"
   },
   "options_general_theme_light": {
     "message": "Claro"
@@ -242,7 +242,7 @@
     "message": "Idioma de la interfaz"
   },
   "options_general_language_desc": {
-    "message": "Elige el idioma usado en la configuración y los paneles de Browd"
+    "message": "Elige el idioma de la configuración y los paneles de Browd"
   },
   "options_general_language_system": {
     "message": "Sistema"
@@ -254,13 +254,13 @@
     "message": "Ruso"
   },
   "options_general_maxSteps": {
-    "message": "Pasos máx por tarea"
+    "message": "Máx. de pasos por tarea"
   },
   "options_general_maxSteps_desc": {
     "message": "Límite de pasos por tarea"
   },
   "options_general_maxActions": {
-    "message": "Acciones máx por paso"
+    "message": "Máx. de acciones por paso"
   },
   "options_general_maxActions_desc": {
     "message": "Límite de acciones por paso"
@@ -275,22 +275,22 @@
     "message": "Activar Visión"
   },
   "options_general_enableVision_desc": {
-    "message": "Usa la capacidad de visión de los LLM (consume más tokens)"
+    "message": "Usa la capacidad de visión de los LLM (aumenta el consumo de tokens)"
   },
   "options_general_displayHighlights": {
     "message": "Mostrar resaltados"
   },
   "options_general_displayHighlights_desc": {
-    "message": "Resaltados visuales en elementos interactivos (botones, enlaces, etc.)"
+    "message": "Muestra resaltados visuales en los elementos interactivos (botones, enlaces, etc.)"
   },
   "options_general_planningInterval": {
     "message": "Frecuencia de replanificación"
   },
   "options_general_planningInterval_desc": {
-    "message": "Reconsiderar y actualizar el plan cada [Número] pasos"
+    "message": "Reconsidera y actualiza el plan cada [Número] pasos"
   },
   "options_general_minWaitPageLoad": {
-    "message": "Espera tras carga de página"
+    "message": "Espera tras cargar la página"
   },
   "options_general_minWaitPageLoad_desc": {
     "message": "Tiempo mínimo de espera tras cargar la página (250-5000ms)"
@@ -299,25 +299,25 @@
     "message": "Repetir tareas históricas"
   },
   "options_general_replayHistoricalTasks_desc": {
-    "message": "Activar almacenamiento y repetición del historial de pasos del agente"
+    "message": "Activa el almacenamiento y la repetición del historial de pasos del agente"
   },
   "options_general_agentMode": {
     "message": "Modo del agente"
   },
   "options_general_agentMode_desc": {
-    "message": "Unified es el agente ReAct por defecto (con presupuestos de herramientas y persistencia del historial). Legacy mantiene el antiguo pipeline Planner+Navigator como red de seguridad."
+    "message": "Unified es el agente ReAct por defecto (con límites de uso de herramientas y persistencia del historial). Legacy mantiene el antiguo pipeline Planner+Navigator como red de seguridad."
   },
   "options_general_launchShortcut": {
     "message": "Atajo del navegador"
   },
   "options_general_launchShortcut_desc": {
-    "message": "Lo gestiona tu navegador, no Browd."
+    "message": "El atajo lo gestiona tu navegador, no Browd."
   },
   "options_models_providers_header": {
     "message": "Proveedores LLM"
   },
   "options_models_providers_lead": {
-    "message": "Conecta claves de API de los proveedores que Browd puede usar."
+    "message": "Conecta las claves de API de los proveedores que Browd puede usar."
   },
   "options_models_providers_notConfigured": {
     "message": "Aún no hay proveedores configurados. Añade uno para empezar."
@@ -332,7 +332,7 @@
     "message": "Eliminar"
   },
   "options_models_providers_setupInstructions": {
-    "message": "Introduce tu clave API y haz clic en Guardar."
+    "message": "Introduce tu clave de API y haz clic en Guardar."
   },
   "options_models_providers_custom_name": {
     "message": "Nombre"
@@ -353,13 +353,13 @@
     "message": "API Key (obligatoria)"
   },
   "options_models_providers_apiKey_placeholder_ollama": {
-    "message": "API Key (déjala vacía para Ollama)"
+    "message": "API Key (déjala en blanco para Ollama)"
   },
   "options_models_providers_apiKey_hide": {
-    "message": "Ocultar API key"
+    "message": "Ocultar API Key"
   },
   "options_models_providers_apiKey_show": {
-    "message": "Mostrar API key"
+    "message": "Mostrar API Key"
   },
   "options_models_selection_header": {
     "message": "Selección de modelos"
@@ -371,7 +371,7 @@
     "message": "Modelo de voz a texto"
   },
   "options_models_agents_navigator": {
-    "message": "Navega sitios web y realiza acciones"
+    "message": "Navega por sitios web y ejecuta acciones"
   },
   "options_models_agents_planner": {
     "message": "Desarrolla y ajusta estrategias para completar tareas"
@@ -395,7 +395,7 @@
     "message": "Ejemplo: Responde en español. Sé conciso. Actúa como un investigador cauteloso."
   },
   "options_models_systemPrompt_desc": {
-    "message": "Instrucciones persistentes opcionales para el rol, estilo o idioma de respuesta. El idioma de interfaz seleccionado también se envía al agente."
+    "message": "Instrucciones persistentes opcionales para el rol, estilo o idioma de respuesta. El idioma de la interfaz seleccionado también se envía al agente."
   },
   "options_models_stt_desc": {
     "message": "Configura el proveedor/modelo para el micrófono. Gemini funciona directamente, OpenRouter necesita un modelo con capacidad de audio."
@@ -404,7 +404,7 @@
     "message": "Elegir modelo"
   },
   "options_models_addNewProvider": {
-    "message": "Agregar proveedor"
+    "message": "Añadir proveedor"
   },
   "options_models_providers_openaiCompatible": {
     "message": "Proveedor de API compatible con OpenAI"
@@ -440,13 +440,13 @@
     "message": "Base URL de Ollama"
   },
   "options_models_providers_placeholders_azureDeployment": {
-    "message": "Introduce el nombre del modelo de Azure (p. ej., gpt-4o, gpt-4o-mini)"
+    "message": "Introduce el nombre del modelo de Azure (p. ej. gpt-4o, gpt-4o-mini)"
   },
   "options_models_providers_placeholders_azureApiVersion": {
-    "message": "p. ej., 2025-04-01-preview"
+    "message": "p. ej. 2025-04-01-preview"
   },
   "options_models_providers_deployment_desc": {
-    "message": "Escribe el nombre del modelo y pulsa Enter o Espacio para establecerlo. El nombre del deployment debe coincidir con el nombre del modelo de OpenAI (p. ej., gpt-4o) para mejor compatibilidad."
+    "message": "Escribe el nombre del modelo y pulsa Enter o Espacio para añadirlo. El nombre del deployment debe coincidir con el nombre del modelo de OpenAI (p. ej. gpt-4o) para una mejor compatibilidad."
   },
   "options_models_providers_models_instructions": {
     "message": "Escribe y pulsa Enter o Espacio para añadir."
@@ -455,7 +455,7 @@
     "message": "No hay modelos seleccionados. Añade los nombres de los modelos manualmente si es necesario."
   },
   "options_models_providers_ollama_reminder": {
-    "message": "la variable de entorno DEBE estar configurada para el servidor de Ollama."
+    "message": "La variable de entorno DEBE estar configurada en el servidor de Ollama."
   },
   "options_models_providers_ollama_learnMore": {
     "message": "Más información"
@@ -482,13 +482,13 @@
     "message": "Activar Firewall"
   },
   "options_firewall_toggleFirewall_a11y": {
-    "message": "Conmutar Firewall"
+    "message": "Activar o desactivar Firewall"
   },
   "options_firewall_allowList_header": {
     "message": "Lista de permitidos"
   },
   "options_firewall_allowList_empty": {
-    "message": "No hay dominios en la lista de permitidos. Una lista de permitidos vacía significa que se permiten todos los dominios no bloqueados."
+    "message": "No hay dominios en la lista de permitidos. Si está vacía, se permiten todos los dominios no bloqueados."
   },
   "options_firewall_denyList_header": {
     "message": "Lista de bloqueados"
@@ -512,7 +512,7 @@
     "message": "Las listas de permitidos y bloqueados se evalúan en cada navegación."
   },
   "options_firewall_howItWorks": {
-    "message": "El firewall contiene una lista de bloqueados y una lista de permitidos.\nSi ambas listas están vacías, se permiten todas las URLs\nLa lista de bloqueados tiene prioridad — si una URL coincide con cualquier entrada de la lista de bloqueados, se bloquea\nCuando la lista de permitidos está vacía, se permiten todas las URLs no bloqueadas\nCuando la lista de permitidos no está vacía, solo se permiten las URLs coincidentes\nLos comodines NO se soportan todavía\nLa lista de permitidos tiene preferencia sobre la lista de bloqueados"
+    "message": "El firewall contiene una lista de bloqueados y una lista de permitidos.\nSi ambas listas están vacías, se permiten todas las URLs.\nLa lista de bloqueados tiene prioridad — si una URL coincide con cualquier entrada de la lista de bloqueados, se bloquea.\nCuando la lista de permitidos está vacía, se permiten todas las URLs no bloqueadas.\nCuando la lista de permitidos no está vacía, solo se permiten las URLs coincidentes.\nLos comodines aún no se admiten.\nLa lista de permitidos tiene preferencia sobre la lista de bloqueados."
   },
   "bg_errors_noTabId": {
     "message": "No se proporcionó ID de pestaña"
@@ -530,7 +530,7 @@
     "message": "No se proporcionó tarea de seguimiento"
   },
   "bg_cmd_followUpTask_cleaned": {
-    "message": "El executor fue limpiado, no se puede añadir tarea de seguimiento"
+    "message": "El ejecutor se ha limpiado; no se puede añadir tarea de seguimiento"
   },
   "bg_cmd_resumeTask_noTask": {
     "message": "No hay tarea para reanudar"
@@ -701,7 +701,7 @@
     }
   },
   "act_click_fileUploader": {
-    "message": "Índice $INDEX$ — contiene un elemento que abre un diálogo para subir archivos. Para hacerlo, usa la función dedicada a la carga de archivos.",
+    "message": "Índice $INDEX$ — contiene un elemento que abre un diálogo para subir archivos. Usa la acción específica de carga de archivos.",
     "placeholders": {
       "index": {
         "content": "$1",
@@ -723,7 +723,7 @@
     }
   },
   "act_click_newTabOpened": {
-    "message": "Se abrió una nueva pestaña — cambiando a ella"
+    "message": "Se abrió una nueva pestaña; cambiando a ella"
   },
   "act_inputText_start": {
     "message": "Escribiendo texto en el índice $INDEX$",
@@ -802,7 +802,7 @@
     }
   },
   "act_cache_start": {
-    "message": "Guardando en caché los hallazgos: $CONTENT$",
+    "message": "Guardando hallazgos en caché: $CONTENT$",
     "placeholders": {
       "content": {
         "content": "$1",
@@ -820,7 +820,7 @@
     }
   },
   "act_scrollToPercent_start": {
-    "message": "Desplazar al porcentaje: $PERCENT$",
+    "message": "Desplazando al porcentaje: $PERCENT$",
     "placeholders": {
       "percent": {
         "content": "$1",
@@ -838,25 +838,25 @@
     }
   },
   "act_scrollToTop_start": {
-    "message": "Desplazar al inicio"
+    "message": "Desplazando al inicio"
   },
   "act_scrollToTop_ok": {
     "message": "Se desplazó al inicio"
   },
   "act_scrollToBottom_start": {
-    "message": "Desplazar al final"
+    "message": "Desplazando al final"
   },
   "act_scrollToBottom_ok": {
     "message": "Se desplazó al final"
   },
   "act_previousPage_start": {
-    "message": "Desplazar a la página anterior"
+    "message": "Desplazando a la página anterior"
   },
   "act_previousPage_ok": {
     "message": "Se desplazó a la página anterior"
   },
   "act_nextPage_start": {
-    "message": "Desplazar a la página siguiente"
+    "message": "Desplazando a la página siguiente"
   },
   "act_nextPage_ok": {
     "message": "Se desplazó a la página siguiente"
@@ -886,7 +886,7 @@
     "message": "Ya estás al final de la página, no se puede desplazar a la página siguiente"
   },
   "act_scrollToText_start": {
-    "message": "Desplazar al texto: $TEXT$, aparición $OCCURRENCE$",
+    "message": "Desplazando al texto: $TEXT$, coincidencia $OCCURRENCE$",
     "placeholders": {
       "text": {
         "content": "$1",
@@ -899,7 +899,7 @@
     }
   },
   "act_scrollToText_ok": {
-    "message": "Se desplazó al texto: $TEXT$, aparición $OCCURRENCE$",
+    "message": "Se desplazó al texto: $TEXT$, coincidencia $OCCURRENCE$",
     "placeholders": {
       "text": {
         "content": "$1",
@@ -912,7 +912,7 @@
     }
   },
   "act_scrollToText_notFound": {
-    "message": "Texto '$TEXT$' (aparición $OCCURRENCE$) no encontrado o no visible",
+    "message": "Texto \"$TEXT$\" (coincidencia $OCCURRENCE$) no encontrado o no visible",
     "placeholders": {
       "text": {
         "content": "$1",
@@ -934,7 +934,7 @@
     }
   },
   "act_sendKeys_start": {
-    "message": "Enviar teclas: $KEYS$",
+    "message": "Enviando teclas: $KEYS$",
     "placeholders": {
       "keys": {
         "content": "$1",
@@ -985,7 +985,7 @@
     }
   },
   "act_selectDropdownOption_start": {
-    "message": "Seleccionar la opción \"$TEXT$\" del desplegable con índice $INDEX$",
+    "message": "Seleccionando la opción \"$TEXT$\" del desplegable con índice $INDEX$",
     "placeholders": {
       "text": {
         "content": "$1",
@@ -1120,13 +1120,13 @@
     "message": "Planner — descompone tu tarea en un plan enfocado de 1 a 7 pasos que ejecutará el Navigator."
   },
   "chat_input_role_navigator_tip": {
-    "message": "Navigator — el ejecutor. Elige herramientas del navegador (clic, escribir, desplazar, web fetch) paso a paso y decide cuándo la tarea está completa."
+    "message": "Navigator — el ejecutor. Elige herramientas del navegador (clic, escribir, desplazar, web fetch) paso a paso y decide cuándo la tarea ha finalizado."
   },
   "chat_input_role_stt_tip": {
-    "message": "STT — speech-to-text. Lo usa el botón del micrófono para transcribir tu voz en la entrada del chat."
+    "message": "STT — speech-to-text. Lo usa el botón del micrófono para transcribir tu voz al campo de entrada del chat."
   },
   "chat_input_role_judge_tip": {
-    "message": "Judge — calificador usado en evaluaciones. Solo lo usa la suite de evals (pnpm test:eval) para puntuar las salidas de cada escenario contra una rúbrica. Opcional; si no se configura, usa por defecto tu modelo Navigator."
+    "message": "Judge — calificador para las evaluaciones. Solo lo usa la suite de evals (pnpm test:eval) para puntuar las salidas de cada escenario según una rúbrica. Opcional; si no se configura, se utilizará por defecto tu modelo Navigator."
   },
   "chat_input_role_label_short_planner": {
     "message": "Plan"
@@ -1147,16 +1147,16 @@
     "message": "Servicios"
   },
   "chat_input_tabFocus_background_label": {
-    "message": "Ejecutar el agente en una pestaña en segundo plano (actual)"
+    "message": "Ejecutar el agente en una pestaña en segundo plano (actualmente activo)"
   },
   "chat_input_tabFocus_foreground_label": {
-    "message": "Mostrar la pestaña del agente cuando trabaja (actual)"
+    "message": "Mostrar la pestaña del agente cuando esté trabajando (actualmente activo)"
   },
   "chat_input_tabFocus_background_tip": {
-    "message": "El agente trabaja en una pestaña aparte, en segundo plano. Haz clic para cambiar: traer la pestaña del agente al primer plano al iniciar la tarea."
+    "message": "El agente trabaja en una pestaña aparte, en segundo plano. Haz clic para cambiar y traer la pestaña del agente al primer plano al iniciar la tarea."
   },
   "chat_input_tabFocus_foreground_tip": {
-    "message": "La pestaña del agente se trae al primer plano al iniciar la tarea para que puedas verla. Haz clic para cambiar: mantener la pestaña del agente en segundo plano (opción predeterminada más segura)."
+    "message": "La pestaña del agente se trae al primer plano al iniciar la tarea para que puedas verla. Haz clic para cambiar y mantener la pestaña del agente en segundo plano (opción predeterminada más segura)."
   },
   "options_models_judge_header": {
     "message": "Judge"
@@ -1207,13 +1207,13 @@
     "message": "Solo en modo Legacy"
   },
   "options_general_section_legacyOnly_desc": {
-    "message": "Estos ajustes solo se aplican cuando el modo de agente está configurado como Legacy."
+    "message": "Estos ajustes solo se aplican cuando el modo del agente está establecido en Legacy."
   },
   "options_general_badge_beta": {
     "message": "beta"
   },
   "hitl_takeover_title": {
-    "message": "Browd quiere tomar el control de una pestaña"
+    "message": "Browd quiere asumir el control de una pestaña"
   },
   "hitl_takeover_reason": {
     "message": "Motivo"

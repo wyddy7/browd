@@ -14,7 +14,7 @@
     "message": "Falha ao conectar ao service worker"
   },
   "errors_cmd_unknown": {
-    "message": "Comando não suportado: $COMMAND$.\n\nComandos disponíveis: /state, /nohighlight, /replay <historySessionId>",
+    "message": "Comando desconhecido: $COMMAND$.\n\nComandos disponíveis: /state, /nohighlight, /replay <historySessionId>",
     "placeholders": {
       "command": {
         "content": "$1",
@@ -41,7 +41,7 @@
     "message": "Bem-vindo ao Browd!"
   },
   "welcome_instruction": {
-    "message": "Para começar, por favor, configure suas chaves de API na página de configurações."
+    "message": "Para começar, configure suas chaves de API na página de configurações."
   },
   "welcome_openSettings": {
     "message": "Abrir Configurações"
@@ -89,7 +89,7 @@
     "message": "Início Rápido"
   },
   "chat_bookmarks_description": {
-    "message": "Use um prompt salvo ou crie seu próprio início."
+    "message": "Use um prompt salvo ou crie o seu."
   },
   "chat_bookmarks_new": {
     "message": "Novo"
@@ -131,13 +131,13 @@
     }
   },
   "chat_replay_invalidArgs": {
-    "message": "Argumentos inválidos. Por favor, use o formato: /replay <historySessionId>"
+    "message": "Argumentos inválidos. Use o formato: /replay <historySessionId>"
   },
   "chat_replay_disabled": {
-    "message": "A reprodução está desativada nas configurações gerais. Por favor, ative \"Reproduzir Tarefas Históricas\" nas configurações da extensão para usar este recurso."
+    "message": "A repetição está desativada nas configurações gerais. Ative \"Repetir tarefas do histórico\" nas configurações da extensão para usar este recurso."
   },
   "chat_replay_noHistory": {
-    "message": "Nenhum histórico de ação encontrado para a sessão \"$SESSION_ID$\".\n\nÉ uma sessão de reprodução (sessões de reprodução não podem ser reproduzidas novamente), ou foi criada antes do recurso de reprodução estar disponível.",
+    "message": "Nenhum histórico de ação encontrado para a sessão \"$SESSION_ID$\". Pode ser que esta sessão não contenha ações reproduzíveis.\n\nOu é uma sessão de reprodução em si (sessões de reprodução não podem ser repetidas), ou foi criada antes de o recurso de reprodução existir.",
     "placeholders": {
       "session_id": {
         "content": "$1",
@@ -164,7 +164,7 @@
     "message": "Reconhecimento de fala falhou"
   },
   "chat_stt_microphone_permissionDenied": {
-    "message": "Acesso ao microfone negado. Por favor, ative as permissões de microfone nas configurações do navegador."
+    "message": "Acesso ao microfone negado. Ative as permissões de microfone nas configurações do navegador."
   },
   "chat_stt_microphone_accessFailed": {
     "message": "Falha ao acessar o microfone. "
@@ -182,31 +182,31 @@
     "message": "O Browd precisa de acesso ao microfone para converter sua fala em texto."
   },
   "permissions_microphone_grantButton": {
-    "message": "Conceder Permissão ao Microfone"
+    "message": "Permitir acesso ao microfone"
   },
   "permissions_microphone_requesting": {
-    "message": "Solicitando permissão de microfone..."
+    "message": "Solicitando acesso ao microfone..."
   },
   "permissions_microphone_grantedSuccess": {
-    "message": "✅ Permissão de microfone concedida! Agora você pode usar a entrada de voz."
+    "message": "✅ Acesso ao microfone permitido! Agora você pode usar a entrada por voz."
   },
   "permissions_microphone_grantedButton": {
-    "message": "Permissão Concedida"
+    "message": "Acesso permitido"
   },
   "permissions_microphone_denied": {
     "message": "Permissão negada. "
   },
   "permissions_microphone_allowHelp": {
-    "message": "Por favor, clique em \"Permitir\" quando solicitado o acesso ao microfone."
+    "message": "Clique em \"Permitir\" quando o navegador solicitar acesso ao microfone."
   },
   "permissions_microphone_notFound": {
-    "message": "Nenhum microfone encontrado. Por favor, verifique seus dispositivos de áudio."
+    "message": "Nenhum microfone encontrado. Verifique seus dispositivos de áudio."
   },
   "permissions_microphone_alreadyGranted": {
-    "message": "✅ Permissão de microfone já concedida!"
+    "message": "✅ Acesso ao microfone já permitido!"
   },
   "permissions_microphone_alreadyGrantedButton": {
-    "message": "Permissão Já Concedida"
+    "message": "Acesso já permitido"
   },
   "options_nav_header": {
     "message": "Configurações"
@@ -230,7 +230,7 @@
     "message": "Tema"
   },
   "options_general_theme_desc": {
-    "message": "Escolha o tom visual usado nos painéis do Browd"
+    "message": "Escolha a aparência usada nos painéis do Browd"
   },
   "options_general_theme_light": {
     "message": "Claro"
@@ -254,13 +254,13 @@
     "message": "Russo"
   },
   "options_general_maxSteps": {
-    "message": "Passos máx por tarefa"
+    "message": "Máximo de passos por tarefa"
   },
   "options_general_maxSteps_desc": {
     "message": "Limite de passos por tarefa"
   },
   "options_general_maxActions": {
-    "message": "Ações máx por passo"
+    "message": "Máximo de ações por passo"
   },
   "options_general_maxActions_desc": {
     "message": "Limite de ações por passo"
@@ -269,7 +269,7 @@
     "message": "Tolerância a falhas"
   },
   "options_general_maxFailures_desc": {
-    "message": "Falhas consecutivas antes de parar"
+    "message": "Quantas falhas consecutivas antes de parar"
   },
   "options_general_enableVision": {
     "message": "Ativar Visão"
@@ -287,10 +287,10 @@
     "message": "Frequência de replanejamento"
   },
   "options_general_planningInterval_desc": {
-    "message": "Reconsiderar e atualizar o plano a cada [Número] passos"
+    "message": "Revisar e atualizar o plano a cada [Número] passos"
   },
   "options_general_minWaitPageLoad": {
-    "message": "Espera de carregamento"
+    "message": "Tempo de espera após carregar a página"
   },
   "options_general_minWaitPageLoad_desc": {
     "message": "Tempo mínimo de espera após carregar a página (250-5000ms)"
@@ -305,7 +305,7 @@
     "message": "Modo do agente"
   },
   "options_general_agentMode_desc": {
-    "message": "Unified é o agente ReAct padrão (com orçamentos de ferramentas e persistência do histórico). Legacy mantém o antigo pipeline Planner+Navigator como rede de segurança."
+    "message": "Unified é o agente ReAct padrão (com limites de uso de ferramentas e persistência do histórico). Legacy mantém o antigo pipeline Planner+Navigator como rede de segurança."
   },
   "options_general_launchShortcut": {
     "message": "Atalho do navegador"
@@ -317,7 +317,7 @@
     "message": "Provedores LLM"
   },
   "options_models_providers_lead": {
-    "message": "Conecte chaves de API dos provedores que o Browd pode usar."
+    "message": "Adicione as chaves de API dos provedores que o Browd pode usar."
   },
   "options_models_providers_notConfigured": {
     "message": "Nenhum provedor configurado ainda. Adicione um para começar."
@@ -332,7 +332,7 @@
     "message": "Excluir"
   },
   "options_models_providers_setupInstructions": {
-    "message": "Insira sua chave API e clique em Salvar."
+    "message": "Insira sua chave de API e clique em Salvar para configurá-la."
   },
   "options_models_providers_custom_name": {
     "message": "Nome"
@@ -350,7 +350,7 @@
     "message": "Chave de API (opcional)"
   },
   "options_models_providers_apiKey_placeholder_required": {
-    "message": "Chave de API (obrigatório)"
+    "message": "Chave de API (obrigatória)"
   },
   "options_models_providers_apiKey_placeholder_ollama": {
     "message": "Chave de API (deixe em branco para Ollama)"
@@ -365,7 +365,7 @@
     "message": "Seleção de modelo"
   },
   "options_models_selection_lead": {
-    "message": "Atribua um modelo para cada função do agente."
+    "message": "Atribua um modelo a cada função do agente."
   },
   "options_models_speechToText_header": {
     "message": "Modelo de fala para texto"
@@ -398,7 +398,7 @@
     "message": "Instruções persistentes opcionais para função, estilo ou idioma. O idioma da interface escolhido também é enviado ao agente."
   },
   "options_models_stt_desc": {
-    "message": "Configure o provedor/modelo para o microfone. Gemini funciona diretamente, OpenRouter precisa de modelo com áudio."
+    "message": "Configure o provedor/modelo usado para fala para texto pelo microfone. Gemini funciona diretamente, OpenRouter precisa de um modelo de chat com entrada de áudio, e Grok usa a API STT dedicada da xAI."
   },
   "options_models_chooseModel": {
     "message": "Escolher modelo"
@@ -416,7 +416,7 @@
     "message": "Endpoint"
   },
   "options_models_providers_deployment": {
-    "message": "Implantação"
+    "message": "Deployment"
   },
   "options_models_providers_apiVersion": {
     "message": "Versão da API"
@@ -431,10 +431,10 @@
     "message": "https://SEU_NOME_DE_RECURSO.openai.azure.com/"
   },
   "options_models_providers_placeholders_baseUrl_openrouter": {
-    "message": "URL Base do OpenRouter (opcional, padrão para https://openrouter.ai/api/v1)"
+    "message": "URL Base do OpenRouter (opcional, padrão: https://openrouter.ai/api/v1)"
   },
   "options_models_providers_placeholders_baseUrl_llama": {
-    "message": "URL Base da API Llama (padrão para https://api.llama.com/v1)"
+    "message": "URL Base da API Llama (padrão: https://api.llama.com/v1)"
   },
   "options_models_providers_placeholders_baseUrl_ollama": {
     "message": "URL base do Ollama"
@@ -446,7 +446,7 @@
     "message": "ex: 2025-04-01-preview"
   },
   "options_models_providers_deployment_desc": {
-    "message": "Digite o nome do modelo e pressione Enter ou Espaço para definir. O nome da implantação deve corresponder ao nome do modelo OpenAI (ex: gpt-4o) para melhor compatibilidade."
+    "message": "Digite o nome do modelo e pressione Enter ou Espaço para definir. O nome do Deployment deve corresponder ao nome do modelo OpenAI (ex: gpt-4o) para melhor compatibilidade."
   },
   "options_models_providers_models_instructions": {
     "message": "Digite e pressione Enter ou Espaço para adicionar."
@@ -461,10 +461,10 @@
     "message": "Saiba mais"
   },
   "options_models_providers_errors_spacesNotAllowed": {
-    "message": "Espaços não são permitidos em nomes de provedores. Por favor, use sublinhados ou outros caracteres."
+    "message": "Espaços não são permitidos em nomes de provedores. Use sublinhados ou outros caracteres."
   },
   "options_models_providers_errors_baseUrlRequired": {
-    "message": "A URL Base é obrigatória para $PROVIDER$. Por favor, insira-a.",
+    "message": "A URL Base é obrigatória para $PROVIDER$. Informe um valor.",
     "placeholders": {
       "provider": {
         "content": "$1",
@@ -485,16 +485,16 @@
     "message": "Ativar/Desativar Firewall"
   },
   "options_firewall_allowList_header": {
-    "message": "Lista de Permissões"
+    "message": "Lista de permitidos"
   },
   "options_firewall_allowList_empty": {
-    "message": "Nenhum domínio na lista de permissões. Uma lista de permissões vazia significa que todos os domínios não negados são permitidos."
+    "message": "Nenhum domínio na lista de permitidos. Uma lista vazia significa que todos os domínios não bloqueados são permitidos."
   },
   "options_firewall_denyList_header": {
-    "message": "Lista de Negações"
+    "message": "Lista de bloqueados"
   },
   "options_firewall_denyList_empty": {
-    "message": "Nenhum domínio na lista de negações"
+    "message": "Nenhum domínio na lista de bloqueados"
   },
   "options_firewall_placeholders_domainUrl": {
     "message": "Insira domínio ou URL (ex: example.com, localhost, 127.0.0.1)"
@@ -512,7 +512,7 @@
     "message": "As listas de permissão e negação são avaliadas a cada navegação."
   },
   "options_firewall_howItWorks": {
-    "message": "O firewall contém uma lista de negações e uma lista de permissões.\nSe ambas as listas estiverem vazias, todos os URLs são permitidos\nA lista de negações tem prioridade - se um URL corresponder a qualquer entrada da lista de negações, ele será bloqueado\nQuando a lista de permissões está vazia, todos os URLs não negados são permitidos\nQuando a lista de permissões não está vazia, apenas os URLs correspondentes são permitidos\nCuringas ainda NÃO são suportados\nA lista de permissões é preferível à lista de negações"
+    "message": "O firewall contém uma lista de bloqueados e uma lista de permitidos.\nSe ambas as listas estiverem vazias, todos os URLs são permitidos.\nA lista de bloqueados tem prioridade — se um URL corresponder a qualquer entrada dela, ele será bloqueado.\nQuando a lista de permitidos está vazia, todos os URLs não bloqueados são permitidos.\nQuando a lista de permitidos não está vazia, apenas os URLs correspondentes são permitidos.\nCuringas ainda NÃO são suportados.\nA lista de permitidos é preferível à de bloqueados."
   },
   "bg_errors_noTabId": {
     "message": "Nenhum ID de aba fornecido"
@@ -530,10 +530,10 @@
     "message": "Nenhuma tarefa de acompanhamento fornecida"
   },
   "bg_cmd_followUpTask_cleaned": {
-    "message": "O executor foi limpo, não é possível adicionar tarefa de acompanhamento"
+    "message": "O executor já foi finalizado; não é possível adicionar tarefa de acompanhamento"
   },
   "bg_cmd_resumeTask_noTask": {
-    "message": "Nenhuma tarefa para resumir"
+    "message": "Nenhuma tarefa para retomar"
   },
   "bg_cmd_state_printed": {
     "message": "Estado impresso no console"
@@ -557,7 +557,7 @@
     "message": "Reprodução falhou"
   },
   "bg_setup_noApiKeys": {
-    "message": "Por favor, configure as chaves de API nas configurações primeiro"
+    "message": "Configure as chaves de API nas configurações primeiro"
   },
   "bg_setup_noProvider": {
     "message": "Provedor $PROVIDER$ não encontrado nas configurações",
@@ -569,7 +569,7 @@
     }
   },
   "bg_setup_noNavigatorModel": {
-    "message": "Por favor, escolha um modelo para o navegador nas configurações primeiro"
+    "message": "Escolha um modelo para o Navigator nas configurações primeiro"
   },
   "exec_errors_maxStepsReached": {
     "message": "Máximo de passos atingido"
@@ -674,7 +674,7 @@
     }
   },
   "act_click_start": {
-    "message": "Clicar no elemento com índice $INDEX$",
+    "message": "Clicando no elemento com índice $INDEX$",
     "placeholders": {
       "index": {
         "content": "$1",
@@ -710,7 +710,7 @@
     }
   },
   "act_click_ok": {
-    "message": "Botão clicado com índice $INDEX$: $TEXT$",
+    "message": "Clicado no botão com índice $INDEX$: $TEXT$",
     "placeholders": {
       "index": {
         "content": "$1",
@@ -723,10 +723,10 @@
     }
   },
   "act_click_newTabOpened": {
-    "message": "Nova aba aberta - mudando para ela"
+    "message": "Nova aba aberta — alternando para ela"
   },
   "act_inputText_start": {
-    "message": "Inserir texto no índice $INDEX$",
+    "message": "Digitando texto no índice $INDEX$",
     "placeholders": {
       "index": {
         "content": "$1",
@@ -735,7 +735,7 @@
     }
   },
   "act_inputText_ok": {
-    "message": "Inserir $TEXT$ no índice $INDEX$",
+    "message": "Digitado \"$TEXT$\" no índice $INDEX$",
     "placeholders": {
       "text": {
         "content": "$1",
@@ -802,7 +802,7 @@
     }
   },
   "act_cache_start": {
-    "message": "Armazenando descobertas em cache: $CONTENT$",
+    "message": "Armazenando resultados em cache: $CONTENT$",
     "placeholders": {
       "content": {
         "content": "$1",
@@ -811,7 +811,7 @@
     }
   },
   "act_cache_ok": {
-    "message": "Descobertas armazenadas em cache: $CONTENT$",
+    "message": "Resultados armazenados em cache: $CONTENT$",
     "placeholders": {
       "content": {
         "content": "$1",
@@ -820,7 +820,7 @@
     }
   },
   "act_scrollToPercent_start": {
-    "message": "Rolar para a porcentagem: $PERCENT$",
+    "message": "Rolando para $PERCENT$%",
     "placeholders": {
       "percent": {
         "content": "$1",
@@ -838,31 +838,31 @@
     }
   },
   "act_scrollToTop_start": {
-    "message": "Rolar para o topo"
+    "message": "Rolando para o topo"
   },
   "act_scrollToTop_ok": {
     "message": "Rolado para o topo"
   },
   "act_scrollToBottom_start": {
-    "message": "Rolar para o final"
+    "message": "Rolando para o final"
   },
   "act_scrollToBottom_ok": {
     "message": "Rolado para o final"
   },
   "act_previousPage_start": {
-    "message": "Rolar para a página anterior"
+    "message": "Rolando para a página anterior"
   },
   "act_previousPage_ok": {
     "message": "Rolado para a página anterior"
   },
   "act_nextPage_start": {
-    "message": "Rolar para a próxima página"
+    "message": "Rolando para a próxima página"
   },
   "act_nextPage_ok": {
     "message": "Rolado para a próxima página"
   },
   "act_errors_alreadyAtTop": {
-    "message": "O elemento com índice $INDEX$ já está no topo, não é possível rolar para a página anterior",
+    "message": "O elemento com índice $INDEX$ já está no topo; não é possível rolar para a página anterior",
     "placeholders": {
       "index": {
         "content": "$1",
@@ -886,7 +886,7 @@
     "message": "Já está no final da página, não é possível rolar para a próxima página"
   },
   "act_scrollToText_start": {
-    "message": "Rolar para o texto: $TEXT$, ocorrência $OCCURRENCE$",
+    "message": "Rolando para o texto: $TEXT$, ocorrência $OCCURRENCE$",
     "placeholders": {
       "text": {
         "content": "$1",
@@ -934,7 +934,7 @@
     }
   },
   "act_sendKeys_start": {
-    "message": "Enviar teclas: $KEYS$",
+    "message": "Enviando teclas: $KEYS$",
     "placeholders": {
       "keys": {
         "content": "$1",
@@ -961,7 +961,7 @@
     }
   },
   "act_getDropdownOptions_useExactText": {
-    "message": "Use a string de texto exata em select_dropdown_option"
+    "message": "Use o texto exato em select_dropdown_option"
   },
   "act_getDropdownOptions_ok": {
     "message": "Obtidas $COUNT$ opções do menu suspenso",
@@ -998,7 +998,7 @@
     }
   },
   "act_selectDropdownOption_ok": {
-    "message": "Opção selecionada \"$TEXT$\" do menu suspenso com índice $INDEX$",
+    "message": "Selecionada a opção \"$TEXT$\" do menu suspenso com índice $INDEX$",
     "placeholders": {
       "text": {
         "content": "$1",
@@ -1054,7 +1054,7 @@
     "message": "Extrair dados"
   },
   "chat_bookmarks_default3": {
-    "message": "Criar processo"
+    "message": "Criar fluxo"
   },
   "chat_bookmarks_done": {
     "message": "Concluído"
@@ -1117,7 +1117,7 @@
     "message": "O modelo Navigator selecionado não tem suporte a visão — a visão está inativa em tempo de execução. Escolha um modelo com suporte a visão para ativar."
   },
   "chat_input_role_planner_tip": {
-    "message": "Planner — decompõe sua tarefa em um plano focado de 1–7 passos que o Navigator vai executar."
+    "message": "Planner — divide sua tarefa em um plano enxuto de 1–7 passos que o Navigator vai executar."
   },
   "chat_input_role_navigator_tip": {
     "message": "Navigator — o executor. Escolhe ferramentas do navegador (clicar, digitar, rolar, buscar na web) um passo de cada vez e decide quando a tarefa está concluída."
@@ -1147,10 +1147,10 @@
     "message": "Serviços"
   },
   "chat_input_tabFocus_background_label": {
-    "message": "Executar agente em aba em segundo plano (atual)"
+    "message": "Rodar agente em uma aba em segundo plano (atual)"
   },
   "chat_input_tabFocus_foreground_label": {
-    "message": "Mostrar a aba do agente quando estiver trabalhando (atual)"
+    "message": "Mostrar a aba do agente enquanto trabalha (atual)"
   },
   "chat_input_tabFocus_background_tip": {
     "message": "O agente trabalha em uma aba separada em segundo plano. Clique para alternar: trazer a aba do agente para o primeiro plano no início da tarefa."
@@ -1162,7 +1162,7 @@
     "message": "Judge"
   },
   "options_models_judge_desc": {
-    "message": "Avaliador opcional. Usado pelo verificador em tempo de execução (registra observações de qualidade nas respostas finais) e pela suíte de eval (pnpm test:eval). Custa +1 chamada de LLM a cada conclusão quando o verificador está ativo."
+    "message": "Avaliador opcional. Usado pelo verificador em tempo de execução (registra observações de qualidade nas respostas finais) e pela suíte de eval (pnpm test:eval). Custa +1 chamada ao LLM a cada conclusão quando o verificador está ativo."
   },
   "options_models_judge_runtime_mode_label": {
     "message": "Verificador em tempo de execução"
@@ -1207,7 +1207,7 @@
     "message": "Apenas no modo Legacy"
   },
   "options_general_section_legacyOnly_desc": {
-    "message": "Essas configurações só se aplicam quando o modo do agente está definido como Legacy."
+    "message": "Essas configurações só se aplicam quando o modo do agente estiver em Legacy."
   },
   "options_general_badge_beta": {
     "message": "beta"
@@ -1228,7 +1228,7 @@
     "message": "Padrão"
   },
   "chat_permissionMode_default_desc": {
-    "message": "Cada tomada de controle entre abas exige sua aprovação"
+    "message": "Cada troca de controle entre abas exige sua aprovação primeiro"
   },
   "chat_permissionMode_full": {
     "message": "Acesso total"

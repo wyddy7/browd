@@ -1,20 +1,20 @@
 {
   "app_metadata_description": {
     "description": "Extension description",
-    "message": "Agent navigateur IA open-source. Exécute des tâches web dans votre side panel Chrome — extraction de données, remplissage de formulaires et plus."
+    "message": "Agent navigateur IA open source. Exécute des tâches web dans votre side panel Chrome : extraction de données, remplissage de formulaires et bien plus encore."
   },
   "app_metadata_name": {
     "description": "Extension name",
     "message": "Browd : agent navigateur IA"
   },
   "errors_unknown": {
-    "message": "Une erreur inconnue s'est produite"
+    "message": "Une erreur inconnue est survenue"
   },
   "errors_conn_serviceWorker": {
     "message": "Échec de la connexion au service worker"
   },
   "errors_cmd_unknown": {
-    "message": "Commande non prise en charge : $COMMAND$.\n\nCommandes disponibles : /state, /nohighlight, /replay <historySessionId>",
+    "message": "Commande non prise en charge : $COMMAND$.\n\nCommandes disponibles : /state, /nohighlight, /replay <historySessionId>",
     "placeholders": {
       "command": {
         "content": "$1",
@@ -41,7 +41,7 @@
     "message": "Bienvenue sur Browd !"
   },
   "welcome_instruction": {
-    "message": "Pour commencer, veuillez configurer vos clés API dans la page des paramètres."
+    "message": "Pour commencer, veuillez configurer vos clés API sur la page des paramètres."
   },
   "welcome_openSettings": {
     "message": "Ouvrir les paramètres"
@@ -50,10 +50,10 @@
     "message": "Guide de démarrage rapide"
   },
   "welcome_joinCommunity": {
-    "message": "Voir GitHub"
+    "message": "Rejoindre la communauté"
   },
   "status_checkingConfig": {
-    "message": "Vérification de la configuration..."
+    "message": "Vérification de la configuration…"
   },
   "chat_buttons_stop": {
     "message": "Arrêter"
@@ -80,13 +80,13 @@
     "message": "Aucun historique de discussion disponible"
   },
   "chat_history_bookmark": {
-    "message": "Mettre la session en favori"
+    "message": "Ajouter aux favoris"
   },
   "chat_history_delete": {
     "message": "Supprimer la session"
   },
   "chat_bookmarks_header": {
-    "message": "Démarrage Rapide"
+    "message": "Démarrage rapide"
   },
   "chat_bookmarks_description": {
     "message": "Utilisez un prompt enregistré ou créez le vôtre."
@@ -107,13 +107,13 @@
     "message": "Supprimer le favori"
   },
   "chat_bookmarks_titlePlaceholder": {
-    "message": "Titre (max 30 car.)"
+    "message": "Titre (30 caractères max)"
   },
   "chat_bookmarks_contentPlaceholder": {
     "message": "Décrivez la tâche..."
   },
   "chat_replay_starting": {
-    "message": "Démarrage de la relecture de la tâche :\n\n« $TASK$ »",
+    "message": "Démarrage de la relecture de la tâche :\n\n« $TASK$ »",
     "placeholders": {
       "task": {
         "content": "$1",
@@ -122,7 +122,7 @@
     }
   },
   "chat_replay_failed": {
-    "message": "Échec de la relecture : $ERROR_MESSAGE$",
+    "message": "Échec de la relecture : $ERROR_MESSAGE$",
     "placeholders": {
       "error_message": {
         "content": "$1",
@@ -134,10 +134,10 @@
     "message": "Arguments invalides. Veuillez utiliser le format : /replay <historySessionId>"
   },
   "chat_replay_disabled": {
-    "message": "La relecture est désactivée dans les paramètres généraux. Veuillez activer « Rejouer les tâches historiques » dans les paramètres de l'extension pour utiliser cette fonctionnalité."
+    "message": "La relecture est désactivée dans les paramètres généraux. Veuillez activer « Rejouer les tâches passées » dans les paramètres de l'extension pour utiliser cette fonctionnalité."
   },
   "chat_replay_noHistory": {
-    "message": "Aucun historique d'action trouvé pour la session « $SESSION_ID$... ». Cette session ne contient peut-être pas d'actions rejouables.\n\nIl s'agit elle-même d'une session de relecture (les sessions de relecture ne peuvent pas être rejouées), ou elle a été créée avant que la fonctionnalité de relecture ne soit disponible.",
+    "message": "Aucun historique d'action trouvé pour la session « $SESSION_ID$... ». Cette session ne contient peut-être pas d'actions rejouables.\n\nIl s'agit peut-être elle-même d'une session de relecture (les sessions de relecture ne peuvent pas être rejouées), ou elle a été créée avant que la fonctionnalité de relecture ne soit disponible.",
     "placeholders": {
       "session_id": {
         "content": "$1",
@@ -146,7 +146,7 @@
     }
   },
   "chat_stt_processing": {
-    "message": "Traitement de la parole..."
+    "message": "Transcription en cours…"
   },
   "chat_stt_recording_stop": {
     "message": "Arrêter l'enregistrement"
@@ -164,13 +164,13 @@
     "message": "Échec de la reconnaissance vocale"
   },
   "chat_stt_microphone_permissionDenied": {
-    "message": "Accès au microphone refusé. Veuillez activer les permissions du microphone dans les paramètres du navigateur."
+    "message": "Accès au microphone refusé. Veuillez activer l'autorisation du microphone dans les paramètres du navigateur."
   },
   "chat_stt_microphone_accessFailed": {
     "message": "Échec de l'accès au microphone. "
   },
   "chat_stt_microphone_grantPermission": {
-    "message": "Veuillez accorder la permission du microphone."
+    "message": "Veuillez autoriser l'accès au microphone."
   },
   "chat_stt_microphone_notFound": {
     "message": "Aucun microphone trouvé."
@@ -182,31 +182,31 @@
     "message": "Browd a besoin d'accéder au microphone pour convertir votre parole en texte."
   },
   "permissions_microphone_grantButton": {
-    "message": "Accorder la permission du microphone"
+    "message": "Autoriser le microphone"
   },
   "permissions_microphone_requesting": {
-    "message": "Demande de permission du microphone..."
+    "message": "Demande d'autorisation du microphone…"
   },
   "permissions_microphone_grantedSuccess": {
-    "message": "✅ Permission du microphone accordée ! Vous pouvez maintenant utiliser la saisie vocale."
+    "message": "✅ Autorisation du microphone accordée ! Vous pouvez maintenant utiliser la saisie vocale."
   },
   "permissions_microphone_grantedButton": {
-    "message": "Permission accordée"
+    "message": "Autorisation accordée"
   },
   "permissions_microphone_denied": {
-    "message": "Permission refusée. "
+    "message": "Autorisation refusée. "
   },
   "permissions_microphone_allowHelp": {
-    "message": "Veuillez cliquer sur « Autoriser » lorsque l'accès au microphone est demandé."
+    "message": "Veuillez cliquer sur « Autoriser » lorsque l'accès au microphone est demandé."
   },
   "permissions_microphone_notFound": {
     "message": "Aucun microphone trouvé. Veuillez vérifier vos périphériques audio."
   },
   "permissions_microphone_alreadyGranted": {
-    "message": "✅ Permission du microphone déjà accordée !"
+    "message": "✅ Autorisation du microphone déjà accordée !"
   },
   "permissions_microphone_alreadyGrantedButton": {
-    "message": "Permission déjà accordée"
+    "message": "Autorisation déjà accordée"
   },
   "options_nav_header": {
     "message": "Paramètres"
@@ -230,7 +230,7 @@
     "message": "Thème d’apparence"
   },
   "options_general_theme_desc": {
-    "message": "Choisissez le style visuel utilisé dans les panneaux Browd"
+    "message": "Choisissez le style visuel utilisé dans les panneaux Browd."
   },
   "options_general_theme_light": {
     "message": "Clair"
@@ -242,7 +242,7 @@
     "message": "Langue de l’interface"
   },
   "options_general_language_desc": {
-    "message": "Choisissez la langue utilisée dans les paramètres et panneaux Browd"
+    "message": "Choisissez la langue utilisée dans les paramètres et les panneaux Browd."
   },
   "options_general_language_system": {
     "message": "Système"
@@ -257,13 +257,13 @@
     "message": "Étapes max par tâche"
   },
   "options_general_maxSteps_desc": {
-    "message": "Limite d'étapes par tâche"
+    "message": "Nombre maximum d'étapes par tâche"
   },
   "options_general_maxActions": {
     "message": "Actions max par étape"
   },
   "options_general_maxActions_desc": {
-    "message": "Limite d'actions par étape"
+    "message": "Nombre maximum d'actions par étape"
   },
   "options_general_maxFailures": {
     "message": "Tolérance aux échecs"
@@ -272,7 +272,7 @@
     "message": "Nombre d'échecs consécutifs avant l'arrêt"
   },
   "options_general_enableVision": {
-    "message": "Activer la Vision"
+    "message": "Activer la vision"
   },
   "options_general_enableVision_desc": {
     "message": "Utiliser la capacité de vision des LLM (consomme plus de jetons)"
@@ -287,19 +287,19 @@
     "message": "Fréquence de replanification"
   },
   "options_general_planningInterval_desc": {
-    "message": "Réexaminer et mettre à jour le plan toutes les [Nombre] étapes"
+    "message": "Réexaminer et mettre à jour le plan tous les N étapes"
   },
   "options_general_minWaitPageLoad": {
     "message": "Délai de chargement de page"
   },
   "options_general_minWaitPageLoad_desc": {
-    "message": "Délai minimum après le chargement de la page (250-5000ms)"
+    "message": "Délai minimum après le chargement de la page (250-5000 ms)"
   },
   "options_general_replayHistoricalTasks": {
-    "message": "Rejouer tâches historiques (expérimental)"
+    "message": "Rejouer les tâches passées (expérimental)"
   },
   "options_general_replayHistoricalTasks_desc": {
-    "message": "Activer le stockage et le rejeu de l'historique des étapes de l'agent"
+    "message": "Activer le stockage et la relecture de l'historique des étapes de l'agent"
   },
   "options_general_agentMode": {
     "message": "Mode de l'agent"
@@ -311,7 +311,7 @@
     "message": "Raccourci navigateur"
   },
   "options_general_launchShortcut_desc": {
-    "message": "Géré par votre navigateur, pas par Browd."
+    "message": "Cette configuration est gérée par votre navigateur, pas par Browd."
   },
   "options_models_providers_header": {
     "message": "Fournisseurs LLM"
@@ -332,13 +332,13 @@
     "message": "Supprimer"
   },
   "options_models_providers_setupInstructions": {
-    "message": "Saisissez votre clé API et cliquez sur Enregistrer."
+    "message": "Saisissez votre clé API et cliquez sur « Enregistrer »."
   },
   "options_models_providers_custom_name": {
     "message": "Nom"
   },
   "options_models_providers_custom_name_desc": {
-    "message": "Nom du fournisseur (les espaces ne sont pas autorisés à l'enregistrement)"
+    "message": "Nom du fournisseur (les espaces ne sont pas autorisés lors de l'enregistrement)"
   },
   "options_models_providers_custom_name_placeholder": {
     "message": "Nom du fournisseur"
@@ -353,7 +353,7 @@
     "message": "Clé API (obligatoire)"
   },
   "options_models_providers_apiKey_placeholder_ollama": {
-    "message": "Clé API (laisser vide pour Ollama)"
+    "message": "Clé API (laissez vide pour Ollama)"
   },
   "options_models_providers_apiKey_hide": {
     "message": "Masquer la clé API"
@@ -392,13 +392,13 @@
     "message": "Prompt système"
   },
   "options_models_systemPrompt_placeholder": {
-    "message": "Exemple : Réponds en français. Sois concis. Agis comme un chercheur prudent."
+    "message": "Exemple : Répondez en français. Soyez concis. Agissez comme un chercheur prudent."
   },
   "options_models_systemPrompt_desc": {
-    "message": "Instructions persistantes facultatives pour le rôle, le style ou la langue de réponse. La langue d'interface choisie est également transmise à l'agent."
+    "message": "Instructions persistantes facultatives pour le rôle, le style ou la langue des réponses. La langue de l'interface choisie est également transmise à l'agent."
   },
   "options_models_stt_desc": {
-    "message": "Configurer le fournisseur/modèle utilisé pour le microphone. Gemini fonctionne directement, OpenRouter nécessite un modèle audio."
+    "message": "Configurez le fournisseur/modèle utilisé pour le microphone. Gemini est prêt à l'emploi, OpenRouter nécessite un modèle audio."
   },
   "options_models_chooseModel": {
     "message": "Choisir un modèle"
@@ -446,22 +446,22 @@
     "message": "ex. 2025-04-01-preview"
   },
   "options_models_providers_deployment_desc": {
-    "message": "Tapez le nom du modèle et appuyez sur Entrée ou Espace pour le définir. Le nom du déploiement doit correspondre au nom du modèle OpenAI (ex. gpt-4o) pour une compatibilité optimale."
+    "message": "Saisissez le nom du modèle et appuyez sur Entrée ou Espace pour le définir. Le nom du déploiement doit correspondre au nom du modèle OpenAI (ex. gpt-4o) pour une compatibilité optimale."
   },
   "options_models_providers_models_instructions": {
-    "message": "Tapez et appuyez sur Entrée ou Espace pour ajouter."
+    "message": "Saisissez puis appuyez sur Entrée ou Espace pour ajouter."
   },
   "options_models_providers_models_openrouter_empty": {
-    "message": "Aucun modèle sélectionné. Ajoutez les noms de modèles manuellement si besoin."
+    "message": "Aucun modèle sélectionné. Ajoutez les noms de modèles manuellement si nécessaire."
   },
   "options_models_providers_ollama_reminder": {
-    "message": "la variable d'environnement DOIT être définie pour le serveur Ollama."
+    "message": "La variable d'environnement DOIT être définie pour le serveur Ollama."
   },
   "options_models_providers_ollama_learnMore": {
     "message": "En savoir plus"
   },
   "options_models_providers_errors_spacesNotAllowed": {
-    "message": "Les espaces ne sont pas autorisés dans les noms de fournisseurs. Veuillez utiliser des underscores ou d'autres caractères à la place."
+    "message": "Les espaces ne sont pas autorisés dans les noms de fournisseurs. Veuillez utiliser des tirets bas ou d'autres caractères à la place."
   },
   "options_models_providers_errors_baseUrlRequired": {
     "message": "L'URL de base est requise pour $PROVIDER$. Veuillez la saisir.",
@@ -476,7 +476,7 @@
     "message": "Pare-feu"
   },
   "options_firewall_header_lead": {
-    "message": "Limitez les URL que l'agent peut visiter en votre nom."
+    "message": "Limitez les URL que l'agent peut visiter pour vous."
   },
   "options_firewall_enableToggle": {
     "message": "Activer le pare-feu"
@@ -497,7 +497,7 @@
     "message": "Aucun domaine dans la liste de refus"
   },
   "options_firewall_placeholders_domainUrl": {
-    "message": "Entrez un domaine ou une URL (ex. example.com, localhost, 127.0.0.1)"
+    "message": "Saisissez un domaine ou une URL (ex. example.com, localhost, 127.0.0.1)"
   },
   "options_firewall_btnAdd": {
     "message": "Ajouter"
@@ -542,7 +542,7 @@
     "message": "Échec de la récupération de l'état"
   },
   "bg_cmd_nohighlight_ok": {
-    "message": "surbrillance supprimée"
+    "message": "Surbrillance supprimée"
   },
   "bg_cmd_stt_noAudioData": {
     "message": "Aucune donnée audio fournie"
@@ -614,7 +614,7 @@
     "message": "L'historique est vide"
   },
   "act_searchGoogle_start": {
-    "message": "Recherche de « $QUERY$ » sur Google",
+    "message": "Recherche de « $QUERY$ » sur Google",
     "placeholders": {
       "query": {
         "content": "$1",
@@ -623,7 +623,7 @@
     }
   },
   "act_searchGoogle_ok": {
-    "message": "Recherche effectuée pour « $QUERY$ » sur Google",
+    "message": "Recherche effectuée pour « $QUERY$ » sur Google",
     "placeholders": {
       "query": {
         "content": "$1",
@@ -650,7 +650,7 @@
     }
   },
   "act_goBack_start": {
-    "message": "Navigation arrière"
+    "message": "Retour en arrière"
   },
   "act_goBack_ok": {
     "message": "Retour effectué"
@@ -723,10 +723,10 @@
     }
   },
   "act_click_newTabOpened": {
-    "message": "Nouvel onglet ouvert — basculement vers celui-ci"
+    "message": "Nouvel onglet ouvert — passage à celui-ci"
   },
   "act_inputText_start": {
-    "message": "Saisie de texte dans l'index $INDEX$",
+    "message": "Saisie de texte dans l'élément d'index $INDEX$",
     "placeholders": {
       "index": {
         "content": "$1",
@@ -735,7 +735,7 @@
     }
   },
   "act_inputText_ok": {
-    "message": "Saisi $TEXT$ dans l'index $INDEX$",
+    "message": "Texte saisi « $TEXT$ » dans l'élément d'index $INDEX$",
     "placeholders": {
       "text": {
         "content": "$1",
@@ -757,7 +757,7 @@
     }
   },
   "act_switchTab_ok": {
-    "message": "Basculé vers l'onglet $TAB_ID$",
+    "message": "Basculement effectué vers l'onglet $TAB_ID$",
     "placeholders": {
       "tab_id": {
         "content": "$1",
@@ -820,7 +820,7 @@
     }
   },
   "act_scrollToPercent_start": {
-    "message": "Défilement au pourcentage : $PERCENT$",
+    "message": "Défilement jusqu'à $PERCENT$ %",
     "placeholders": {
       "percent": {
         "content": "$1",
@@ -829,7 +829,7 @@
     }
   },
   "act_scrollToPercent_ok": {
-    "message": "Défilement effectué à $PERCENT$",
+    "message": "Défilement effectué à $PERCENT$ %",
     "placeholders": {
       "percent": {
         "content": "$1",
@@ -862,7 +862,7 @@
     "message": "Défilement effectué vers la page suivante"
   },
   "act_errors_alreadyAtTop": {
-    "message": "L'élément d'index $INDEX$ est déjà en haut, impossible de défiler à la page précédente",
+    "message": "L'élément d'index $INDEX$ est déjà en haut, impossible de défiler vers la page précédente",
     "placeholders": {
       "index": {
         "content": "$1",
@@ -871,10 +871,10 @@
     }
   },
   "act_errors_pageAlreadyAtTop": {
-    "message": "Déjà en haut de la page, impossible de défiler à la page précédente"
+    "message": "Déjà en haut de la page, impossible de défiler vers la page précédente"
   },
   "act_errors_alreadyAtBottom": {
-    "message": "L'élément d'index $INDEX$ est déjà en bas, impossible de défiler à la page suivante",
+    "message": "L'élément d'index $INDEX$ est déjà en bas, impossible de défiler vers la page suivante",
     "placeholders": {
       "index": {
         "content": "$1",
@@ -883,10 +883,10 @@
     }
   },
   "act_errors_pageAlreadyAtBottom": {
-    "message": "Déjà en bas de la page, impossible de défiler à la page suivante"
+    "message": "Déjà en bas de la page, impossible de défiler vers la page suivante"
   },
   "act_scrollToText_start": {
-    "message": "Défilement vers le texte : $TEXT$, occurrence $OCCURRENCE$",
+    "message": "Défilement vers le texte : « $TEXT$ », occurrence $OCCURRENCE$",
     "placeholders": {
       "text": {
         "content": "$1",
@@ -899,7 +899,7 @@
     }
   },
   "act_scrollToText_ok": {
-    "message": "Défilement effectué vers le texte : $TEXT$, occurrence $OCCURRENCE$",
+    "message": "Défilement effectué vers le texte : « $TEXT$ », occurrence $OCCURRENCE$",
     "placeholders": {
       "text": {
         "content": "$1",
@@ -912,7 +912,7 @@
     }
   },
   "act_scrollToText_notFound": {
-    "message": "Texte « $TEXT$ » (occurrence $OCCURRENCE$) introuvable ou non visible",
+    "message": "Texte « $TEXT$ » (occurrence $OCCURRENCE$) introuvable ou non visible",
     "placeholders": {
       "text": {
         "content": "$1",
@@ -934,7 +934,7 @@
     }
   },
   "act_sendKeys_start": {
-    "message": "Envoi des touches : $KEYS$",
+    "message": "Envoi des touches : $KEYS$",
     "placeholders": {
       "keys": {
         "content": "$1",
@@ -943,7 +943,7 @@
     }
   },
   "act_sendKeys_ok": {
-    "message": "Touches envoyées : $KEYS$",
+    "message": "Touches envoyées : $KEYS$",
     "placeholders": {
       "keys": {
         "content": "$1",
@@ -961,7 +961,7 @@
     }
   },
   "act_getDropdownOptions_useExactText": {
-    "message": "Utilisez la chaîne de texte exacte dans select_dropdown_option"
+    "message": "Utilisez le texte exact dans select_dropdown_option"
   },
   "act_getDropdownOptions_ok": {
     "message": "$COUNT$ options récupérées dans le menu déroulant",
@@ -985,7 +985,7 @@
     }
   },
   "act_selectDropdownOption_start": {
-    "message": "Sélectionner l'option « $TEXT$ » dans le menu déroulant d'index $INDEX$",
+    "message": "Sélection de l'option « $TEXT$ » dans le menu déroulant d'index $INDEX$",
     "placeholders": {
       "text": {
         "content": "$1",
@@ -1011,7 +1011,7 @@
     }
   },
   "act_selectDropdownOption_notSelect": {
-    "message": "Impossible de sélectionner l'option : l'élément d'index $INDEX$ est un $TAG_NAME$, pas un SELECT",
+    "message": "Impossible de sélectionner l'option : l'élément d'index $INDEX$ est un $TAG_NAME$, et non un SELECT",
     "placeholders": {
       "index": {
         "content": "$1",
@@ -1051,16 +1051,16 @@
     "message": "Explorer Browd"
   },
   "chat_bookmarks_default2": {
-    "message": "Extraire données"
+    "message": "Extraire des données"
   },
   "chat_bookmarks_default3": {
-    "message": "Créer processus"
+    "message": "Créer un processus"
   },
   "chat_bookmarks_done": {
     "message": "Terminé"
   },
   "chat_bookmarks_edit_btn": {
-    "message": "Éditer"
+    "message": "Modifier"
   },
   "chat_input_models_button": {
     "message": "Modèles"
@@ -1072,7 +1072,7 @@
     "message": "Rôle"
   },
   "chat_input_placeholder_with_files": {
-    "message": "Ajouter un message (facultatif)..."
+    "message": "Ajouter un message (facultatif)…"
   },
   "options_general_launchShortcut_btnOpen": {
     "message": "Ouvrir les raccourcis"
@@ -1117,16 +1117,16 @@
     "message": "Le modèle Navigator sélectionné ne prend pas en charge la vision — la vision est désactivée à l'exécution. Choisissez un modèle compatible vision pour l'activer."
   },
   "chat_input_role_planner_tip": {
-    "message": "Planner — décompose votre tâche en un plan ciblé de 1 à 7 étapes que le Navigator suivra."
+    "message": "Planner — décompose votre tâche en un plan précis de 1 à 7 étapes que le Navigator suivra."
   },
   "chat_input_role_navigator_tip": {
-    "message": "Navigator — l'exécuteur. Choisit les outils du navigateur (cliquer, taper, faire défiler, extraire du web) une étape à la fois et décide quand la tâche est terminée."
+    "message": "Navigator — l'exécuteur. Choisit les outils du navigateur (cliquer, saisir du texte, faire défiler, extraire du web) étape par étape et décide quand la tâche est terminée."
   },
   "chat_input_role_stt_tip": {
-    "message": "STT — speech-to-text. Utilisé par le bouton microphone pour transcrire votre voix dans la saisie de discussion."
+    "message": "STT — speech-to-text. Utilisé par le bouton microphone pour transcrire votre voix dans le champ de saisie."
   },
   "chat_input_role_judge_tip": {
-    "message": "Judge — évaluateur en phase d'eval. Utilisé uniquement par la suite d'eval (pnpm test:eval) pour noter les résultats de scénarios selon un barème. Facultatif ; utilise par défaut votre modèle Navigator si non défini."
+    "message": "Judge — évaluateur en phase d'évaluation. Utilisé uniquement par la suite d'évaluation (pnpm test:eval) pour noter les résultats de scénarios selon un barème. Facultatif ; utilise par défaut votre modèle Navigator s'il n'est pas défini."
   },
   "chat_input_role_label_short_planner": {
     "message": "Plan"
@@ -1153,16 +1153,16 @@
     "message": "Afficher l'onglet de l'agent pendant son exécution (mode actuel)"
   },
   "chat_input_tabFocus_background_tip": {
-    "message": "L'agent travaille dans un onglet séparé en arrière-plan. Cliquez pour basculer : mettre l'onglet de l'agent au premier plan au démarrage de la tâche."
+    "message": "L'agent travaille dans un onglet séparé en arrière-plan. Cliquez pour basculer : mettre l'onglet de l'agent au premier plan au démarrage de la tâche."
   },
   "chat_input_tabFocus_foreground_tip": {
-    "message": "L'onglet de l'agent est mis au premier plan au démarrage de la tâche pour que vous puissiez observer. Cliquez pour basculer : garder l'onglet de l'agent en arrière-plan (par défaut, plus sûr)."
+    "message": "L'onglet de l'agent est mis au premier plan au démarrage de la tâche pour que vous puissiez observer. Cliquez pour basculer : garder l'onglet de l'agent en arrière-plan (par défaut, plus sûr)."
   },
   "options_models_judge_header": {
     "message": "Judge"
   },
   "options_models_judge_desc": {
-    "message": "Évaluateur facultatif. Utilisé par le vérificateur d'exécution (annote les réponses finales avec des remarques sur la qualité) et la suite d'eval (pnpm test:eval). Coûte +1 appel LLM par finalisation quand le vérificateur est actif."
+    "message": "Évaluateur facultatif. Utilisé par le vérificateur d'exécution (annote les réponses finales avec des remarques sur la qualité) et la suite d'évaluation (pnpm test:eval). Coûte +1 appel LLM par finalisation quand le vérificateur est actif."
   },
   "options_models_judge_runtime_mode_label": {
     "message": "Vérificateur d'exécution"
@@ -1171,13 +1171,13 @@
     "message": "Désactivé (pas de vérificateur)"
   },
   "options_models_judge_runtime_mode_verify_once": {
-    "message": "Vérifier une fois (annoter les préoccupations)"
+    "message": "Vérifier une fois (ajouter des remarques sur la qualité)"
   },
   "options_general_section_appearance": {
     "message": "Apparence"
   },
   "options_general_section_appearance_lead": {
-    "message": "L'apparence de Browd dans votre navigateur."
+    "message": "Comment Browd s'affiche dans votre navigateur."
   },
   "options_general_section_agent": {
     "message": "Comportement de l'agent"
@@ -1228,12 +1228,12 @@
     "message": "Par défaut"
   },
   "chat_permissionMode_default_desc": {
-    "message": "Chaque prise de contrôle inter-onglets demande d'abord votre approbation"
+    "message": "Chaque prise de contrôle inter-onglets demande d'abord votre approbation."
   },
   "chat_permissionMode_full": {
     "message": "Accès complet"
   },
   "chat_permissionMode_full_desc": {
-    "message": "Ignore toutes les approbations dans l'application. Les invites de permission du navigateur peuvent toujours apparaître."
+    "message": "Contourne toutes les approbations dans l'application. Les demandes d'autorisation du navigateur peuvent toujours apparaître."
   }
 }
