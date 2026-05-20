@@ -802,10 +802,22 @@
     }
   },
   "act_cache_start": {
-    "message": "Armazenando descobertas em cache: $CONTENT$"
+    "message": "Armazenando descobertas em cache: $CONTENT$",
+    "placeholders": {
+      "content": {
+        "content": "$1",
+        "example": "Preferências do usuário salvas"
+      }
+    }
   },
   "act_cache_ok": {
-    "message": "Descobertas armazenadas em cache: $CONTENT$"
+    "message": "Descobertas armazenadas em cache: $CONTENT$",
+    "placeholders": {
+      "content": {
+        "content": "$1",
+        "example": "Preferências do usuário salvas"
+      }
+    }
   },
   "act_scrollToPercent_start": {
     "message": "Rolar para a porcentagem: $PERCENT$",

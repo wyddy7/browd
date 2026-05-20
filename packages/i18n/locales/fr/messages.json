@@ -1,8 +1,10 @@
 {
   "app_metadata_description": {
+    "description": "Extension description",
     "message": "Agent navigateur IA open-source. Exécute des tâches web dans votre side panel Chrome — extraction de données, remplissage de formulaires et plus."
   },
   "app_metadata_name": {
+    "description": "Extension name",
     "message": "Browd : agent navigateur IA"
   },
   "errors_unknown": {
@@ -12,7 +14,13 @@
     "message": "Échec de la connexion au service worker"
   },
   "errors_cmd_unknown": {
-    "message": "Commande non prise en charge : $COMMAND$.\n\nCommandes disponibles : /state, /nohighlight, /replay <historySessionId>"
+    "message": "Commande non prise en charge : $COMMAND$.\n\nCommandes disponibles : /state, /nohighlight, /replay <historySessionId>",
+    "placeholders": {
+      "command": {
+        "content": "$1",
+        "example": "/unknown"
+      }
+    }
   },
   "nav_newChat_a11y": {
     "message": "Nouvelle discussion"
@@ -105,10 +113,22 @@
     "message": "Décrivez la tâche..."
   },
   "chat_replay_starting": {
-    "message": "Démarrage de la relecture de la tâche :\n\n« $TASK$ »"
+    "message": "Démarrage de la relecture de la tâche :\n\n« $TASK$ »",
+    "placeholders": {
+      "task": {
+        "content": "$1",
+        "example": "Navigate to example.com"
+      }
+    }
   },
   "chat_replay_failed": {
-    "message": "Échec de la relecture : $ERROR_MESSAGE$"
+    "message": "Échec de la relecture : $ERROR_MESSAGE$",
+    "placeholders": {
+      "error_message": {
+        "content": "$1",
+        "example": "Connection timeout"
+      }
+    }
   },
   "chat_replay_invalidArgs": {
     "message": "Arguments invalides. Veuillez utiliser le format : /replay <historySessionId>"
@@ -117,7 +137,13 @@
     "message": "La relecture est désactivée dans les paramètres généraux. Veuillez activer « Rejouer les tâches historiques » dans les paramètres de l'extension pour utiliser cette fonctionnalité."
   },
   "chat_replay_noHistory": {
-    "message": "Aucun historique d'action trouvé pour la session « $SESSION_ID$... ». Cette session ne contient peut-être pas d'actions rejouables.\n\nIl s'agit elle-même d'une session de relecture (les sessions de relecture ne peuvent pas être rejouées), ou elle a été créée avant que la fonctionnalité de relecture ne soit disponible."
+    "message": "Aucun historique d'action trouvé pour la session « $SESSION_ID$... ». Cette session ne contient peut-être pas d'actions rejouables.\n\nIl s'agit elle-même d'une session de relecture (les sessions de relecture ne peuvent pas être rejouées), ou elle a été créée avant que la fonctionnalité de relecture ne soit disponible.",
+    "placeholders": {
+      "session_id": {
+        "content": "$1",
+        "example": "abc123def456789"
+      }
+    }
   },
   "chat_stt_processing": {
     "message": "Traitement de la parole..."
@@ -438,7 +464,13 @@
     "message": "Les espaces ne sont pas autorisés dans les noms de fournisseurs. Veuillez utiliser des underscores ou d'autres caractères à la place."
   },
   "options_models_providers_errors_baseUrlRequired": {
-    "message": "L'URL de base est requise pour $PROVIDER$. Veuillez la saisir."
+    "message": "L'URL de base est requise pour $PROVIDER$. Veuillez la saisir.",
+    "placeholders": {
+      "provider": {
+        "content": "$1",
+        "example": "Custom OpenAI"
+      }
+    }
   },
   "options_firewall_header": {
     "message": "Pare-feu"
@@ -528,7 +560,13 @@
     "message": "Veuillez d'abord configurer les clés API dans les paramètres"
   },
   "bg_setup_noProvider": {
-    "message": "Fournisseur $PROVIDER$ introuvable dans les paramètres"
+    "message": "Fournisseur $PROVIDER$ introuvable dans les paramètres",
+    "placeholders": {
+      "provider": {
+        "content": "$1",
+        "example": "openai"
+      }
+    }
   },
   "bg_setup_noNavigatorModel": {
     "message": "Veuillez d'abord choisir un modèle pour le Navigator dans les paramètres"
@@ -546,7 +584,13 @@
     "message": "Tâche en pause"
   },
   "exec_task_fail": {
-    "message": "Échec de la tâche : \n\n$ERROR_MESSAGE$"
+    "message": "Échec de la tâche : \n\n$ERROR_MESSAGE$",
+    "placeholders": {
+      "error_message": {
+        "content": "$1",
+        "example": "Connection timeout"
+      }
+    }
   },
   "exec_replay_cancel": {
     "message": "Relecture annulée"
@@ -555,7 +599,13 @@
     "message": "Relecture terminée"
   },
   "exec_replay_fail": {
-    "message": "Échec de la relecture : \n\n$ERROR_MESSAGE$"
+    "message": "Échec de la relecture : \n\n$ERROR_MESSAGE$",
+    "placeholders": {
+      "error_message": {
+        "content": "$1",
+        "example": "Network error"
+      }
+    }
   },
   "exec_replay_historyNotFound": {
     "message": "Historique introuvable"
@@ -564,16 +614,40 @@
     "message": "L'historique est vide"
   },
   "act_searchGoogle_start": {
-    "message": "Recherche de « $QUERY$ » sur Google"
+    "message": "Recherche de « $QUERY$ » sur Google",
+    "placeholders": {
+      "query": {
+        "content": "$1",
+        "example": "weather today"
+      }
+    }
   },
   "act_searchGoogle_ok": {
-    "message": "Recherche effectuée pour « $QUERY$ » sur Google"
+    "message": "Recherche effectuée pour « $QUERY$ » sur Google",
+    "placeholders": {
+      "query": {
+        "content": "$1",
+        "example": "weather today"
+      }
+    }
   },
   "act_goToUrl_start": {
-    "message": "Navigation vers $URL$"
+    "message": "Navigation vers $URL$",
+    "placeholders": {
+      "url": {
+        "content": "$1",
+        "example": "https://example.com"
+      }
+    }
   },
   "act_goToUrl_ok": {
-    "message": "Accédé à $URL$"
+    "message": "Accédé à $URL$",
+    "placeholders": {
+      "url": {
+        "content": "$1",
+        "example": "https://example.com"
+      }
+    }
   },
   "act_goBack_start": {
     "message": "Navigation arrière"
@@ -582,64 +656,186 @@
     "message": "Retour effectué"
   },
   "act_wait_start": {
-    "message": "Attente de $SECONDS$ secondes"
+    "message": "Attente de $SECONDS$ secondes",
+    "placeholders": {
+      "seconds": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
   },
   "act_wait_ok": {
-    "message": "$SECONDS$ secondes écoulées"
+    "message": "$SECONDS$ secondes écoulées",
+    "placeholders": {
+      "seconds": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
   },
   "act_click_start": {
-    "message": "Clic sur l'élément d'index $INDEX$"
+    "message": "Clic sur l'élément d'index $INDEX$",
+    "placeholders": {
+      "index": {
+        "content": "$1",
+        "example": "5"
+      }
+    }
   },
   "act_errors_elementNotExist": {
-    "message": "L'élément d'index $INDEX$ n'existe pas — réessayez ou utilisez d'autres actions"
+    "message": "L'élément d'index $INDEX$ n'existe pas — réessayez ou utilisez d'autres actions",
+    "placeholders": {
+      "index": {
+        "content": "$1",
+        "example": "5"
+      }
+    }
   },
   "act_errors_elementNoLongerAvailable": {
-    "message": "Élément indisponible à l'index $INDEX$ — la page a probablement changé"
+    "message": "Élément indisponible à l'index $INDEX$ — la page a probablement changé",
+    "placeholders": {
+      "index": {
+        "content": "$1",
+        "example": "5"
+      }
+    }
   },
   "act_click_fileUploader": {
-    "message": "Index $INDEX$ — possède un élément qui ouvre la boîte de dialogue d'envoi de fichier. Pour envoyer des fichiers, veuillez utiliser une fonction spécifique d'envoi de fichiers"
+    "message": "Index $INDEX$ — possède un élément qui ouvre la boîte de dialogue d'envoi de fichier. Pour envoyer des fichiers, veuillez utiliser une fonction spécifique d'envoi de fichiers",
+    "placeholders": {
+      "index": {
+        "content": "$1",
+        "example": "5"
+      }
+    }
   },
   "act_click_ok": {
-    "message": "Clic effectué sur le bouton d'index $INDEX$ : $TEXT$"
+    "message": "Clic effectué sur le bouton d'index $INDEX$ : $TEXT$",
+    "placeholders": {
+      "index": {
+        "content": "$1",
+        "example": "5"
+      },
+      "text": {
+        "content": "$2",
+        "example": "Submit Button"
+      }
+    }
   },
   "act_click_newTabOpened": {
     "message": "Nouvel onglet ouvert — basculement vers celui-ci"
   },
   "act_inputText_start": {
-    "message": "Saisie de texte dans l'index $INDEX$"
+    "message": "Saisie de texte dans l'index $INDEX$",
+    "placeholders": {
+      "index": {
+        "content": "$1",
+        "example": "5"
+      }
+    }
   },
   "act_inputText_ok": {
-    "message": "Saisi $TEXT$ dans l'index $INDEX$"
+    "message": "Saisi $TEXT$ dans l'index $INDEX$",
+    "placeholders": {
+      "text": {
+        "content": "$1",
+        "example": "Hello World"
+      },
+      "index": {
+        "content": "$2",
+        "example": "5"
+      }
+    }
   },
   "act_switchTab_start": {
-    "message": "Basculement vers l'onglet $TAB_ID$"
+    "message": "Basculement vers l'onglet $TAB_ID$",
+    "placeholders": {
+      "tab_id": {
+        "content": "$1",
+        "example": "123456"
+      }
+    }
   },
   "act_switchTab_ok": {
-    "message": "Basculé vers l'onglet $TAB_ID$"
+    "message": "Basculé vers l'onglet $TAB_ID$",
+    "placeholders": {
+      "tab_id": {
+        "content": "$1",
+        "example": "123456"
+      }
+    }
   },
   "act_openTab_start": {
-    "message": "Ouverture de $URL$ dans un nouvel onglet"
+    "message": "Ouverture de $URL$ dans un nouvel onglet",
+    "placeholders": {
+      "url": {
+        "content": "$1",
+        "example": "https://example.com"
+      }
+    }
   },
   "act_openTab_ok": {
-    "message": "$URL$ ouvert dans un nouvel onglet"
+    "message": "$URL$ ouvert dans un nouvel onglet",
+    "placeholders": {
+      "url": {
+        "content": "$1",
+        "example": "https://example.com"
+      }
+    }
   },
   "act_closeTab_start": {
-    "message": "Fermeture de l'onglet $TAB_ID$"
+    "message": "Fermeture de l'onglet $TAB_ID$",
+    "placeholders": {
+      "tab_id": {
+        "content": "$1",
+        "example": "123456"
+      }
+    }
   },
   "act_closeTab_ok": {
-    "message": "Onglet $TAB_ID$ fermé"
+    "message": "Onglet $TAB_ID$ fermé",
+    "placeholders": {
+      "tab_id": {
+        "content": "$1",
+        "example": "123456"
+      }
+    }
   },
   "act_cache_start": {
-    "message": "Mise en cache des résultats : $CONTENT$"
+    "message": "Mise en cache des résultats : $CONTENT$",
+    "placeholders": {
+      "content": {
+        "content": "$1",
+        "example": "User preferences saved"
+      }
+    }
   },
   "act_cache_ok": {
-    "message": "Résultats mis en cache : $CONTENT$"
+    "message": "Résultats mis en cache : $CONTENT$",
+    "placeholders": {
+      "content": {
+        "content": "$1",
+        "example": "User preferences saved"
+      }
+    }
   },
   "act_scrollToPercent_start": {
-    "message": "Défilement au pourcentage : $PERCENT$"
+    "message": "Défilement au pourcentage : $PERCENT$",
+    "placeholders": {
+      "percent": {
+        "content": "$1",
+        "example": "50"
+      }
+    }
   },
   "act_scrollToPercent_ok": {
-    "message": "Défilement effectué à $PERCENT$"
+    "message": "Défilement effectué à $PERCENT$",
+    "placeholders": {
+      "percent": {
+        "content": "$1",
+        "example": "50"
+      }
+    }
   },
   "act_scrollToTop_start": {
     "message": "Défilement vers le haut"
@@ -666,61 +862,175 @@
     "message": "Défilement effectué vers la page suivante"
   },
   "act_errors_alreadyAtTop": {
-    "message": "L'élément d'index $INDEX$ est déjà en haut, impossible de défiler à la page précédente"
+    "message": "L'élément d'index $INDEX$ est déjà en haut, impossible de défiler à la page précédente",
+    "placeholders": {
+      "index": {
+        "content": "$1",
+        "example": "5"
+      }
+    }
   },
   "act_errors_pageAlreadyAtTop": {
     "message": "Déjà en haut de la page, impossible de défiler à la page précédente"
   },
   "act_errors_alreadyAtBottom": {
-    "message": "L'élément d'index $INDEX$ est déjà en bas, impossible de défiler à la page suivante"
+    "message": "L'élément d'index $INDEX$ est déjà en bas, impossible de défiler à la page suivante",
+    "placeholders": {
+      "index": {
+        "content": "$1",
+        "example": "5"
+      }
+    }
   },
   "act_errors_pageAlreadyAtBottom": {
     "message": "Déjà en bas de la page, impossible de défiler à la page suivante"
   },
   "act_scrollToText_start": {
-    "message": "Défilement vers le texte : $TEXT$, occurrence $OCCURRENCE$"
+    "message": "Défilement vers le texte : $TEXT$, occurrence $OCCURRENCE$",
+    "placeholders": {
+      "text": {
+        "content": "$1",
+        "example": "Contact Us"
+      },
+      "occurrence": {
+        "content": "$2",
+        "example": "2"
+      }
+    }
   },
   "act_scrollToText_ok": {
-    "message": "Défilement effectué vers le texte : $TEXT$, occurrence $OCCURRENCE$"
+    "message": "Défilement effectué vers le texte : $TEXT$, occurrence $OCCURRENCE$",
+    "placeholders": {
+      "text": {
+        "content": "$1",
+        "example": "Contact Us"
+      },
+      "occurrence": {
+        "content": "$2",
+        "example": "2"
+      }
+    }
   },
   "act_scrollToText_notFound": {
-    "message": "Texte « $TEXT$ » (occurrence $OCCURRENCE$) introuvable ou non visible"
+    "message": "Texte « $TEXT$ » (occurrence $OCCURRENCE$) introuvable ou non visible",
+    "placeholders": {
+      "text": {
+        "content": "$1",
+        "example": "Contact Us"
+      },
+      "occurrence": {
+        "content": "$2",
+        "example": "2"
+      }
+    }
   },
   "act_scrollToText_failed": {
-    "message": "Échec du défilement vers le texte : $ERROR$"
+    "message": "Échec du défilement vers le texte : $ERROR$",
+    "placeholders": {
+      "error": {
+        "content": "$1",
+        "example": "Element not found"
+      }
+    }
   },
   "act_sendKeys_start": {
-    "message": "Envoi des touches : $KEYS$"
+    "message": "Envoi des touches : $KEYS$",
+    "placeholders": {
+      "keys": {
+        "content": "$1",
+        "example": "Enter"
+      }
+    }
   },
   "act_sendKeys_ok": {
-    "message": "Touches envoyées : $KEYS$"
+    "message": "Touches envoyées : $KEYS$",
+    "placeholders": {
+      "keys": {
+        "content": "$1",
+        "example": "Enter"
+      }
+    }
   },
   "act_getDropdownOptions_start": {
-    "message": "Récupération des options du menu déroulant d'index $INDEX$"
+    "message": "Récupération des options du menu déroulant d'index $INDEX$",
+    "placeholders": {
+      "index": {
+        "content": "$1",
+        "example": "5"
+      }
+    }
   },
   "act_getDropdownOptions_useExactText": {
     "message": "Utilisez la chaîne de texte exacte dans select_dropdown_option"
   },
   "act_getDropdownOptions_ok": {
-    "message": "$COUNT$ options récupérées dans le menu déroulant"
+    "message": "$COUNT$ options récupérées dans le menu déroulant",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "5"
+      }
+    }
   },
   "act_getDropdownOptions_noOptions": {
     "message": "Aucune option trouvée dans le menu déroulant"
   },
   "act_getDropdownOptions_failed": {
-    "message": "Échec de la récupération des options du menu déroulant : $ERROR$"
+    "message": "Échec de la récupération des options du menu déroulant : $ERROR$",
+    "placeholders": {
+      "error": {
+        "content": "$1",
+        "example": "Element not found"
+      }
+    }
   },
   "act_selectDropdownOption_start": {
-    "message": "Sélectionner l'option « $TEXT$ » dans le menu déroulant d'index $INDEX$"
+    "message": "Sélectionner l'option « $TEXT$ » dans le menu déroulant d'index $INDEX$",
+    "placeholders": {
+      "text": {
+        "content": "$1",
+        "example": "Option 1"
+      },
+      "index": {
+        "content": "$2",
+        "example": "5"
+      }
+    }
   },
   "act_selectDropdownOption_ok": {
-    "message": "Option « $TEXT$ » sélectionnée dans le menu déroulant d'index $INDEX$"
+    "message": "Option « $TEXT$ » sélectionnée dans le menu déroulant d'index $INDEX$",
+    "placeholders": {
+      "text": {
+        "content": "$1",
+        "example": "Option 1"
+      },
+      "index": {
+        "content": "$2",
+        "example": "5"
+      }
+    }
   },
   "act_selectDropdownOption_notSelect": {
-    "message": "Impossible de sélectionner l'option : l'élément d'index $INDEX$ est un $TAG_NAME$, pas un SELECT"
+    "message": "Impossible de sélectionner l'option : l'élément d'index $INDEX$ est un $TAG_NAME$, pas un SELECT",
+    "placeholders": {
+      "index": {
+        "content": "$1",
+        "example": "5"
+      },
+      "tag_name": {
+        "content": "$2",
+        "example": "DIV"
+      }
+    }
   },
   "act_selectDropdownOption_failed": {
-    "message": "Échec de la sélection de l'option : $ERROR$"
+    "message": "Échec de la sélection de l'option : $ERROR$",
+    "placeholders": {
+      "error": {
+        "content": "$1",
+        "example": "Option not found"
+      }
+    }
   },
   "options_general_language_es": {
     "message": "Espagnol"
