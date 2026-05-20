@@ -41,3 +41,7 @@ demo.MOV
 demo-demo.MOV
 demo*.mov
 assets/demo-twitter.mp4
+store-assets/
+
+# Local marketing notes / external advisor convos (private context)
+promo.md
