@@ -13,6 +13,90 @@ import { createLogger } from '@src/background/log';
 import { isUrlAllowed } from './util';
 
 const logger = createLogger('BrowserContext');
+
+/**
+ * URL schemes the Chrome debugger cannot attach to, so the agent can neither
+ * read nor act on them. `chrome-extension://` covers the very common case of a
+ * new-tab page replaced by another extension — the tab looks like an ordinary
+ * new tab to the user while being completely opaque to the agent.
+ *
+ * `about:blank` is deliberately NOT in this list: it is attachable, empty, and
+ * carries a truthful URL, which makes it the correct safe parking spot.
+ */
+const UNATTACHABLE_SCHEMES = [
+  'chrome://',
+  'chrome-extension://',
+  'edge://',
+  'brave://',
+  'devtools://',
+  'view-source:',
+  'chrome-search://',
+  'chrome-untrusted://',
+];
+
+/** Web Store pages are attachable in scheme but blocked from scripting by Chrome. */
+const UNATTACHABLE_HOSTS = [
+  'chromewebstore.google.com',
+  'chrome.google.com/webstore',
+  'microsoftedge.microsoft.com/addons',
+];
+
+/**
+ * True when the agent can realistically drive this URL. Exported for tests —
+ * this predicate decides whether the agent starts its task blind.
+ */
+export function isAttachableUrl(url: string): boolean {
+  if (!url) return false;
+  const u = url.trim().toLowerCase();
+  if (u === 'about:blank') return true;
+  if (u.startsWith('about:')) return false;
+  if (UNATTACHABLE_SCHEMES.some(scheme => u.startsWith(scheme))) return false;
+  if (UNATTACHABLE_HOSTS.some(host => u.includes(host))) return false;
+  return true;
+}
+
+/**
+ * Wait until a tab has finished loading its current document.
+ *
+ * `chrome.tabs.update` resolves as soon as navigation is requested, so callers
+ * that immediately attach the debugger land on the OUTGOING document. Polling
+ * `chrome.tabs.get` avoids an onUpdated listener that would have to be torn
+ * down on every path.
+ *
+ * `status === 'complete'` ALONE is ambiguous: the outgoing document also
+ * reports `complete`, so an early poll can accept the old page before Chrome
+ * even flips to `loading`. When the caller knows a navigation was just
+ * requested it passes `expectNavigationFrom` (the pre-navigation URL); we then
+ * require evidence that the document actually changed — the tab entered
+ * `loading`, carries a `pendingUrl`, or its URL moved off the old one — before
+ * accepting `complete`.
+ *
+ * Bounded: a page that never reports `complete` (long-polling, streaming) must
+ * not hold the whole task hostage, so we give up and let the agent proceed —
+ * perception provenance will report an honest state either way.
+ */
+export async function waitForTabSettled(tabId: number, timeoutMs = 8000, expectNavigationFrom?: string): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  let sawNavigation = expectNavigationFrom === undefined;
+  while (Date.now() < deadline) {
+    let tab: chrome.tabs.Tab;
+    try {
+      tab = await chrome.tabs.get(tabId);
+    } catch {
+      return; // tab gone — the caller's own error handling takes over
+    }
+    if (
+      !sawNavigation &&
+      (tab.status === 'loading' || !!tab.pendingUrl || (!!tab.url && tab.url !== expectNavigationFrom))
+    ) {
+      sawNavigation = true;
+    }
+    if (sawNavigation && tab.status === 'complete' && !tab.pendingUrl) return;
+    await new Promise(r => setTimeout(r, 100));
+  }
+  logger.warning(`waitForTabSettled: tab ${tabId} did not settle within ${timeoutMs}ms; continuing`);
+}
+
 export default class BrowserContext {
   private _config: BrowserContextConfig;
   private _currentTabId: number | null = null;
@@ -190,8 +274,44 @@ export default class BrowserContext {
     if (initialUrl && initialUrl !== 'about:blank') {
       try {
         await chrome.tabs.update(tabId, { url: initialUrl });
+        // `tabs.update` resolves when navigation STARTS, not when it finishes.
+        // Returning here used to let the debugger attach while the tab was
+        // still showing the outgoing page. A chrome-extension:// → http://
+        // hop is cross-process, so Chrome creates a new target and the session
+        // attached to the old one answers "Cannot access a chrome-extension://
+        // URL of different extension" for the rest of the task (36 times in a
+        // row on 2026-08-06, while chrome.tabs.get already reported the new
+        // URL). Wait for the document to settle — with evidence that it
+        // actually CHANGED, because the outgoing document also reports
+        // status 'complete' — before anyone attaches.
+        await waitForTabSettled(tabId, 8000, activeTab.url && activeTab.url !== initialUrl ? activeTab.url : undefined);
+        logger.info(`openAgentTab: navigated agent tab ${tabId} to ${initialUrl}`);
       } catch (err) {
         logger.warning(`openAgentTab: failed to navigate ${tabId} to ${initialUrl}`, err);
+      }
+      return tabId;
+    }
+
+    // 4. Attachability gate (2026-08-06). The anchor is whatever the user had
+    //    focused, and that can be a page the debugger cannot attach to at all:
+    //    chrome://newtab (very often replaced by *another extension*, so the
+    //    real URL is chrome-extension://<other-id>/…), the Web Store, devtools.
+    //    Anchoring there left the agent permanently blind — every capture threw
+    //    "Cannot access a chrome-extension:// URL of different extension", and
+    //    the loop that followed burned an entire task. browser-use hits the same
+    //    Chrome limitation and answers it the same way: never leave the agent
+    //    parked on a page it cannot drive.
+    //
+    //    about:blank is attachable, empty, and honest — the agent sees an empty
+    //    page with a real URL and has to navigate, which is exactly right.
+    if (!isAttachableUrl(activeTab.url ?? '')) {
+      logger.info(`openAgentTab: anchor ${activeTab.url ?? '<unknown>'} is not attachable — moving tab to about:blank`);
+      try {
+        await chrome.tabs.update(tabId, { url: 'about:blank' });
+        await waitForTabSettled(tabId, 8000, activeTab.url || undefined);
+        logger.info(`openAgentTab: parked agent tab ${tabId} on about:blank`);
+      } catch (err) {
+        logger.warning(`openAgentTab: failed to move ${tabId} to about:blank`, err);
       }
     }
 
@@ -345,6 +465,24 @@ export default class BrowserContext {
       this._currentTabId = null;
     }
     logger.warning(`handleTabGone: tab ${tabId} evicted from BrowserContext`);
+  }
+
+  /**
+   * Chrome force-detached the debugger from a tab (`chrome.debugger.onDetach`
+   * in `background/index.ts`). Reasons: navigation to a URL we may not debug,
+   * a foreign extension's frame appearing in the page (password-manager
+   * overlays on credential-field focus), DevTools takeover, tab close.
+   *
+   * The Page STAYS in `_attachedPages` — the tab is alive and the Page holds
+   * its config and cached state. Only the binding is marked lost, which makes
+   * `attached` truthful (so `navigateTo` falls back to the tabs API, which
+   * Chrome never blocks) and routes the next state capture through the lazy
+   * re-attach in `Page._updateState`. Eviction remains `handleTabGone`'s job.
+   */
+  public handleDebuggerDetached(tabId: number, reason: string): void {
+    const page = this._attachedPages.get(tabId);
+    if (!page) return;
+    page.markBindingLost(reason);
   }
 
   public async getCurrentPage(): Promise<Page> {

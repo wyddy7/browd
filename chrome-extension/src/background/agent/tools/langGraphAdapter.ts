@@ -46,6 +46,24 @@ export const DEFAULT_TOOL_BUDGETS: Readonly<Record<string, number>> = Object.fre
   web_fetch_markdown: 5,
 });
 
+/**
+ * Outcome of the approval gate. `proceed: false` means the user rejected the
+ * action (or approval could not be obtained) — the wrapper then returns
+ * `message` to the LLM as a ToolMessage instead of running the action.
+ */
+export type ApprovalOutcome = { proceed: true } | { proceed: false; message: string };
+
+/**
+ * Unified-mode approval gate (T-hitl-unified). `checkApproval` used to be wired
+ * only into the legacy Navigator, so in `agentMode='unified'` — the default —
+ * submitting a form or typing into a password field reached the page with no
+ * prompt at all. The gate belongs here because this wrapper is the single seam
+ * every unified-mode action passes through, next to the budget and duplicate
+ * guards. The implementation lives in `runReactAgent`, where the browser
+ * context and the HITL controller are in scope.
+ */
+export type ApprovalGate = (actionName: string, input: unknown) => Promise<ApprovalOutcome>;
+
 export interface ToolBudgetOptions {
   /** Mutable counter map; the wrapper increments per invocation. */
   counters: Record<string, number>;
@@ -207,7 +225,12 @@ function renderResult(result: ActionResult): ToolReturn {
  * name has a configured limit, the wrapper increments its counter and
  * blocks past the limit without invoking the underlying action.
  */
-export function actionToTool(action: Action, budget?: ToolBudgetOptions, dupGuard?: DuplicateGuardState) {
+export function actionToTool(
+  action: Action,
+  budget?: ToolBudgetOptions,
+  dupGuard?: DuplicateGuardState,
+  approvalGate?: ApprovalGate,
+) {
   const schema = action.schema;
   const name = schema.name;
   const limit = budget?.limits?.[name];
@@ -244,6 +267,16 @@ export function actionToTool(action: Action, budget?: ToolBudgetOptions, dupGuar
           return dupGuardErrorMessage(name, count);
         }
       }
+      // Approval gate — runs LAST of the three guards, so a call that is
+      // already blocked by budget or dup never bothers the user with a
+      // prompt for an action that was not going to run anyway.
+      if (approvalGate) {
+        const outcome = await approvalGate(name, input);
+        if (!outcome.proceed) {
+          logger.info(`[tool] ${name} ${argSummary} → BLOCKED-approval`);
+          return outcome.message;
+        }
+      }
       try {
         const result = await action.call(input);
         const ms = Date.now() - callStart;
@@ -278,9 +311,15 @@ export function actionToTool(action: Action, budget?: ToolBudgetOptions, dupGuar
  *
  * Pass `budget` to enforce per-task caps (T2g). Pass `dupGuard` to
  * trip after 3 consecutive identical tool calls (T2f-final-fix).
- * Without either, the wrappers behave as in T2d: plain Action.call
- * passthrough.
+ * Pass `approvalGate` to route sensitive actions through HITL
+ * (T-hitl-unified). Without any of them, the wrappers behave as in
+ * T2d: plain Action.call passthrough.
  */
-export function actionsToTools(actions: Action[], budget?: ToolBudgetOptions, dupGuard?: DuplicateGuardState) {
-  return actions.filter(a => a.name() !== 'done').map(a => actionToTool(a, budget, dupGuard));
+export function actionsToTools(
+  actions: Action[],
+  budget?: ToolBudgetOptions,
+  dupGuard?: DuplicateGuardState,
+  approvalGate?: ApprovalGate,
+) {
+  return actions.filter(a => a.name() !== 'done').map(a => actionToTool(a, budget, dupGuard, approvalGate));
 }

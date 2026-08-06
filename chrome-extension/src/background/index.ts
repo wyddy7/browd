@@ -79,10 +79,19 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   }
 });
 
-// Listen for debugger detached event
-// if canceled_by_user, remove the tab from the browser context
+// Listen for debugger detached event.
+// This event is the ONLY signal Chrome gives when it kills our session
+// unilaterally (navigation to a restricted URL, a foreign extension's frame
+// appearing in the page, DevTools takeover). ExtensionTransport does not
+// listen for it, so puppeteer never learns the connection died — without the
+// handleDebuggerDetached call below the Page kept a zombie session and every
+// later CDP call failed without ever re-attaching (2026-08-06 incident).
 chrome.debugger.onDetach.addListener(async (source, reason) => {
   console.log('Debugger detached:', source, reason);
+  if (source.tabId) {
+    browserContext.handleDebuggerDetached(source.tabId, reason);
+  }
+  // if canceled_by_user, remove the tab from the browser context
   if (reason === 'canceled_by_user') {
     if (source.tabId) {
       currentExecutor?.cancel();

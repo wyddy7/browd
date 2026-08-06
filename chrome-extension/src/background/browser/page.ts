@@ -21,6 +21,9 @@ import {
   type BrowserContextConfig,
   DEFAULT_BROWSER_CONTEXT_CONFIG,
   type PageState,
+  type PerceptionProvenance,
+  isStaleTargetErrorMessage,
+  isForeignExtensionFrameError,
   URLNotAllowedError,
   TabGoneError,
   isTabGoneErrorMessage,
@@ -31,16 +34,41 @@ import { isUrlAllowed } from './util';
 
 const logger = createLogger('Page');
 
+/** Empty DOM root — used for the initial shell and for failed captures. */
+function emptyElementTree(): DOMElementNode {
+  return new DOMElementNode({
+    tagName: 'root',
+    isVisible: true,
+    parent: null,
+    xpath: '',
+    attributes: {},
+    children: [],
+  });
+}
+
+/**
+ * Model-facing explanation for a capture that died on a debugger-access
+ * error. The raw Chrome message ("Cannot access a chrome-extension:// URL of
+ * different extension") repeatedly sent the LLM chasing a wrong theory (it
+ * assumed it navigated to the wrong URL); name the actual mechanic and the
+ * one action that clears it instead.
+ */
+export function describeBindingLoss(msg: string): string {
+  if (isForeignExtensionFrameError(msg)) {
+    return (
+      'Chrome revoked debugger access to this tab: another browser extension ' +
+      '(commonly a password manager) injected its own frame into the page, and Chrome ' +
+      'blocks debugging while that frame exists. Interactions may fail until the page is ' +
+      'reloaded or navigated. Original error: ' +
+      msg
+    );
+  }
+  return msg;
+}
+
 export function build_initial_state(tabId?: number, url?: string, title?: string): PageState {
   return {
-    elementTree: new DOMElementNode({
-      tagName: 'root',
-      isVisible: true,
-      parent: null,
-      xpath: '',
-      attributes: {},
-      children: [],
-    }),
+    elementTree: emptyElementTree(),
     selectorMap: new Map(),
     tabId: tabId || 0,
     url: url || '',
@@ -49,6 +77,8 @@ export function build_initial_state(tabId?: number, url?: string, title?: string
     scrollY: 0,
     scrollHeight: 0,
     visualViewportHeight: 0,
+    // A freshly built shell has never been captured from a live page.
+    perception: { verdict: 'unavailable', capturedAt: 0, urlSource: 'none', error: 'state not captured yet' },
   };
 }
 
@@ -74,6 +104,14 @@ export default class Page {
   private _validWebPage = false;
   private _cachedState: PageState | null = null;
   private _cachedStateClickableElementsHashes: CachedStateClickableElementsHashes | null = null;
+  /**
+   * Message of the most recent failed attach attempt, cleared on success.
+   * `_reattachIfStale` swallows attach errors (its contract is a boolean), but
+   * WHY the attach failed — e.g. Chrome denying access because a foreign
+   * extension frame is present — is exactly what the honest unavailable state
+   * must tell the model. Kept here so `_updateState` can compose the reason.
+   */
+  private _lastAttachFailure: string | null = null;
 
   constructor(tabId: number, url: string, title: string, config: Partial<BrowserContextConfig> = {}) {
     this._tabId = tabId;
@@ -121,20 +159,92 @@ export default class Page {
     }
 
     logger.info('attaching puppeteer', this._tabId);
-    const browser = await connect({
-      transport: await ExtensionTransport.connectTab(this._tabId),
-      defaultViewport: null,
-      protocol: 'cdp' as ProtocolType,
-    });
-    this._browser = browser;
+    // `ExtensionTransport.connectTab` is nothing but `chrome.debugger.attach`;
+    // every later CDP call is `chrome.debugger.sendCommand`. If any step AFTER
+    // the raw attach fails (puppeteer handshake, anti-detection install), the
+    // chrome.debugger session would stay dangling and every future attach
+    // would answer "Another debugger is already attached" — a dead end this
+    // teardown prevents.
+    let browser: Browser | null = null;
+    try {
+      browser = await connect({
+        transport: await ExtensionTransport.connectTab(this._tabId),
+        defaultViewport: null,
+        protocol: 'cdp' as ProtocolType,
+      });
 
-    const [page] = await browser.pages();
-    this._puppeteerPage = page;
+      const [page] = await browser.pages();
+      if (!page) {
+        throw new Error(`attachPuppeteer: no page target on tab ${this._tabId}`);
+      }
+      this._browser = browser;
+      this._puppeteerPage = page;
 
-    // Add anti-detection scripts
-    await this._addAntiDetectionScripts();
+      // Add anti-detection scripts
+      await this._addAntiDetectionScripts();
 
-    return true;
+      this._lastAttachFailure = null;
+      return true;
+    } catch (err) {
+      this._lastAttachFailure = err instanceof Error ? err.message : String(err);
+      this._browser = null;
+      this._puppeteerPage = null;
+      if (browser) {
+        await browser.disconnect().catch(() => {});
+      }
+      // Idempotent: rejects harmlessly when the attach itself never landed.
+      await chrome.debugger.detach({ tabId: this._tabId }).catch(() => {});
+      throw err;
+    }
+  }
+
+  /**
+   * Re-attach the debugger when the session is bound to a document the tab has
+   * already left.
+   *
+   * A `chrome-extension://` → `http://` navigation is cross-process: Chrome
+   * spawns a new target and our session keeps serving the old page's access
+   * error indefinitely. On 2026-08-06 that produced 36 consecutive capture
+   * failures while `chrome.tabs.get` had long reported the new URL — the tab
+   * had moved on, the debugger had not, and nothing tried to reconnect.
+   *
+   * Returns true when a fresh session was established and the caller should
+   * retry. Only acts on the stale-target error class; a genuinely gone tab
+   * still routes to `TabGoneError`/eviction.
+   */
+  private async _reattachIfStale(message: string): Promise<boolean> {
+    if (!isStaleTargetErrorMessage(message)) return false;
+    logger.warning(`stale debugger target on tab ${this._tabId} — reconnecting: ${message.slice(0, 120)}`);
+    try {
+      await this.detachPuppeteer();
+    } catch (err) {
+      logger.debug('detach during re-attach failed (ignored)', err);
+    }
+    try {
+      const ok = await this.attachPuppeteer();
+      if (ok) logger.info(`re-attached debugger to tab ${this._tabId}`);
+      return ok;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!isForeignExtensionFrameError(msg)) {
+        logger.warning(`re-attach failed for tab ${this._tabId}`, err);
+        return false;
+      }
+    }
+    // Chrome denies attach while ANY frame in the tab belongs to another
+    // extension (debugger_api.cc walks every RenderFrameHost). The usual
+    // culprit is a password-manager iframe injected on credential-field focus.
+    // Retrying attach against an unchanged tab can never succeed.
+    //
+    // We deliberately do NOT delete that frame (owner decision 2026-08-06).
+    // Removing another extension's DOM from the user's page to unblock
+    // ourselves is too aggressive for what it buys — and now that credential
+    // fields are refused outright instead of approved, the agent no longer
+    // focuses the fields that summon it. Report honestly and move on.
+    logger.warning(
+      `re-attach to tab ${this._tabId} blocked by another extension's frame; leaving it alone and reporting unavailable`,
+    );
+    return false;
   }
 
   private async _addAntiDetectionScripts(): Promise<void> {
@@ -181,11 +291,55 @@ export default class Page {
 
   async detachPuppeteer(): Promise<void> {
     if (this._browser) {
-      await this._browser.disconnect();
+      const browser = this._browser;
       this._browser = null;
       this._puppeteerPage = null;
+      try {
+        await browser.disconnect();
+      } catch (err) {
+        logger.debug(`detachPuppeteer: disconnect failed (ignored)`, err);
+      }
+      // `ExtensionTransport.close()` fires `chrome.debugger.detach` WITHOUT
+      // awaiting it (`void chrome.debugger.detach(...)`), so an immediate
+      // re-attach races the in-flight detach and Chrome can answer "Another
+      // debugger is already attached". Await an explicit detach here — it is
+      // idempotent and the rejection on an already-detached tab is expected.
+      await chrome.debugger.detach({ tabId: this._tabId }).catch(() => {});
       // reset the state
       this._state = build_initial_state(this._tabId);
+    }
+  }
+
+  /**
+   * Chrome killed the debugger session unilaterally — the extension sees it
+   * only through `chrome.debugger.onDetach`. This happens when the tab
+   * navigates to a URL we may not debug, when a frame belonging to a
+   * DIFFERENT extension appears in the page (password-manager overlays do
+   * this on credential-field focus), when DevTools takes the tab over, or on
+   * tab close. Reasons arrive as `target_closed` / `canceled_by_user`.
+   *
+   * Without this hook the Page kept a zombie puppeteer connection: the
+   * transport never notices an external detach (it has no onDetach listener
+   * and never fires `onclose`), so every later call either raced Chrome's
+   * "Cannot access …" answer or died on "Puppeteer page is not connected".
+   * Marking the binding lost here makes `attached` truthful immediately and
+   * routes the next state capture through the lazy re-attach path.
+   *
+   * Synchronous on purpose — the caller is an event listener; disposal of the
+   * dead connection is best-effort in the background.
+   */
+  markBindingLost(reason: string): void {
+    if (!this._browser && !this._puppeteerPage) {
+      return;
+    }
+    logger.warning(`debugger binding lost for tab ${this._tabId} (${reason}); disposing dead session`);
+    const browser = this._browser;
+    this._browser = null;
+    this._puppeteerPage = null;
+    if (browser) {
+      // Rejects pending protocol callbacks deterministically instead of
+      // leaving them to time out against a session Chrome already closed.
+      void browser.disconnect().catch(() => {});
     }
   }
 
@@ -409,22 +563,88 @@ export default class Page {
     return updatedState;
   }
 
+  /**
+   * Snapshot for a capture that failed.
+   *
+   * Replaces the old `return this._state` cache-fallback, which handed the
+   * model a stale page rendered as if it were current — the root cause of the
+   * 2026-08-06 loop (agent believed it had already navigated, typed into a
+   * non-existent field 25 times). Three properties matter:
+   *
+   *  1. `url`/`title` come from `chrome.tabs.get`, which an extension can read
+   *     even when CDP refuses to attach (chrome://, another extension's pages).
+   *     That is the only channel here that cannot go stale.
+   *  2. Element data is CLEARED, not carried over — stale indices are what the
+   *     model kept clicking into.
+   *  3. `perception.verdict` marks the snapshot so the state-message builder
+   *     cannot render it as a normal page.
+   *
+   * The result is also stored as the cached state, so `getCachedState()`
+   * consumers (the post-action verifier) see the same honest picture.
+   */
+  private async _unavailableState(reason: string): Promise<PageState> {
+    let url = '';
+    let title = '';
+    let urlSource: PerceptionProvenance['urlSource'] = 'none';
+    try {
+      const tab = await chrome.tabs.get(this._tabId);
+      url = tab.url ?? '';
+      title = tab.title ?? '';
+      urlSource = 'tabs-api';
+    } catch (err) {
+      logger.warning(`_unavailableState: tabs.get failed for tab ${this._tabId}: ${String(err)}`);
+    }
+    this._state = {
+      ...this._state,
+      url: url || this._state.url,
+      title: title || this._state.title,
+      elementTree: emptyElementTree(),
+      selectorMap: new Map(),
+      screenshot: null,
+      pageText: undefined,
+      perception: { verdict: 'unavailable', capturedAt: Date.now(), urlSource, error: reason },
+    };
+    logger.warning(`perception unavailable (${reason}); authoritative url=${this._state.url || '<unknown>'}`);
+    return this._state;
+  }
+
   async _updateState(useVision = false, focusElement = -1, signal?: AbortSignal): Promise<PageState> {
     if (signal?.aborted) {
       throw new TabGoneError(this._tabId, new Error(`Tab ${this._tabId} probe aborted: tab gone`));
     }
     try {
-      // Test if page is still accessible
-      // @ts-expect-error - puppeteerPage is not null, already checked before calling this function
+      // Test if page is still accessible. A null page here is not a
+      // programming error: Chrome may have force-detached the session
+      // (`markBindingLost`) since the last capture. Throwing a stale-class
+      // message routes it into the same lazy re-attach as any dead session.
+      if (!this._puppeteerPage) {
+        throw new Error(`debugger binding lost for tab ${this._tabId}`);
+      }
       await this._puppeteerPage.evaluate('1');
     } catch (error) {
       logger.warning('Current page is no longer accessible:', error);
-      if (this._browser) {
-        const pages = await this._browser.pages();
-        if (pages.length > 0) {
-          this._puppeteerPage = pages[0];
+      const msg = error instanceof Error ? error.message : String(error);
+      // Stale session after a cross-process navigation: reconnecting is the
+      // only thing that helps. Picking another page off the SAME connection
+      // (below) cannot, because the connection itself is bound to the target
+      // that went away.
+      if (!(await this._reattachIfStale(msg))) {
+        if (this._browser) {
+          const pages = await this._browser.pages();
+          if (pages.length > 0) {
+            this._puppeteerPage = pages[0];
+          } else {
+            throw new Error('Browser closed: no valid pages available');
+          }
         } else {
-          throw new Error('Browser closed: no valid pages available');
+          // No binding and no way to get one back right now. Capturing the
+          // DOM via chrome.scripting would still work, but the resulting
+          // state would carry an empty CDP-derived URL and elements the agent
+          // cannot act on — an honest unavailable snapshot is worth more.
+          // Prefer the recorded attach failure over the probe message: the
+          // probe only says the binding is gone, the attach failure says WHY
+          // it cannot come back.
+          return this._unavailableState(describeBindingLoss(this._lastAttachFailure ?? msg));
         }
       }
     }
@@ -455,7 +675,7 @@ export default class Page {
             await new Promise(r => setTimeout(r, 500));
             continue;
           }
-          return this._state;
+          return this._unavailableState('clickable-element capture returned nothing after 2 attempts');
         }
         if (content.selectorMap.size === 0 && attempt === 0) {
           // Empty tree often means we caught the page mid-navigation.
@@ -475,6 +695,7 @@ export default class Page {
         this._state.visualViewportHeight = visualViewportHeight;
         this._state.scrollHeight = scrollHeight;
         this._state.pageText = await this.getPageText();
+        this._state.perception = { verdict: 'fresh', capturedAt: Date.now(), urlSource: 'cdp' };
         return this._state;
       } catch (error) {
         lastErr = error;
@@ -493,13 +714,18 @@ export default class Page {
           logger.warning(`updateState: tab ${this._tabId} appears gone, surfacing TabGoneError: ${msg}`);
           throw new TabGoneError(this._tabId, error);
         }
+        // Stale target — reconnect and give the capture one more go before
+        // declaring perception unavailable.
+        if (attempt === 0 && (await this._reattachIfStale(msg))) {
+          continue;
+        }
         if (attempt === 0 && /Frame with ID \d+ is showing error page|Frame is detached|Target closed/.test(msg)) {
           logger.warning(`updateState transient frame error (attempt 1/2), retrying: ${msg}`);
           await new Promise(r => setTimeout(r, 500));
           continue;
         }
         logger.error('Failed to update state:', error);
-        return this._state;
+        return this._unavailableState(describeBindingLoss(msg));
       }
     }
     if (lastErr) {
@@ -509,8 +735,9 @@ export default class Page {
         throw new TabGoneError(this._tabId, lastErr);
       }
       logger.error('updateState exhausted retries:', lastErr);
+      return this._unavailableState(describeBindingLoss(msg));
     }
-    return this._state;
+    return this._unavailableState('state capture did not complete');
   }
 
   async takeScreenshot(fullPage = false): Promise<string | null> {

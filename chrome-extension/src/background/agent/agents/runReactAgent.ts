@@ -60,6 +60,7 @@ import { actionsToTools, DEFAULT_TOOL_BUDGETS } from '../tools/langGraphAdapter'
 import { reactSystemPromptTemplate } from '../prompts/react';
 import { buildReactVisionPrompt } from '../prompts/reactVision';
 import { extractForms, formatFormsForPrompt } from '@src/background/browser/dom/forms';
+import { createApprovalGate } from '../guardrails/approvalGate';
 import { wrapUntrustedContent } from '../messages/utils';
 import { Actors, ExecutionState } from '../event/types';
 import { createLogger } from '@src/background/log';
@@ -159,7 +160,7 @@ export interface RunReactAgentResult {
  * state messages. Mirrors browser-use / Stagehand / computer-use which
  * all let the agent drive its own perception loop.
  */
-async function buildBrowserStateMessage(context: AgentContext): Promise<HumanMessage> {
+export async function buildBrowserStateMessage(context: AgentContext): Promise<HumanMessage> {
   // useVision=false: we never capture inside getState; the `screenshot`
   // Action handles all image acquisition and stays inside the regular
   // tracer pipeline for observability.
@@ -205,7 +206,27 @@ async function buildBrowserStateMessage(context: AgentContext): Promise<HumanMes
     ? `<user-tabs note="The user has these tabs open. You may NOT navigate / click / read them without first calling take_over_user_tab(tabId) — doing so disrupts the user's parallel work.">\n${userTabsList.join('\n')}\n</user-tabs>`
     : '<user-tabs>(none)</user-tabs>';
 
+  // Perception provenance (2026-08-06). When the capture failed, the runtime
+  // used to hand over the previous snapshot as if it were current — the model
+  // then "knew" it was already on the target page and skipped navigation. Now
+  // a failed capture is an explicit, labelled artifact, the same shape
+  // browser-use uses (`<browser_state_error>`): the element list is declared
+  // unusable and the URL is flagged as coming from the tab API, which stays
+  // truthful even when CDP cannot attach.
+  const perception = browserState.perception;
+  const perceptionOk = !perception || perception.verdict === 'fresh';
+  const stateErrorBlock = perceptionOk
+    ? ''
+    : `<browser-state-error>
+Page state capture FAILED: ${perception.error ?? 'unknown reason'}.
+The interactive-element list below is UNAVAILABLE — any element index you remember from an earlier turn is INVALID. Do not click or type by index.
+The URL in <agent-tab> is read from the browser tab API and IS authoritative: trust it over anything you assumed or planned earlier.
+Recover before acting: if that URL is not the page your task needs, call go_to_url first; otherwise wait or take a screenshot, then re-read this state.
+</browser-state-error>
+`;
+
   const wrapped = elementsText ? wrapUntrustedContent(elementsText) : '';
+  const elementsBody = perceptionOk ? wrapped || '(empty page)' : '(unavailable — see browser-state-error above)';
   const agentTabId = context.browserContext.agentTabId();
   const agentTabHeader = agentTabId
     ? `<agent-tab note="This is your dedicated workspace. You can read and interact with it freely.">
@@ -216,10 +237,10 @@ id: ${browserState.tabId}, url: ${browserState.url}, title: ${browserState.title
 </active-tab>`;
 
   const text = `[Browser state @ ${timeStr}]
-${agentTabHeader}
+${stateErrorBlock}${agentTabHeader}
 ${userTabsBlock}
 ${pageTextSection}Interactive elements (in your tab):
-${wrapped || '(empty page)'}
+${elementsBody}
 ${formsSection ? `\n${formsSection}\n` : ''}
 Current date: ${timeStr}
 `;
@@ -392,7 +413,12 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
     if (n === 'done') return false;
     return true;
   });
-  const tools = actionsToTools(filteredActions, { counters, limits: DEFAULT_TOOL_BUDGETS }, dupGuard);
+  // T-hitl-unified — sensitive actions go through HITL in unified mode.
+  // Implementation (policy layers, approval memory, decision handling) lives in
+  // guardrails/approvalGate.ts; here it is one wiring line.
+  const approvalGate = createApprovalGate(context);
+
+  const tools = actionsToTools(filteredActions, { counters, limits: DEFAULT_TOOL_BUDGETS }, dupGuard, approvalGate);
   const checkpointer = new MemorySaver();
   const baseSystemPrompt = visionMode === 'off' ? reactSystemPromptTemplate : buildReactVisionPrompt();
 

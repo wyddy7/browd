@@ -130,6 +130,103 @@ separate `visionMode` toggle:
   the user IS the only solution (no automation can bypass). Add new
   HITL gates by checking `(await generalSettingsStore.getSettings()).permissionMode`
   at decision time, mirroring the take-over handler.
+- **ApprovalPolicy runs in BOTH modes (T-hitl-unified, 2026-08-06).**
+  `checkApproval` used to have exactly one call site —
+  `agents/navigator.ts` — which is the *legacy* pipeline, so in
+  `agentMode='unified'` (the default) submits and credential fills
+  reached the page with no prompt at all. The gate now also runs in
+  unified mode as the third guard inside `actionToTool`
+  (`tools/langGraphAdapter.ts`), next to the tool-call budget and the
+  duplicate guard; the implementation is built in `runReactAgent`
+  where the browser context and `hitlController` are in scope.
+  Ordering matters: approval runs LAST, so a call already blocked by
+  budget or dup never raises a prompt for an action that was not going
+  to run. Two behaviours worth knowing: an unanswered prompt (5-min
+  timeout) fails **closed** — the action does not run; and an `edit`
+  decision comes back to the model as a rejection carrying the user's
+  corrected arguments, because the wrapper cannot rewrite tool input
+  in place. **Credentials are refused, not approved (owner decision
+  2026-08-06):** a password / CVV / card / PIN field returns `handOff: true`,
+  and the gate refuses before any prompt, telling the model to ask the owner to
+  type it — same shape as the `hitl_click_at` handoff. Two reasons: an agent
+  typing credentials is not something to approve, and focusing such a field is
+  exactly what makes password-manager extensions inject the frame that
+  force-detaches the debugger. We were fighting to enable something we should
+  not be doing. The policy itself is three layers — action name + args
+  (model cannot reword past it), page state, then the `intent` regex
+  as a widener only. Never let a gate rest on `intent` alone: that
+  string is written by the LLM.
+  **Approval memory (2026-08-06):** one approval covers retries of the
+  same intent for the rest of the task — key is
+  `action | host | args-without-intent`, held in the closure of
+  `guardrails/approvalGate.ts` so its lifetime is exactly one task
+  (T2q forbids replaying consent across tasks; no eviction needed).
+  `intent` is excluded on purpose — caching on model-authored text
+  would let a reworded new action inherit an old approval. Only
+  `approve` is cached; a rejection must stay uncached so the model is
+  told why each time. Auto-approvals emit a TRACE event — an approval
+  the user cannot see is worse than asking twice.
+- **PERCEPTION MUST NEVER LIE (2026-08-06). Hard rule.**
+  `PageState.perception` (`{verdict, capturedAt, urlSource, error}`) is
+  **required**, so no snapshot can reach the model without stating how it
+  was obtained. `page.ts::_updateState` no longer returns the cached
+  state when a capture fails: it returns `verdict:'unavailable'` with the
+  element tree CLEARED and `url`/`title` re-read from `chrome.tabs.get`.
+  The tabs API is the one channel that stays truthful when the debugger
+  cannot attach, so it is the authority for "where am I". The state
+  message renders a `<browser-state-error>` block whenever the verdict is
+  not `fresh`, and the element list is declared unusable.
+  Cause: the old silent cache-fallback let the model read a stale URL as
+  current, "know" it had already navigated, skip `go_to_url`, and burn all
+  25 recursion rounds typing into an element that did not exist. Frontier
+  agents do the same thing — browser-use surfaces `<browser_state_error>`,
+  Anthropic returns tool failures as `is_error`. **Never reintroduce a
+  silent cache fallback; if a capture fails, say so.**
+- **Never attach the debugger to a tab that is still navigating (2026-08-06).**
+  `chrome.tabs.update` resolves when navigation STARTS. `openAgentTab` used to
+  return right after it, so the debugger attached to the OUTGOING document.
+  Every navigation inside `openAgentTab` is now followed by `waitForTabSettled`
+  (bounded 8s). `status === 'complete'` ALONE is ambiguous — the outgoing
+  document also reports it — so callers that just requested a navigation pass
+  `expectNavigationFrom` (the pre-navigation URL) and the wait demands evidence
+  the document changed (`loading` seen, `pendingUrl` present, or URL moved off
+  the old one) before accepting `complete`.
+- **Debugger-binding lifecycle (2026-08-06, third pass — real mechanics).**
+  `ExtensionTransport.connectTab` is just `chrome.debugger.attach`; commands are
+  `chrome.debugger.sendCommand`; `close()` fires a NON-awaited detach. Chrome
+  denies attach/commands when ANY frame in the tab belongs to a different
+  extension (Chromium `debugger_api.cc` walks every RenderFrameHost) — that is
+  what `Cannot access a chrome-extension:// URL of different extension` means.
+  Two triggers: a foreign new-tab override at anchor time, and a
+  password-manager-style iframe injected the moment a credential field gets
+  focus — the latter also FORCE-DETACHES a live session (`chrome.debugger.onDetach`,
+  reason `target_closed`), and a naive re-attach fails with the very error it
+  is curing while the frame persists. **The agent does not delete that frame**
+  (owner decision 2026-08-06): removing another extension's DOM from the user's
+  page to unblock ourselves is disproportionate, and credential fields are now
+  refused outright, so the injection is rarely summoned at all. The node's
+  contract now: (1) `onDetach`
+  is wired `index.ts` → `BrowserContext.handleDebuggerDetached` →
+  `Page.markBindingLost`, so `attached` is truthful and no zombie puppeteer
+  connection survives; (2) every detach path awaits an explicit
+  `chrome.debugger.detach` so re-attach cannot race the transport's
+  fire-and-forget one; (3) `attachPuppeteer` tears down the raw attachment if
+  the handshake fails (a dangling session makes every later attach die with
+  "Another debugger is already attached"); (4) `_reattachIfStale` on the
+  foreign-frame error class removes foreign `chrome-extension://` iframes via
+  `chrome.scripting` (which Chrome does NOT block) and retries attach exactly
+  once; (5) if the environment stays blocked, the state is honest-unavailable
+  with the mechanic named (`describeBindingLoss`), never a stale snapshot.
+  Recovery point is lazy — `Page._updateState`, which runs before every LLM
+  step. Tests: `browser/__tests__/debuggerBindingLifecycle.test.ts`.
+- **Agent tab must be drivable (2026-08-06).** `openAgentTab` anchors on
+  the user's active tab, which can be a page the debugger cannot attach
+  to — most often `chrome://newtab/` replaced by *another extension*, so
+  the real URL is `chrome-extension://<other-id>/…`. `isAttachableUrl`
+  (exported from `browser/context.ts`) gates this: an unattachable anchor
+  is moved to `about:blank`, which is attachable, empty, and carries an
+  honest URL. An explicit `initialUrl` still wins. A normal page is left
+  alone — it is the user's tab, not ours to navigate.
 - **All third-party text sources MUST go through
   `wrapUntrustedContent`** before reaching the LLM:
   `Interactive elements`, `pageText`, `web_fetch_markdown`,
