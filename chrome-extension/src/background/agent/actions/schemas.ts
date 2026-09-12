@@ -20,7 +20,14 @@ export const doneActionSchema: ActionSchema = {
  * Execute replanner stays as a fallback finaliser, but it has a
  * blind spot: when the LLM's reasoning concludes the task is done
  * yet emits zero tool calls, the next focused subgoal has nothing
- * to act on and stuckDetector's `silent-step` guard kills the run.
+ * to act on. There is no subgoal-level stuck detector any more (the
+ * old `silent-step` guard was removed in T2x phase 0b because it
+ * flagged framework-natural behaviour as stuck), so without an
+ * explicit terminal tool such a run would drift through the
+ * replanner until the outer LangGraph `recursionLimit`
+ * (min(maxSteps, 50)) cut it off. Remaining stuck coverage is the
+ * tool-layer `dupGuard` (identical tool+args 3 times in the last 5
+ * calls → forcing error to the LLM) plus that recursion cap.
  * Giving the agent an explicit `task_complete(response)` tool lets
  * it close the StateGraph cleanly via the existing `state.response`
  * channel — same idea as browser-use's `DoneAgentOutput` and
