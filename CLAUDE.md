@@ -232,6 +232,13 @@ Do not edit generated outputs:
 
 ## Branding
 
+The approved violet `b` artwork lives in `assets/brand/browd-master.png`.
+Use `chrome-extension/public/browd-logo.png` for in-product identity on the light
+theme and `browd-logo-dark.png` (same silhouette, lifted lightness) on the dark theme; `icon-{16,32,48,128}.png` are the manifest exports. The shared
+`.browd-brand` / `.browd-wordmark` styles keep header identity consistent.
+Keep gradients inside the brand artwork and preserve neutral product controls.
+Export notes and provenance live in `assets/brand/README.md`.
+
 User-facing surfaces should say Browd, not Nanobrowser, unless referencing upstream attribution, license history, or migration notes.
 
 Preserve Apache-2.0 attribution requirements while removing upstream community, sponsor, and store copy from the active public surface.

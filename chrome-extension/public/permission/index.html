@@ -2,7 +2,8 @@
 <html>
   <head>
     <meta charset="UTF-8" />
-    <title>Microphone Permission</title>
+    <title>Browd — Microphone Permission</title>
+    <link rel="icon" type="image/png" href="../icon-32.png" />
     <style>
       :root {
         --surface-000: hsl(48 30% 98%);
@@ -130,7 +131,10 @@
   </head>
   <body>
     <div class="container">
-      <div class="mic-icon">🎤</div>
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="../browd-logo-dark.png" />
+        <img src="../browd-logo.png" alt="Browd" width="64" height="64" />
+      </picture>
       <h1 id="title">Enable Voice Input</h1>
       <p id="description">Browd needs microphone access to convert your speech to text.</p>
       <button id="requestPermission">Grant Microphone Permission</button>

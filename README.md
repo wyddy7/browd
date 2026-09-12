@@ -1,7 +1,7 @@
 <h1 align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./chrome-extension/public/browd-logo-dark.svg">
-    <img src="./chrome-extension/public/browd-logo.svg" alt="Browd" width="180">
+    <source media="(prefers-color-scheme: dark)" srcset="./chrome-extension/public/browd-logo-dark.png">
+    <img src="./chrome-extension/public/browd-logo.png" alt="Browd" width="120">
   </picture>
 </h1>
 
