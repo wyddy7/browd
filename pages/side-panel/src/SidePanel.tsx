@@ -246,7 +246,7 @@ const SidePanel = () => {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<number | null>(null);
-  const brandLogoSrc = chrome.runtime.getURL(appearanceTheme === 'dark' ? 'browd-logo-dark.svg' : 'browd-logo.svg');
+  const brandLogoSrc = chrome.runtime.getURL(appearanceTheme === 'dark' ? 'browd-logo-dark.png' : 'browd-logo.png');
 
   // Check for dark mode preference
   useEffect(() => {
@@ -1707,7 +1707,10 @@ const SidePanel = () => {
                 {t('nav_back')}
               </button>
             ) : (
-              <img src={brandLogoSrc} alt="Browd logo" className="size-7" />
+              <div className="browd-brand" aria-label="Browd">
+                <img src={brandLogoSrc} alt="" width={28} height={28} />
+                <span className="browd-wordmark">browd</span>
+              </div>
             )}
           </div>
           <div className="header-icons">

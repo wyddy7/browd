@@ -77,7 +77,7 @@ const manifest = withOperaSidebar(
       type: 'module',
     },
     action: {
-      default_icon: 'icon-32.png',
+      default_icon: { 16: 'icon-16.png', 32: 'icon-32.png' },
     },
     commands: {
       _execute_action: {
@@ -88,6 +88,9 @@ const manifest = withOperaSidebar(
       },
     },
     icons: {
+      16: 'icon-16.png',
+      32: 'icon-32.png',
+      48: 'icon-48.png',
       128: 'icon-128.png',
     },
     content_scripts: [
@@ -103,6 +106,8 @@ const manifest = withOperaSidebar(
           '*.js',
           '*.css',
           '*.svg',
+          'browd-logo.png',
+          'browd-logo-dark.png',
           'icon-128.png',
           'icon-32.png',
           'permission/index.html',

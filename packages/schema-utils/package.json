@@ -1,6 +1,6 @@
 {
   "name": "@extension/schema-utils",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "description": "JSON schema and related helpers for tools",
   "private": true,
   "type": "module",

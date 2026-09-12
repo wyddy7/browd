@@ -74,6 +74,15 @@ const Options = () => {
       {/* Vertical Navigation Bar */}
       <nav className="w-48 border-r border-[var(--browd-border)] bg-[var(--browd-surface)]/85 backdrop-blur-sm">
         <div className="p-4">
+          <div className="browd-brand mb-4" aria-label="Browd">
+            <img
+              src={chrome.runtime.getURL(appearanceTheme === 'dark' ? 'browd-logo-dark.png' : 'browd-logo.png')}
+              alt=""
+              width={28}
+              height={28}
+            />
+            <span className="browd-wordmark">browd</span>
+          </div>
           <h1 className="mb-6 text-xl font-bold text-[var(--browd-text)]">{t('options_nav_header')}</h1>
           <ul className="space-y-2">
             {TABS.map(item => (

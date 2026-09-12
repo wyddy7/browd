@@ -4,6 +4,18 @@ All notable changes to Browd are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.16] — 2026-09-13
+
+### Changed
+
+- Refreshed Browd identity with a violet `b` mark and matching wordmark in the
+  side panel and settings; added dedicated light- and dark-theme artwork.
+- Updated toolbar icons, page favicons, the microphone permission page, and
+  README branding. Added Chrome Web Store installation instructions.
+- Corrected the offline evaluation script reference and agent documentation.
+
+Browser permissions, agent behavior, and stored settings are unchanged.
+
 ## [0.1.15] — 2026-05-20
 
 User-facing controls, observability, and complete localization on top of
