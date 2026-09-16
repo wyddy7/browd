@@ -739,6 +739,9 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
 
   const emitLive = (msg: LiveEvent) => context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_LIVE, JSON.stringify(msg));
   const publishOutcome = (outcome: TaskOutcome): RunReactAgentResult => {
+    // The pinned checklist describes active work, not proof of task success.
+    // Retire it on every terminal path; never tick unexecuted future subgoals.
+    emitPlanChecklist([]);
     if (outcome.status === 'completed') {
       context.finalAnswer = outcome.response;
       context.emitEvent(Actors.PLANNER, ExecutionState.STEP_OK, outcome.response);

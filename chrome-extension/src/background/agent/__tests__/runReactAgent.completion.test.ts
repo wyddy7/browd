@@ -144,7 +144,10 @@ describe('runReactAgent authoritative completion', () => {
         // If this is consumed, task_complete did not actually stop ReAct.
         new AIMessage('This extra LLM round must never run.'),
       ],
-      [plan(), { decision: 'finish', success: true, plan: null, response: 'REPLANNER MUST NOT REPLACE THE ANSWER.' }],
+      [
+        { ...plan(), plan: ['Collect requested data', 'Explain findings', 'Return source links'] },
+        { decision: 'finish', success: true, plan: null, response: 'REPLANNER MUST NOT REPLACE THE ANSWER.' },
+      ],
     );
 
     const result = await runReactAgent({
@@ -161,6 +164,9 @@ describe('runReactAgent authoritative completion', () => {
     expect(terminalStates(events)).toEqual([
       expect.objectContaining({ state: ExecutionState.TASK_OK, details: answer }),
     ]);
+    expect(events.filter(event => event.details.startsWith('{"type":"plan"')).at(-1)?.details).toBe(
+      JSON.stringify({ type: 'plan', items: [] }),
+    );
   });
 
   it('treats a rejected task_complete action as failure and never reports TASK_OK', async () => {
@@ -212,6 +218,9 @@ describe('runReactAgent authoritative completion', () => {
     expect(terminalStates(events)).toEqual([
       expect.objectContaining({ state: ExecutionState.TASK_FAIL, details: explanation }),
     ]);
+    expect(events.filter(event => event.details.startsWith('{"type":"plan"')).at(-1)?.details).toBe(
+      JSON.stringify({ type: 'plan', items: [] }),
+    );
   });
 
   it('fails closed when a malformed task_complete call is rejected by its schema', async () => {
@@ -292,6 +301,9 @@ describe('runReactAgent authoritative completion', () => {
 
     expect(result).toEqual({ finalAnswer: null, error: 'cancelled' });
     expect(terminalStates(events).map(event => event.state)).toEqual([ExecutionState.TASK_CANCEL]);
+    expect(events.filter(event => event.details.startsWith('{"type":"plan"')).at(-1)?.details).toBe(
+      JSON.stringify({ type: 'plan', items: [] }),
+    );
   });
 
   it('keeps the replanner path for a normal non-terminal subgoal', async () => {

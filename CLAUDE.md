@@ -171,6 +171,8 @@ separate `visionMode` toggle:
   agent node emits `inProgress: true` for the current subgoal at
   start, `done: true` at end. `currentPhaseRef = 'thinking'` is
   set on TASK_START so messages get phase-tagged at append time.
+  Terminal outcomes retire the active pinned checklist with an empty plan
+  event. Never mark unexecuted future subgoals done to make a counter reach N/N.
 - **Markdown is the LLM output contract.** Chat content renders
   through `react-markdown` (links open in new tab, code blocks
   on soft surface, no hard borders). When asking the LLM for a
