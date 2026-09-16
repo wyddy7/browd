@@ -461,8 +461,11 @@ export class ActionBuilder {
     const openTab = new Action(async (input: z.infer<typeof openTabActionSchema.schema>) => {
       const intent = input.intent || t('act_openTab_start', [input.url]);
       this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_START, intent);
-      await this.context.browserContext.openTab(input.url);
-      const msg = t('act_openTab_ok', [input.url]);
+      const created = await this.context.browserContext.openTab(input.url);
+      const msg =
+        `${t('act_openTab_ok', [input.url])} Tab ID: ${created.tabId}; status: ${created.status}.` +
+        (created.status === 'loading' ? ' Tab already exists; wait or inspect it, do not repeat open_tab.' : '') +
+        (created.detail ? ` ${created.detail}` : '');
       this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_OK, msg);
       return new ActionResult({ extractedContent: msg, includeInMemory: true });
     }, openTabActionSchema);

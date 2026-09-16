@@ -114,13 +114,18 @@ separate `visionMode` toggle:
   call: mixed batches are rejected before any tool executes. Offline tests
   exercise the actual LangGraph runtime with a scripted provider transport.
 - **Tab isolation contract (T2f-tab-iso).** In `agentMode='unified'`
-  the Executor opens an `agentTab` via `BrowserContext.openAgentTab()`
-  on TASK_START. `getCurrentPage()` resolves to that tab even if
+  the Executor anchors the user's active tab via `BrowserContext.openAgentTab()`
+  on TASK_START and groups it. `getCurrentPage()` resolves to that tab even if
   the user switches focus. State message renders `<agent-tab>` (full
   DOM) and `<user-tabs>` (id/url/title only, marked read-only).
   Cross-over to a user tab happens only via `take_over_user_tab(tabId, reason)`
   Action — explicit, never implicit. Title prefix `[Browd] ` is
   injected so the user sees which tab is the agent's.
+  - `openTab` separates creation from readiness: once created, it returns
+    the tab ID and `ready`/`loading`/`unavailable`, never a generic retryable
+    creation failure. Owned new tabs become the agent's attention target;
+    debugger attachment is lazy. Grouping failure preserves the old anchor.
+    `tabReadiness.ts` owns event/timer cleanup on all exit paths.
   - **Side-effect new-tab handling (fixed 2026-05-17, commit `094f56f`).**
     `click_element` / `click_at` / `type_at` previously auto-switched
     to any new tab spawned by the click (target="_blank", window.open).

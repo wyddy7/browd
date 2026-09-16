@@ -110,7 +110,64 @@ function stubChrome(opts: StubOptions) {
 
 describe('BrowserContext T2o-agent-tab-follow — switchTab moves _agentTabId', () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
+  });
+
+  it('reports a created slow tab instead of throwing and moves agent attention', async () => {
+    vi.useFakeTimers();
+    const chrome = stubChrome({ anchorTabId: 1, groupId: 50, tabsInGroup: new Set([1, 99]) });
+    const ctx = new BrowserContext({});
+    await ctx.openAgentTab('about:blank');
+    const pending = ctx.openTab('https://example.com/slow');
+    const check = expect(pending).resolves.toMatchObject({ tabId: 99, status: 'loading' });
+    await vi.advanceTimersByTimeAsync(5001);
+    await check;
+    expect(chrome.tabs.create).toHaveBeenCalledTimes(1);
+    expect(ctx.agentTabId()).toBe(99);
+    expect(chrome.tabs.onUpdated.removeListener).toHaveBeenCalledWith(
+      chrome.tabs.onUpdated.addListener.mock.calls[0][0],
+    );
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('does not require a title for a loaded tab and clears its timeout', async () => {
+    vi.useFakeTimers();
+    const chrome = stubChrome({ anchorTabId: 1, groupId: 50, tabsInGroup: new Set([1, 99]) });
+    chrome.tabs.get.mockResolvedValue({
+      id: 99,
+      url: 'https://example.com/',
+      title: '',
+      active: true,
+      status: 'complete',
+      groupId: 50,
+    });
+    const result = await new BrowserContext({}).openTab('https://example.com/');
+    expect(result).toMatchObject({ tabId: 99, status: 'ready' });
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('reports the created tab when reading fails and releases listeners', async () => {
+    vi.useFakeTimers();
+    const chrome = stubChrome({ anchorTabId: 1, groupId: 50, tabsInGroup: new Set([1]) });
+    chrome.tabs.get.mockRejectedValue(new Error('No tab with id: 99'));
+    await expect(new BrowserContext({}).openTab('https://example.com/')).resolves.toMatchObject({
+      tabId: 99,
+      status: 'unavailable',
+    });
+    expect(chrome.tabs.onUpdated.removeListener).toHaveBeenCalled();
+    expect(chrome.tabs.onActivated.removeListener).toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('does not take over an ungrouped tab after grouping fails', async () => {
+    const chrome = stubChrome({ anchorTabId: 1, groupId: 50, tabsInGroup: new Set([1]) });
+    const ctx = new BrowserContext({});
+    await ctx.openAgentTab();
+    chrome.tabs.group.mockRejectedValue(new Error('Group disappeared'));
+    await expect(ctx.openTab('https://example.com/')).resolves.toMatchObject({ tabId: 99, status: 'unavailable' });
+    expect(ctx.agentTabId()).toBe(1);
+    expect(chrome.tabs.create).toHaveBeenCalledTimes(1);
   });
 
   it('unified mode: switchTab(Y) updates _agentTabId AND getCurrentPage() resolves to Y', async () => {
