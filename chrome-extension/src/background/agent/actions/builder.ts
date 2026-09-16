@@ -1273,7 +1273,8 @@ export class ActionBuilder {
     const extractMd = new Action(async (input: z.infer<typeof extractPageMarkdownActionSchema.schema>) => {
       // T2f-untrusted-wrap: extracted page markdown is also third-
       // party content; wrap it before showing to the LLM.
-      const result = await extractActiveTabAsMarkdown({ maxChars: input.maxChars });
+      const page = await this.context.browserContext.getCurrentPage();
+      const result = await extractActiveTabAsMarkdown({ maxChars: input.maxChars, tabId: page.tabId });
       if (!result.ok) {
         return new ActionResult({ error: `extract_page_as_markdown failed: ${result.errorType}: ${result.message}` });
       }

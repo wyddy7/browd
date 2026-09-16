@@ -78,13 +78,19 @@ function truncate(text: string, maxChars: number): { text: string; truncated: bo
 function htmlToMarkdown(html: string, sourceUrl: string): { title: string; markdown: string } {
   const { document: doc } = parseHTML(html);
 
-  // Set the base URL so relative anchors resolve.
+  // linkedom does not resolve href against <base>. Normalize explicitly.
+  let baseUrl = sourceUrl;
   try {
-    const base = doc.createElement('base');
-    base.href = sourceUrl;
-    doc.head?.prepend(base);
+    baseUrl = new URL(doc.querySelector('base[href]')?.getAttribute('href') || sourceUrl, sourceUrl).href;
   } catch {
-    // Some hostile docs throw — ignore.
+    /* invalid base */
+  }
+  for (const anchor of Array.from(doc.querySelectorAll('a[href]'))) {
+    try {
+      anchor.setAttribute('href', new URL(anchor.getAttribute('href')!, baseUrl).href);
+    } catch {
+      /* invalid link */
+    }
   }
 
   let title = doc.title || sourceUrl;
@@ -109,8 +115,12 @@ function htmlToMarkdown(html: string, sourceUrl: string): { title: string; markd
     articleHtml = main?.innerHTML ?? doc.body?.innerHTML ?? '';
   }
 
+  // Passing a string makes the browser distribution call global document.
+  // Pass a linkedom node instead; never install fake DOM globals in the worker.
+  const container = doc.createElement('div');
+  container.innerHTML = articleHtml;
   const markdown = turndown
-    .turndown(articleHtml)
+    .turndown(container as unknown as HTMLElement)
     .replace(/\n{3,}/g, '\n\n')
     .trim();
   return { title: title.trim(), markdown };
@@ -375,10 +385,13 @@ function parseBingHtml(html: string, topK: number): WebSearchHit[] {
  */
 export async function extractActiveTabAsMarkdown(input: {
   maxChars?: number;
+  tabId?: number;
 }): Promise<WebFetchResult | WebFetchError> {
   const maxChars = input.maxChars ?? 3000;
-  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-  const tab = tabs[0];
+  const tab =
+    input.tabId === undefined
+      ? (await chrome.tabs.query({ active: true, currentWindow: true }))[0]
+      : await chrome.tabs.get(input.tabId);
   if (!tab?.id || !tab.url) {
     return { ok: false, errorType: 'auth_or_config', message: 'no active tab', url: '' };
   }
@@ -397,6 +410,7 @@ export async function extractActiveTabAsMarkdown(input: {
   // (i.e. heavy SPAs that render late).
   let pageTitle = '';
   let pageText = '';
+  let pageLinks = '';
   try {
     const [{ result }] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
@@ -410,13 +424,23 @@ export async function extractActiveTabAsMarkdown(input: {
             document.body;
           return main?.innerText ?? document.body?.innerText ?? '';
         })();
-        return { title: document.title, text: safeText };
+        const links = Array.from(document.querySelectorAll('a[href]'))
+          .filter(anchor => anchor.getClientRects().length > 0 && getComputedStyle(anchor).visibility !== 'hidden')
+          .map(anchor => ({ text: (anchor as HTMLElement).innerText.trim(), href: (anchor as HTMLAnchorElement).href }))
+          .filter(link => link.text && /^(https?:|mailto:)/i.test(link.href));
+        return { title: document.title, text: safeText, links };
       },
     });
     pageTitle = String(result?.title ?? '');
     pageText = String(result?.text ?? '')
       .replace(/\n{3,}/g, '\n\n')
       .trim();
+    pageLinks = (result?.links ?? [])
+      .map(
+        (link: { text: string; href: string }) =>
+          `[${link.text.replace(/[\\[\]]/g, '\\$&')}](${link.href.replace(/\(/g, '%28').replace(/\)/g, '%29')})`,
+      )
+      .join('\n');
   } catch (err) {
     return {
       ok: false,
@@ -426,8 +450,11 @@ export async function extractActiveTabAsMarkdown(input: {
     };
   }
 
-  if (pageText.length >= 200) {
-    const { text, truncated } = truncate(pageText, maxChars);
+  if (pageText.length >= 200 || pageLinks) {
+    const { text, truncated } = truncate(
+      [pageText, pageLinks && `Links:\n${pageLinks}`].filter(Boolean).join('\n\n'),
+      maxChars,
+    );
     return { ok: true, url: tab.url, title: pageTitle || tab.url, markdown: text, truncated };
   }
 

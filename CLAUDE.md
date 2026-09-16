@@ -218,6 +218,10 @@ provides them; the actual SW does not.
   markdown prefer Jina Reader (`https://r.jina.ai/<url>`) — server
   renders + extracts, no DOM in SW. Local fallback in
   `chrome-extension/src/background/agent/tools/webTools.ts`.
+  Pass a parsed node, not an HTML string, into Turndown: its browser build
+  otherwise calls global `document`. Worker regressions must exercise that
+  distribution, not its Node DOM fallback. Visible-text extraction includes
+  visible link destinations and targets the agent page, not user focus.
 - **No `node:async_hooks`.** `@langchain/langgraph` calls
   `new AsyncLocalStorage()` at module load. Vite alias redirects
   `node:async_hooks` → `chrome-extension/src/background/shims/asyncLocalStorage.ts`
