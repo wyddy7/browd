@@ -29,6 +29,7 @@ import { tool } from '@langchain/core/tools';
 import type { z } from 'zod';
 import type { Action } from '../actions/builder';
 import type { ActionResult } from '../types';
+import type { TaskOutcome } from '../taskOutcome';
 import { createLogger } from '@src/background/log';
 
 const logger = createLogger('LangGraphAdapter');
@@ -116,7 +117,8 @@ function canonicaliseArgsForGuard(name: string, input: unknown): string {
     return `intent=${intent}`;
   }
   // Default: strip intent, stringify the rest.
-  const { intent: _intent, ...rest } = obj;
+  const rest = { ...obj };
+  delete rest.intent;
   try {
     return JSON.stringify(rest);
   } catch {
@@ -210,6 +212,35 @@ function renderResult(result: ActionResult): ToolReturn {
 export function actionToTool(action: Action, budget?: ToolBudgetOptions, dupGuard?: DuplicateGuardState) {
   const schema = action.schema;
   const name = schema.name;
+  if (name === 'task_complete') {
+    return tool(
+      async (input: unknown): Promise<[string, TaskOutcome]> => {
+        let outcome: TaskOutcome;
+        try {
+          const result = await action.call(input);
+          if (result.error || !result.isDone || !result.extractedContent?.trim()) {
+            outcome = {
+              status: 'failed',
+              response: result.error || 'The task completion tool returned no valid result.',
+            };
+          } else {
+            outcome = { status: result.success ? 'completed' : 'failed', response: result.extractedContent };
+          }
+        } catch (err) {
+          outcome = { status: 'failed', response: err instanceof Error ? err.message : String(err) };
+        }
+        logger.info(`[tool] task_complete → ${outcome.status}`);
+        return [outcome.response, outcome];
+      },
+      {
+        name,
+        description: schema.description,
+        schema: schema.schema as z.ZodType,
+        returnDirect: true,
+        responseFormat: 'content_and_artifact',
+      },
+    );
+  }
   const limit = budget?.limits?.[name];
   return tool(
     async (input: unknown) => {

@@ -15,33 +15,22 @@ export const doneActionSchema: ActionSchema = {
   }),
 };
 
-/**
- * T2w — sentinel termination action for unified mode. The Plan-and-
- * Execute replanner stays as a fallback finaliser, but it has a
- * blind spot: when the LLM's reasoning concludes the task is done
- * yet emits zero tool calls, the next focused subgoal has nothing
- * to act on. There is no subgoal-level stuck detector any more (the
- * old `silent-step` guard was removed in T2x phase 0b because it
- * flagged framework-natural behaviour as stuck), so without an
- * explicit terminal tool such a run would drift through the
- * replanner until the outer LangGraph `recursionLimit`
- * (min(maxSteps, 50)) cut it off. Remaining stuck coverage is the
- * tool-layer `dupGuard` (identical tool+args 3 times in the last 5
- * calls → forcing error to the LLM) plus that recursion cap.
- * Giving the agent an explicit `task_complete(response)` tool lets
- * it close the StateGraph cleanly via the existing `state.response`
- * channel — same idea as browser-use's `DoneAgentOutput` and
- * Magentic-One's ledger update. The action handler simply returns
- * an ActionResult with a `TASK_COMPLETE: ` prefix; runReactAgent
- * detects the sentinel and routes to END.
- */
+/** Terminal result for the entire user task, not a subgoal summary. */
 export const taskCompleteActionSchema: ActionSchema = {
   name: 'task_complete',
   description:
-    'Call this when you have the final answer for the user. Pass the answer as `response`. This ends the task — no more tools will run after this. Use it the moment you have what the user asked for; do NOT keep reasoning about the answer instead of returning it.',
+    'End the entire user task and deliver response verbatim. Call alone, after all other actions have finished. Set success=false if the task is blocked or incomplete and explain what remains. For a completed subgoal with work remaining, return a subgoal summary instead.',
   schema: z.object({
     intent: z.string().default('').describe('purpose of this action'),
-    response: z.string().min(1).describe('the final answer to surface to the user'),
+    response: z
+      .string()
+      .min(1)
+      .refine(text => text.trim().length > 0, 'Response must not be blank')
+      .describe('the final answer to surface to the user'),
+    success: z
+      .boolean()
+      .default(true)
+      .describe('true only if the user task is completed; false for a blocked or incomplete task'),
   }),
 };
 

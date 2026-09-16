@@ -1,57 +1,12 @@
 /**
- * runReactAgent — LangGraph.js **Plan-and-Execute** agent with per-subgoal
- * ReAct inner loops. This is the unified-mode entry point. The naming
- * is historical: T2d (`833f84d`) shipped a solo `createReactAgent` that
- * terminated on the first no-tool-call AIMessage — even mid-task — and
- * T2f-replan (May 2026) wrapped it in a Plan-and-Execute StateGraph
- * because that failure mode is unrecoverable without an outer
- * orchestrator. The filename and `runReactAgent` symbol stayed for
- * stability; the architecture changed.
- *
- * Outer loop (StateGraph below): planner → agent → replanner ⇄ agent → END.
- *   - planner: structured-output decomposition into 1-7 subgoals plus
- *     `taskParameters` (urls/queries/names) captured verbatim from the
- *     user request — schema-enforced, so subgoal-abstraction drift cannot
- *     erase concrete inputs.
- *   - agent: invokes a fresh `createReactAgent` per subgoal via
- *     `runReactStep`. Subgoal scope = single createReactAgent.invoke()
- *     with its own `MemorySaver`. Inner `recursionLimit: 25`.
- *   - replanner: reads pastSteps, decides END (with final response) or
- *     continue (with rewritten remaining plan). Repeated-failure guard
- *     finishes honestly with partial result after N `failed:` subgoals.
- *
- * Inner loop (per subgoal, via `createReactAgent` from
- * `@langchain/langgraph/prebuilt`): standard ReAct — LLM call →
- * tool dispatch (`langGraphAdapter` wraps each `Action` as a LangChain
- * tool with budget caps + dupGuard) → state-message rebuild via
- * `stateModifier`, repeat until no-tool-call AIMessage (subgoal done)
- * or recursionLimit (subgoal aborts).
- *
- * Why Plan-and-Execute is provisional (slated for migration):
- *   - Industry 2026 has moved to single-loop `create_agent` +
- *     middleware + schema-forced terminal/replan tools — see
- *     `auto-docs/for-development/agents/multi-agent.md` and
- *     `auto-docs/browd-agent-evolution.md` active tier T2x.
- *   - Until that migration ships, P&E persists as the safety-net
- *     architecture: it works on weaker models (Gemini-flash class)
- *     where solo createReactAgent's no-tool-call exit is too eager.
- *
- * Stuck coverage (after T2x phase 0a/0b removed subgoal-level
- * guards — see anti-patterns.md §9):
- *   - dupGuard in `tools/langGraphAdapter.ts` — identical
- *     (tool, args) 3-in-5 → forcing error string to the LLM.
- *   - LangGraph `recursionLimit` (inner 25, outer ~50) — hard cap.
- *   - T2p-3 recursion-limit soft-fail — distinguishes inner-loop
- *     budget exhaustion with progress (→ `partial:` to replanner)
- *     from genuine stuck (→ rethrow → graceful TASK_FAIL).
- *   - Schema-forced terminal via `task_complete` action +
- *     `findTaskCompleteAnswer` scan covering ToolMessage prefix,
- *     LangChain-canonical tool_calls, and raw OpenAI tool_calls
- *     (T2x phase 0c).
+ * Unified Plan-and-Execute runtime. Nonterminal subgoal summaries go to the
+ * replanner; a typed TaskOutcome ends the graph immediately. task_complete is
+ * a returnDirect tool, so neither the inner model nor the replanner rewrites
+ * an accepted answer. Tool budgets and recursion limits bound unfinished work.
  */
 import { createReactAgent } from '@langchain/langgraph/prebuilt';
 import { MemorySaver, StateGraph, Annotation, START, END } from '@langchain/langgraph';
-import { HumanMessage, AIMessage, SystemMessage, ToolMessage, BaseMessage } from '@langchain/core/messages';
+import { HumanMessage, AIMessage, SystemMessage, ToolMessage, type BaseMessage } from '@langchain/core/messages';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { z } from 'zod';
 import type { AgentContext } from '../types';
@@ -64,9 +19,11 @@ import { wrapUntrustedContent } from '../messages/utils';
 import { Actors, ExecutionState } from '../event/types';
 import { createLogger } from '@src/background/log';
 import { createObservabilityCallback } from './observabilityCallback';
+import { createUsageTracker } from './usageTracker';
 import { computeStateFingerprint, isInnerRecursionLimitError } from '../guardrails/unifiedStuckDetector';
 import { TabGoneError } from '@src/background/browser/views';
 import { bridgeStreamEvents, type LiveEvent } from './streamBridge';
+import { readTaskOutcome, TaskToolNode, InvalidTaskToolBatchError, type TaskOutcome } from '../taskOutcome';
 
 const logger = createLogger('runReactAgent');
 
@@ -228,11 +185,6 @@ Current date: ${timeStr}
 }
 
 /**
- * Extract the last AIMessage's text content as the final answer. LangGraph
- * terminates when the LLM emits an AIMessage without tool_calls; that
- * message's content is the natural-language answer.
- */
-/**
  * T2p-3 — soft-fail summary on inner-recursion exhaustion WITH progress.
  *
  * Walks `messages` from the end and stitches a 1-2 sentence partial
@@ -277,59 +229,7 @@ export function extractPartialSummary(messages: BaseMessage[]): string {
   return `last action: ${lastToolName}`;
 }
 
-/**
- * T2x phase 0c — find a `task_complete(response=…)` call across the
- * three shapes a provider might leave it in. Returns the answer
- * wrapped in `TASK_COMPLETE: ` so the caller can pattern-match the
- * prefix exactly like the legacy ToolMessage path.
- *
- * Shape 1 — ToolMessage.content already prefixed (action handler's
- *   ActionResult.extractedContent path, normal LangChain.js flow).
- * Shape 2 — AIMessage.tool_calls (LangChain-canonical slot, populated
- *   when the provider's tool-call output is normalised).
- * Shape 3 — AIMessage.additional_kwargs.tool_calls[i].function
- *   (raw OpenAI/OpenRouter format, sometimes left un-normalised by
- *   provider adapters — Gemini-2.5-flash via OpenRouter does this).
- */
-export function findTaskCompleteAnswer(messages: BaseMessage[]): string | null {
-  for (const m of messages) {
-    // Shape 1: ToolMessage with prefix.
-    if (m instanceof ToolMessage) {
-      const c = m.content;
-      const text = typeof c === 'string' ? c : '';
-      if (text.startsWith('TASK_COMPLETE: ')) return text;
-    }
-    if (!(m instanceof AIMessage)) continue;
-    // Shape 2: AIMessage.tool_calls (LangChain-canonical).
-    if (Array.isArray(m.tool_calls)) {
-      for (const tc of m.tool_calls) {
-        if (tc?.name === 'task_complete' && tc.args && typeof tc.args === 'object') {
-          const r = (tc.args as { response?: unknown }).response;
-          if (typeof r === 'string' && r.length > 0) return `TASK_COMPLETE: ${r}`;
-        }
-      }
-    }
-    // Shape 3: additional_kwargs.tool_calls[i].function (raw OpenAI shape).
-    const kwargs = (m as { additional_kwargs?: { tool_calls?: unknown } }).additional_kwargs;
-    if (kwargs && Array.isArray(kwargs.tool_calls)) {
-      for (const tc of kwargs.tool_calls as Array<{ function?: { name?: string; arguments?: string } }>) {
-        if (tc?.function?.name === 'task_complete' && typeof tc.function.arguments === 'string') {
-          try {
-            const parsed = JSON.parse(tc.function.arguments) as { response?: unknown };
-            if (typeof parsed.response === 'string' && parsed.response.length > 0) {
-              return `TASK_COMPLETE: ${parsed.response}`;
-            }
-          } catch {
-            // fall through — malformed args, ignore this tool_call
-          }
-        }
-      }
-    }
-  }
-  return null;
-}
-
-function extractFinalAnswer(messages: BaseMessage[]): string | null {
+function extractSubgoalSummary(messages: BaseMessage[]): string | null {
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i];
     if (m instanceof AIMessage) {
@@ -393,168 +293,10 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
     return true;
   });
   const tools = actionsToTools(filteredActions, { counters, limits: DEFAULT_TOOL_BUDGETS }, dupGuard);
-  const checkpointer = new MemorySaver();
   const baseSystemPrompt = visionMode === 'off' ? reactSystemPromptTemplate : buildReactVisionPrompt();
 
-  // T2f-plan — minimal Plan-and-Execute pattern from LangGraph docs
-  // (https://langchain-ai.github.io/langgraphjs/tutorials/plan-and-execute/).
-  // One structured-output LLM call BEFORE the ReAct loop produces a
-  // 1-7 step plan; the plan is emitted to the side panel as a
-  // Planner message and pinned to the system prompt so the ReAct
-  // agent treats it as the spine of execution. We deliberately do
-  // not run the full replan-loop variant yet — the up-front plan
-  // alone closes the "thrashing past 30 steps" failure mode in the
-  // 2026-05-02 LinkedIn trace.
-  // T2f-final-fix-2 — accumulate token usage via LangChain callback so
-  // every LLM end (planner / agent steps / replanner) feeds the ring.
-  let cumulativeIn = 0;
-  let cumulativeOut = 0;
-  let cumulativeCacheRead = 0;
-  let cumulativeCacheCreation = 0;
-  let cacheTelemetrySeen = false;
-  // Track last-emitted totals so emitUsage() sends DELTAS (the side-panel
-  // accumulates across invokes via setTokenUsage(prev => prev + parsed)).
-  let lastEmittedIn = 0;
-  let lastEmittedOut = 0;
-  let lastEmittedCacheRead = 0;
-  let lastEmittedCacheCreation = 0;
-  const usageCallback = {
-    handleLLMEnd: (output: unknown) => {
-      const o = output as {
-        llmOutput?: {
-          tokenUsage?: { promptTokens?: number; completionTokens?: number };
-          usage?: {
-            input_tokens?: number;
-            output_tokens?: number;
-            cache_read_input_tokens?: number;
-            cache_creation_input_tokens?: number;
-            prompt_tokens_details?: { cached_tokens?: number; cache_write_tokens?: number };
-          };
-        };
-        generations?: Array<
-          Array<{
-            message?: {
-              usage_metadata?: {
-                input_tokens?: number;
-                output_tokens?: number;
-                input_token_details?: { cache_read?: number; cache_creation?: number; cached_tokens?: number };
-              };
-              response_metadata?: {
-                usage?: {
-                  input_tokens?: number;
-                  output_tokens?: number;
-                  cache_read_input_tokens?: number;
-                  cache_creation_input_tokens?: number;
-                  prompt_tokens_details?: { cached_tokens?: number; cache_write_tokens?: number };
-                };
-              };
-            };
-          }>
-        >;
-      };
-      const fromLlmOutput = o.llmOutput?.tokenUsage
-        ? { input: o.llmOutput.tokenUsage.promptTokens ?? 0, output: o.llmOutput.tokenUsage.completionTokens ?? 0 }
-        : o.llmOutput?.usage
-          ? { input: o.llmOutput.usage.input_tokens ?? 0, output: o.llmOutput.usage.output_tokens ?? 0 }
-          : null;
-      let dIn = fromLlmOutput?.input ?? 0;
-      let dOut = fromLlmOutput?.output ?? 0;
-      let dCacheRead = 0;
-      let dCacheCreation = 0;
-      // Cache-token extraction — provider-agnostic, parses every nesting
-      // location populated by LangChain JS ChatAnthropic / ChatOpenAI /
-      // ChatGoogleGenerativeAI / ChatVertexAI / OpenRouter (OpenAI-compat).
-      // Field name catalogue (verified empirically 2026-05-16 against
-      // OpenRouter+Gemini-2.5-Flash; documented in agent research report):
-      //   - usage_metadata.input_token_details.cache_read         ← LangChain cross-provider standard
-      //   - usage_metadata.input_token_details.cache_creation     ← same
-      //   - usage_metadata.input_token_details.cached_tokens      ← upstream alias (some PRs)
-      //   - llmOutput.usage.cache_read_input_tokens               ← Anthropic raw
-      //   - llmOutput.usage.cache_creation_input_tokens           ← Anthropic raw
-      //   - llmOutput.usage.prompt_tokens_details.cached_tokens   ← OpenAI / OpenRouter reads
-      //   - llmOutput.usage.prompt_tokens_details.cache_write_tokens ← OpenRouter explicit writes
-      //   - response_metadata.usage.* mirrors of the above
-      // Adding a new provider rarely needs new code — start by trusting
-      // usage_metadata.input_token_details (the LangChain standard).
-      const u0 = o.llmOutput?.usage;
-      if (u0) {
-        dCacheRead += u0.cache_read_input_tokens ?? u0.prompt_tokens_details?.cached_tokens ?? 0;
-        dCacheCreation += u0.cache_creation_input_tokens ?? u0.prompt_tokens_details?.cache_write_tokens ?? 0;
-      }
-      if (Array.isArray(o.generations)) {
-        for (const generation of o.generations) {
-          for (const item of generation) {
-            const u = item.message?.usage_metadata ?? item.message?.response_metadata?.usage;
-            if (u) {
-              if (!dIn && !dOut) {
-                dIn += u.input_tokens ?? 0;
-                dOut += u.output_tokens ?? 0;
-              }
-              const um = item.message?.usage_metadata;
-              if (um?.input_token_details) {
-                dCacheRead += um.input_token_details.cache_read ?? um.input_token_details.cached_tokens ?? 0;
-                dCacheCreation += um.input_token_details.cache_creation ?? 0;
-              }
-              const ur = item.message?.response_metadata?.usage;
-              if (ur) {
-                dCacheRead += ur.cache_read_input_tokens ?? ur.prompt_tokens_details?.cached_tokens ?? 0;
-                dCacheCreation += ur.cache_creation_input_tokens ?? ur.prompt_tokens_details?.cache_write_tokens ?? 0;
-              }
-            }
-          }
-        }
-      }
-      if (dIn || dOut) {
-        cumulativeIn += dIn;
-        cumulativeOut += dOut;
-        cumulativeCacheRead += dCacheRead;
-        cumulativeCacheCreation += dCacheCreation;
-        const cacheSuffix =
-          dCacheRead || dCacheCreation || cacheTelemetrySeen
-            ? ` | cache: +${dCacheRead} read / +${dCacheCreation} write (cum ${cumulativeCacheRead}/${cumulativeCacheCreation})`
-            : '';
-        if (dCacheRead || dCacheCreation) cacheTelemetrySeen = true;
-        logger.info(`usage tick: +${dIn} in / +${dOut} out (cum ${cumulativeIn}/${cumulativeOut})${cacheSuffix}`);
-        // Live-emit so the side-panel TokenRing grows in real time
-        // instead of jumping once at task-end. emitUsage is idempotent
-        // (sends absolute cumulative totals), so emitting after every
-        // LLM call is safe — the panel just replaces its state.
-        emitUsage();
-      }
-    },
-  };
-  // T2m-observability — sibling handler that logs LLM/chain/tool
-  // lifecycle events. Kept separate from `usageCallback` so token
-  // accounting (cumulative ring telemetry) and lifecycle logging
-  // (start/end/error/streaming progress + TRACE rows) stay
-  // separable. Both are registered in the StateGraph and per-step
-  // ReAct `callbacks:` arrays below.
+  const { usageCallback, emitUsage } = createUsageTracker(context, input.contextWindow);
   const observabilityCallback = createObservabilityCallback({ taskId: context.taskId });
-  const emitUsage = () => {
-    const dIn = cumulativeIn - lastEmittedIn;
-    const dOut = cumulativeOut - lastEmittedOut;
-    const dCacheRead = cumulativeCacheRead - lastEmittedCacheRead;
-    const dCacheCreation = cumulativeCacheCreation - lastEmittedCacheCreation;
-    if (dIn || dOut || dCacheRead || dCacheCreation) {
-      context.emitEvent(
-        Actors.SYSTEM,
-        ExecutionState.TASK_USAGE,
-        JSON.stringify({
-          inputTokens: dIn,
-          outputTokens: dOut,
-          cacheReadTokens: dCacheRead,
-          cacheCreationTokens: dCacheCreation,
-          contextWindow: input.contextWindow ?? 100_000,
-        }),
-      );
-      lastEmittedIn = cumulativeIn;
-      lastEmittedOut = cumulativeOut;
-      lastEmittedCacheRead = cumulativeCacheRead;
-      lastEmittedCacheCreation = cumulativeCacheCreation;
-    } else if (cumulativeIn === 0 && cumulativeOut === 0) {
-      logger.warning('no token usage observed — provider may not expose usage_metadata; ring will stay empty');
-    }
-  };
 
   // T2f-replan — Plan-and-Execute via LangGraph StateGraph.
   // (https://langchain-ai.github.io/langgraphjs/tutorials/plan-and-execute/)
@@ -604,11 +346,12 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
       .describe('updated remaining subgoals (only when decision=continue, null when finish).'),
     response: z
       .string()
-      .max(2000)
       .nullable()
-      .describe(
-        'final answer to the user (only when decision=finish, null when continue). Keep it under 2000 characters; do NOT repeat sentences.',
-      ),
+      .describe('the actual final answer, including requested data (only when decision=finish, null when continue)'),
+    success: z
+      .boolean()
+      .nullable()
+      .describe('true if the user task is completed, false if blocked/incomplete, null when continue'),
   });
 
   const planner = llm.withStructuredOutput(planSchema, { name: 'plan' });
@@ -646,7 +389,7 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
     // new tab or navigation target.
     const overlayNudge =
       'If a modal overlay (cookie banner, newsletter signup, sign-in prompt, paywall dialog) is blocking the content you need, dismiss it first via the available click tool before attempting to extract data from the page.';
-    return `${baseSystemPrompt}\n<original-user-task>\n${task}\n</original-user-task>${paramsBlock}\n<current-subgoal>\nFocus on this single subgoal of the larger user task:\n${currentStep}\n\nIf the subgoal text refers to "the provided URL" / "the requested term" / similar abstractions, ALWAYS resolve them by re-reading the original user task above and the <task-parameters> block. Do not invent parameters from memory or the current tab.\n\n${overlayNudge}\n\nFinish this subgoal with at most a few tool calls, then write a brief description of what you achieved. Do NOT solve the entire user task in one go — the orchestrator will pick the next subgoal.\n</current-subgoal>${completedBlock}`;
+    return `${baseSystemPrompt}\n<original-user-task>\n${task}\n</original-user-task>${paramsBlock}\n<current-subgoal>\nFocus on this subgoal of the larger user task:\n${currentStep}\n\nResolve abstract references using the original user task and task parameters above.\n\n${overlayNudge}\n\nIf the entire user task is complete, call task_complete with the actual answer. If only this subgoal is complete and more work remains, return a summary with the concrete findings needed by the next step.\n</current-subgoal>${completedBlock}`;
   };
 
   const runReactStep = async (
@@ -655,11 +398,11 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
     stepIndex: number,
     params: PlanType['taskParameters'],
     fpStart: string | null,
-  ): Promise<{ finalAnswer: string }> => {
+  ): Promise<{ summary: string; outcome?: TaskOutcome }> => {
     const stepSystemPrompt = buildSystemPromptForStep(currentStep, completed, params);
     const agent = createReactAgent({
       llm,
-      tools,
+      tools: new TaskToolNode(tools),
       checkpointSaver: new MemorySaver(),
       stateModifier: async (state: { messages: BaseMessage[] }) => {
         try {
@@ -696,7 +439,7 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
         {
           messages: [
             new HumanMessage(
-              `Original user task:\n${task}\n\nCurrent subgoal:\n${currentStep}\n\nExecute the current subgoal only. Resolve any abstract reference in the subgoal text (e.g. "the provided URL", "the requested term") by re-reading the original user task above.`,
+              `Original user task:\n${task}\n\nCurrent subgoal:\n${currentStep}\n\nWork on this subgoal. If the entire task is already answered, deliver the result through task_complete.`,
             ),
           ],
         },
@@ -710,7 +453,7 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
       // exhausts the 25-round budget just before producing its answer.
       // Compare the page fingerprint captured at agentNode entry against
       // the fingerprint at exhaustion: same → real stuck (rethrow so the
-      // outer catch flips innerRecursionExhausted), different → real
+      // outer catch reports a failure), different → observable
       // progress → soft-fail with a "partial:" summary so the replanner
       // can decide END or CONTINUE on the next round.
       if (!isInnerRecursionLimitError(msg)) throw err;
@@ -750,28 +493,12 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
       }
       const summary = extractPartialSummary(snapshotMessages);
       logger.info(`recursion-limit soft-fail with progress (fp_start≠fp_now) — handing partial to replanner`);
-      return { finalAnswer: `partial: ${summary}` };
+      return { summary: `partial: ${summary}` };
     }
-    // T2w (T2x phase 0c — robust) — scan for the `task_complete`
-    // sentinel across THREE shapes the underlying provider might use:
-    //   1. ToolMessage.content prefixed `TASK_COMPLETE: ` — what the
-    //      action handler emits via ActionResult.extractedContent.
-    //   2. AIMessage.tool_calls[i].name === 'task_complete' — the
-    //      LangChain-canonical normalised slot.
-    //   3. AIMessage.additional_kwargs.tool_calls[i].function — raw
-    //      OpenAI/OpenRouter format that some providers populate
-    //      without normalising to (2). Test25 (Gemini-2.5-flash via
-    //      OpenRouter, 2026-05-16) showed the prefix scan alone is
-    //      not enough — the model called `task_complete` twice with
-    //      a valid `response` arg but the ToolMessage shape didn't
-    //      trigger the prefix match, so the agent burned more rounds
-    //      until the replanner forced a finish.
-    // Whichever shape lands first wins. The returned `finalAnswer`
-    // keeps the `TASK_COMPLETE: ` prefix so agentNode can route to
-    // END via state.response, bypassing the replanner.
-    const taskCompleteAnswer = findTaskCompleteAnswer(stepResult.messages);
+    const outcome = readTaskOutcome(stepResult.messages);
     return {
-      finalAnswer: taskCompleteAnswer ?? extractFinalAnswer(stepResult.messages) ?? 'no observable result',
+      summary: outcome?.response ?? extractSubgoalSummary(stepResult.messages) ?? 'no observable result',
+      outcome: outcome ?? undefined,
     };
   };
 
@@ -783,7 +510,7 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
       reducer: (cur, n) => [...cur, ...n],
       default: () => [],
     }),
-    response: Annotation<string | null>({ reducer: (_, n) => n, default: () => null }),
+    outcome: Annotation<TaskOutcome | null>({ reducer: (current, next) => current ?? next, default: () => null }),
     // T2f-task-params: structured params from the user task, set by
     // the planner once and re-read by every executor step.
     taskParameters: Annotation<PlanType['taskParameters']>({
@@ -829,170 +556,91 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
     }
   };
 
+  const isCancelled = () => context.controller.signal.aborted || context.stopped;
+  const cancelledOutcome: TaskOutcome = { status: 'cancelled', response: 'Task cancelled' };
+  const failed = (response: string): { outcome: TaskOutcome } => ({ outcome: { status: 'failed', response } });
+  const isTabGone = (err: unknown) =>
+    err instanceof TabGoneError ||
+    /No tab with id|No frame with id/i.test(err instanceof Error ? err.message : String(err));
+  const stepSucceeded = (summary: string) => !summary.startsWith('failed:') && !summary.startsWith('partial:');
+
   const agentNode = async (state: typeof PlanExecuteState.State) => {
-    if (state.plan.length === 0) {
-      return { response: 'no remaining plan steps' };
-    }
-    // T2u-runaway-loop — short-circuit the node body if the user
-    // has already pressed Stop OR a previous probe noticed the
-    // agent tab is gone. Without this, the `fpStart` and post-step
-    // `fpNow` probes below kept calling `getState()` after abort,
-    // which hammered a dead tab and generated tens of thousands of
-    // log lines per second in the SW console. Returning a
-    // `response` routes the StateGraph straight to END; the outer
-    // catch in `runReactAgent` classifies the abort/dead-tab case
-    // by inspecting `context.stopped` separately.
-    if (context.controller.signal.aborted || context.stopped) {
-      return { response: 'cancelled' };
-    }
+    if (isCancelled()) return { outcome: cancelledOutcome };
+    if (state.plan.length === 0) return failed('No remaining plan steps and no completed task result.');
+    // A tab can be opened lazily on the first step; later eviction is terminal.
     if (context.browserContext.agentTabId() === null && state.pastSteps.length > 0) {
-      // Once we've started a task, `agentTabId` becoming `null`
-      // mid-run means `handleTabGone` evicted it — bail rather
-      // than spin on a dead tab. Skipped at step 0 because the
-      // tab is opened lazily on first navigation.
-      return { response: 'agent tab is no longer reachable' };
+      return failed('The agent tab is no longer reachable.');
     }
     const currentStep = state.plan[0];
     const remainingAfter = state.plan.slice(1);
-    logger.info(`executing subgoal ${state.pastSteps.length + 1}: ${currentStep}`);
-    // T2f-plan-pinned-live: emit IN-PROGRESS for the current step
-    // BEFORE running it. Without this the checklist sits frozen
-    // throughout the entire runReactStep (multiple LLM rounds + tool
-    // calls), so the user sees no movement for 10–30 seconds.
-    emitPlanChecklist([
-      ...state.pastSteps.map(([s]) => ({ text: s, done: true })),
-      { text: currentStep, done: false, inProgress: true },
-      ...remainingAfter.map(s => ({ text: s, done: false })),
-    ]);
-    // T2p-3 — capture page fingerprint BEFORE entering the inner ReAct
-    // loop. Passed through to runReactStep so its catch block can
-    // compare against the post-exhaustion fingerprint and distinguish
-    // "burned budget on a frozen page" (real stuck) from "burned budget
-    // mid-progress" (soft-fail with partial). Wrapped in try/catch
-    // because a probe failure must NOT abort the subgoal — we fall
-    // back to `null` and the inner catch treats that as
-    // conservative-stuck.
-    let fpStart: string | null = null;
-    let tabGoneOnFpStart = false;
-    try {
-      const liveState = await context.browserContext.getState(false);
-      fpStart = computeStateFingerprint(liveState);
-    } catch (err) {
-      // T2u-runaway-loop — if the tab vanished before we even
-      // entered the inner ReAct loop there is nothing left to do
-      // for this subgoal. Set a flag so the post-step block below
-      // short-circuits straight to a graceful "tab gone" response
-      // rather than re-probing the dead tab.
-      const msg = err instanceof Error ? err.message : String(err);
-      if (err instanceof TabGoneError || /No tab with id|No frame with id/i.test(msg)) {
-        logger.warning(`fp_start probe saw tab gone (${msg}); will end subgoal gracefully`);
-        tabGoneOnFpStart = true;
-      } else {
-        logger.warning('fp_start probe failed; recursion-limit soft-fail will treat as stuck', err);
-      }
-      fpStart = null;
-    }
-    if (tabGoneOnFpStart) {
+    const previousItems = state.pastSteps.map(([text, summary]) => ({ text, done: stepSucceeded(summary) }));
+    const emitStep = (done: boolean, inProgress = false) =>
       emitPlanChecklist([
-        ...state.pastSteps.map(([s]) => ({ text: s, done: true })),
-        { text: currentStep, done: false },
-        ...remainingAfter.map(s => ({ text: s, done: false })),
+        ...previousItems,
+        { text: currentStep, done, inProgress },
+        ...remainingAfter.map(text => ({ text, done: false })),
       ]);
-      return {
-        pastSteps: [[currentStep, 'failed: agent tab is no longer available'] as [string, string]],
-        response: 'The agent tab is no longer available (closed or crashed). Run ended.',
-      };
-    }
-    let stepResult: string;
-    let innerRecursionExhausted = false;
+    logger.info(`executing subgoal ${state.pastSteps.length + 1}: ${currentStep}`);
+    emitStep(false, true);
+
+    // Used only to distinguish progress at recursion-budget exhaustion.
+    let fpStart: string | null = null;
     try {
-      const stepOut = await runReactStep(
+      fpStart = computeStateFingerprint(await context.browserContext.getState(false));
+    } catch (err) {
+      if (isTabGone(err)) {
+        emitStep(false);
+        return failed('The agent tab is no longer available (closed or crashed). Run ended.');
+      }
+      logger.warning('Initial state probe failed; recursion exhaustion will fail closed', err);
+    }
+
+    let summary: string;
+    let outcome: TaskOutcome | undefined;
+    try {
+      const step = await runReactStep(
         currentStep,
         state.pastSteps,
         state.pastSteps.length,
         state.taskParameters,
         fpStart,
       );
-      stepResult = stepOut.finalAnswer;
+      summary = step.summary;
+      outcome = step.outcome;
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      logger.warning(`subgoal "${currentStep}" failed: ${msg}`);
-      stepResult = `failed: ${msg}`;
-      // T2p-2: when the inner createReactAgent exhausts its own
-      // recursionLimit, the subgoal burned ~25 LLM rounds emitting
-      // tool calls with no progress (typical: isTrusted=false antibot
-      // wall on click_at). Treat it as a structural reasoning failure
-      // and short-circuit the outer StateGraph immediately, BEFORE
-      // the replanner takes another swing and burns another 25
-      // rounds under a new subgoal description.
-      if (isInnerRecursionLimitError(msg)) {
-        innerRecursionExhausted = true;
+      const message = err instanceof Error ? err.message : String(err);
+      summary = `failed: ${message}`;
+      logger.warning(`subgoal "${currentStep}" failed: ${message}`);
+      if (isInnerRecursionLimitError(message) || isTabGone(err) || err instanceof InvalidTaskToolBatchError) {
+        outcome = { status: 'failed', response: message };
       }
     }
-    // Post-subgoal terminal-condition check. Two paths can force an
-    // immediate stop here:
-    //   1. T2p-2: the inner createReactAgent exhausted its recursion
-    //      budget AND fp_start == fp_now (no progress) — surface as
-    //      a clean "stuck inside one step" message to the user.
-    //   2. T2u: user pressed Stop OR the agent tab is gone — short
-    //      out before `getState()` re-triggers DOM probes on a dead
-    //      tab. (Tab-gone is checked again below via a probe.)
-    // The previous subgoal-level stuck detector (silent-step +
-    // env-fingerprint) was deleted in T2x phase 0a/0b — see
-    // `auto-docs/for-development/agents/anti-patterns.md` §9.
-    // Remaining stuck coverage: dupGuard at the tool layer +
-    // LangGraph recursionLimit + the schema-forced terminal
-    // `task_complete` tool below.
-    let stuckResponse: string | null = null;
-    if (innerRecursionExhausted) {
-      const partial = state.pastSteps.map(([s, r]) => `- ${s}: ${r}`).join('\n');
-      stuckResponse = `I'm stopping because the agent got stuck inside one step: it burned the inner recursion budget on "${currentStep}" without making progress (usually means the target page silently blocks automated clicks).\n\nWhat I did so far:\n${partial || '(no completed subgoals)'}\n\nTry rephrasing the task, opening the target page yourself, or switching to legacy agent mode in Settings.`;
-    } else if (context.controller.signal.aborted || context.stopped) {
-      stuckResponse = 'cancelled';
-    } else {
-      // Tab-gone probe — `getState()` throws TabGoneError when the
-      // agent tab has been closed/crashed. Surface a clean response
-      // so `decide` routes to END instead of feeding the replanner
-      // a dead tab.
+
+    if (isCancelled()) outcome = cancelledOutcome;
+    // Accepted completion is final: do not probe the browser or call another model.
+    if (!outcome) {
       try {
         await context.browserContext.getState(false);
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        if (err instanceof TabGoneError || /No tab with id|No frame with id/i.test(msg)) {
-          logger.warning(`agentNode probe saw tab gone; ending run gracefully: ${msg}`);
-          stuckResponse = 'The agent tab is no longer available (closed or crashed). Run ended.';
+        if (isTabGone(err)) {
+          outcome = {
+            status: 'failed',
+            response: 'The agent tab is no longer available (closed or crashed). Run ended.',
+          };
         } else {
-          logger.warning('agentNode post-subgoal probe failed; continuing', err);
+          logger.warning('Post-subgoal state probe failed; continuing', err);
         }
       }
     }
-    // After the step: flip current to done unless it came back as a
-    // "failed:..." marker OR a "partial:..." marker (T2p-3 soft-fail
-    // when the inner loop exhausted its recursion budget mid-progress).
-    // In both cases the replanner picks up from the pastSteps entry and
-    // decides END or CONTINUE. T2w — a `TASK_COMPLETE: ` prefix means
-    // the agent explicitly called the sentinel termination action;
-    // strip the prefix, mark the subgoal done, and short-circuit to
-    // END via state.response (bypasses the replanner entirely).
-    const taskCompleteMatch = stepResult.startsWith('TASK_COMPLETE: ')
-      ? stepResult.slice('TASK_COMPLETE: '.length)
-      : null;
-    const stepIsDone =
-      taskCompleteMatch !== null || (!stepResult.startsWith('failed:') && !stepResult.startsWith('partial:'));
-    emitPlanChecklist([
-      ...state.pastSteps.map(([s]) => ({ text: s, done: true })),
-      { text: currentStep, done: stepIsDone },
-      ...remainingAfter.map(s => ({ text: s, done: false })),
-    ]);
-    const update: { pastSteps: Array<[string, string]>; response?: string } = {
-      pastSteps: [[currentStep, stepResult] as [string, string]],
+    emitStep(outcome ? outcome.status === 'completed' : stepSucceeded(summary));
+    return {
+      pastSteps: [[currentStep, summary] as [string, string]],
+      ...(outcome ? { outcome } : {}),
     };
-    if (taskCompleteMatch !== null) update.response = taskCompleteMatch;
-    else if (stuckResponse !== null) update.response = stuckResponse;
-    return update;
   };
 
   const replannerNode = async (state: typeof PlanExecuteState.State) => {
+    if (isCancelled()) return { outcome: cancelledOutcome };
     const remaining = state.plan.slice(1);
     const completedBlock = state.pastSteps.map(([s, r]) => `- ${s} → ${r}`).join('\n');
     const remainingBlock = remaining.length ? remaining.join('\n') : '(none)';
@@ -1011,28 +659,32 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
         .filter(([, r]) => !r.startsWith('failed:'))
         .map(([s, r]) => `- ${s}: ${r}`)
         .join('\n');
-      const finishedSubgoals = state.pastSteps.filter(([, r]) => !r.startsWith('failed:')).map(([s]) => s);
+      const finishedSubgoals = state.pastSteps.filter(([, r]) => stepSucceeded(r)).map(([s]) => s);
       const failedSubgoal = tail[0][0];
       emitPlanChecklist([
         ...finishedSubgoals.map(s => ({ text: s, done: true })),
         { text: `${failedSubgoal} (blocked)`, done: false },
       ]);
-      return {
-        response: `I made progress on the task but hit a wall on "${failedSubgoal}" — three consecutive attempts failed (likely blocked by the site's anti-automation behaviour, e.g. unresponsive buttons or rate-limiting).\n\nWhat I did manage:\n${partial || '(no completed subgoals)'}\n\nIf you want, I can try a different approach (constructing the URL directly, switching tabs, or simpler manual-style navigation).`,
-      };
+      return failed(
+        `The task is incomplete: ${failuresCap} consecutive subgoals failed at "${failedSubgoal}".\n\nPartial results:\n${partial || '(none)'}`,
+      );
     }
     try {
       const result = (await replanner.invoke([
         new SystemMessage(
-          `You are the replanner half of a browser-agent loop. After each executed subgoal, decide whether the user's task is now sufficiently answered (decision="finish" + response), or whether more subgoals are needed (decision="continue" + plan with the remaining steps, possibly rewritten). Keep the plan focused — do not invent new subgoals when the task is essentially done. If the executor reports a step "failed:", do not blindly retry — replan around the failure or finalise honestly.`,
+          `You are the replanner half of a browser-agent loop. After a nonterminal subgoal, decide whether more work is needed (decision="continue", plan, response=null, success=null), or deliver the final result (decision="finish", response, success). The response must contain the requested data, not a statement that you presented it elsewhere. Set success=true only when the user's task is completed; use success=false for blocked or incomplete work and explain what remains. Replan around failed steps rather than blindly retrying.`,
         ),
         new HumanMessage(
           `User task:\n${task}\n\nCompleted so far:\n${completedBlock}\n\nRemaining plan:\n${remainingBlock}\n\nDecide: continue with new plan, or finish with a response to the user.`,
         ),
       ])) as z.infer<typeof replanSchema>;
-      if (result.decision === 'finish' && result.response) {
-        emitPlanChecklist(state.pastSteps.map(([s]) => ({ text: s, done: true })));
-        return { response: result.response };
+      if (result.decision === 'finish') {
+        if (!result.response?.trim() || typeof result.success !== 'boolean') {
+          return failed('The replanner ended without a valid task result.');
+        }
+        emitPlanChecklist(state.pastSteps.map(([text, summary]) => ({ text, done: stepSucceeded(summary) })));
+        const outcome: TaskOutcome = { status: result.success ? 'completed' : 'failed', response: result.response };
+        return { outcome };
       }
       // T2f-plan-pinned-live: replanner LLM sometimes echoes
       // already-completed subgoals into the new plan ("p1, p2, p3"
@@ -1043,25 +695,27 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
       const completedTexts = new Set(state.pastSteps.map(([s]) => s));
       const newPlan = rawNewPlan.filter(s => !completedTexts.has(s));
       const items = [
-        ...state.pastSteps.map(([s]) => ({ text: s, done: true })),
+        ...state.pastSteps.map(([text, summary]) => ({ text, done: stepSucceeded(summary) })),
         ...newPlan.map(s => ({ text: s, done: false })),
       ];
       emitPlanChecklist(items);
       if (newPlan.length === 0) {
-        return { response: 'planner exhausted with no remaining steps' };
+        return failed('The plan was exhausted without a completed task result.');
       }
       return { plan: newPlan };
     } catch (err) {
       logger.warning('replanner failed; defaulting to remaining plan or finishing', err);
       if (remaining.length === 0) {
-        return { response: state.pastSteps.map(([, r]) => r).join('\n\n') || 'task complete' };
+        return failed(
+          `The replanner failed before producing a final result.\n\nPartial results:\n${completedBlock || '(none)'}`,
+        );
       }
       return { plan: remaining };
     }
   };
 
   const decide = (state: typeof PlanExecuteState.State): typeof END | 'agent' => {
-    return state.response ? END : 'agent';
+    return state.outcome ? END : 'agent';
   };
 
   const graph = new StateGraph(PlanExecuteState)
@@ -1070,7 +724,7 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
     .addNode('replanner', replannerNode)
     .addEdge(START, 'planner')
     .addEdge('planner', 'agent')
-    .addEdge('agent', 'replanner')
+    .addConditionalEdges('agent', state => (state.outcome ? END : 'replanner'), { replanner: 'replanner', [END]: END })
     .addConditionalEdges('replanner', decide, { agent: 'agent', [END]: END });
   const compiled = graph.compile();
 
@@ -1083,38 +737,41 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
     callbacks: [usageCallback, observabilityCallback],
   };
 
-  // T2v — `streamEvents(v2)` replaces batch `invoke()` so silence is a real abnormal signal.
   const emitLive = (msg: LiveEvent) => context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_LIVE, JSON.stringify(msg));
+  const publishOutcome = (outcome: TaskOutcome): RunReactAgentResult => {
+    if (outcome.status === 'completed') {
+      context.finalAnswer = outcome.response;
+      context.emitEvent(Actors.PLANNER, ExecutionState.STEP_OK, outcome.response);
+      context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_OK, outcome.response);
+      return { finalAnswer: outcome.response, error: null };
+    }
+    context.finalAnswer = null;
+    const event = outcome.status === 'cancelled' ? ExecutionState.TASK_CANCEL : ExecutionState.TASK_FAIL;
+    context.emitEvent(Actors.SYSTEM, event, outcome.response);
+    return { finalAnswer: null, error: outcome.status === 'cancelled' ? 'cancelled' : outcome.response };
+  };
   try {
+    if (isCancelled()) return publishOutcome(cancelledOutcome);
     const finalState = await bridgeStreamEvents<typeof PlanExecuteState.State>(
       compiled.streamEvents({}, { ...config, version: 'v2' }),
       emitLive,
       context.controller.signal,
     );
-    emitLive({ kind: 'idle' });
-    emitUsage();
-    const finalAnswer =
-      finalState.response ??
-      (finalState.pastSteps.length > 0 ? finalState.pastSteps[finalState.pastSteps.length - 1][1] : null);
-    if (finalAnswer) {
-      context.finalAnswer = finalAnswer;
-      context.emitEvent(Actors.PLANNER, ExecutionState.STEP_OK, finalAnswer);
-      context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_OK, finalAnswer);
-      return { finalAnswer, error: null };
-    }
-    const msg = 'Agent terminated without producing an answer';
-    context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_FAIL, msg);
-    return { finalAnswer: null, error: msg };
+    return publishOutcome(
+      isCancelled()
+        ? cancelledOutcome
+        : (finalState.outcome ?? {
+            status: 'failed',
+            response: 'Agent terminated without producing a task result',
+          }),
+    );
   } catch (err) {
+    if (isCancelled()) return publishOutcome(cancelledOutcome);
+    const message = err instanceof Error ? err.message : String(err);
+    logger.error('runReactAgent failed', err);
+    return publishOutcome({ status: 'failed', response: message });
+  } finally {
     emitLive({ kind: 'idle' });
     emitUsage();
-    const message = err instanceof Error ? err.message : String(err);
-    if (context.stopped || message.includes('aborted')) {
-      context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_CANCEL, 'Task cancelled');
-      return { finalAnswer: null, error: 'cancelled' };
-    }
-    logger.error('runReactAgent failed', err);
-    context.emitEvent(Actors.SYSTEM, ExecutionState.TASK_FAIL, message);
-    return { finalAnswer: null, error: message };
   }
 }

@@ -4,6 +4,18 @@ All notable changes to Browd are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Completed agent answers are delivered verbatim: `task_complete` now stops
+  the inner loop and bypasses replanning, preventing repeated completion
+  calls and replacement of requested data with a generic acknowledgement.
+- Failed and incomplete tasks, lost tabs, and exhausted plans no longer emit
+  success events. Cancellation remains distinct from failure.
+- Completion mixed with other tool calls is rejected before dispatch, so
+  browser actions cannot run alongside a task's final result.
+
 ## [0.1.16] — 2026-09-13
 
 ### Changed

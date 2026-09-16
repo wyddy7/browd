@@ -103,6 +103,16 @@ separate `visionMode` toggle:
   Until migration ships, do not add new guards that try to "detect"
   a silent inner-step exit — that signal is the framework's
   termination, not a stall.
+- **Authoritative completion.** `task_complete` runs through `Action.call`,
+  returns a validated `ActionResult` (`isDone`, `success`, verbatim answer),
+  and becomes a LangGraph `returnDirect` tool with a typed result artifact.
+  `TaskOutcome` is the graph's only terminal state. The agent routes directly
+  to END when it exists; replanning is only for nonterminal subgoals. Never
+  infer completion from model tool-call arguments, text prefixes, a nonempty
+  answer, or an exhausted plan. Failed/incomplete results emit TASK_FAIL;
+  user cancellation emits TASK_CANCEL. Completion must be a standalone tool
+  call: mixed batches are rejected before any tool executes. Offline tests
+  exercise the actual LangGraph runtime with a scripted provider transport.
 - **Tab isolation contract (T2f-tab-iso).** In `agentMode='unified'`
   the Executor opens an `agentTab` via `BrowserContext.openAgentTab()`
   on TASK_START. `getCurrentPage()` resolves to that tab even if

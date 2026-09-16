@@ -40,7 +40,6 @@ import {
 } from './schemas';
 import { webFetchMarkdown, webSearch, extractActiveTabAsMarkdown } from '../tools/webTools';
 import { findFieldByLabel } from '@src/background/browser/dom/fieldFinder';
-import { makeActionError } from '../agentErrors';
 import type { HITLRequest } from '../hitl/types';
 import { z } from 'zod';
 import { createLogger } from '@src/background/log';
@@ -306,15 +305,13 @@ export class ActionBuilder {
     }, doneActionSchema);
     actions.push(done);
 
-    // T2w — unified-mode termination sentinel. The handler is pure:
-    // it returns an ActionResult whose extractedContent carries a
-    // `TASK_COMPLETE: ` prefix. runReactAgent inspects the ToolMessage
-    // stream for that prefix and routes the StateGraph directly to END
-    // via `state.response`, bypassing the replanner. No HITL gate, no
-    // tab-isolation check — terminal signal only.
+    // The adapter turns this validated ActionResult into a terminal
+    // artifact. The answer is delivered verbatim, without another LLM call.
     const taskComplete = new Action(async (input: z.infer<typeof taskCompleteActionSchema.schema>) => {
       return new ActionResult({
-        extractedContent: `TASK_COMPLETE: ${input.response}`,
+        isDone: true,
+        success: input.success,
+        extractedContent: input.response,
         includeInMemory: true,
       });
     }, taskCompleteActionSchema);
