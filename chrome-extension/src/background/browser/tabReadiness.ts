@@ -6,6 +6,7 @@ export function waitForTabReady(
   return new Promise((resolve, reject) => {
     let loaded = !waitForUpdate;
     let active = !waitForActivation;
+    let receivedStatusEvent = false;
     const cleanup = () => {
       clearTimeout(timer);
       chrome.tabs.onUpdated.removeListener(onUpdated);
@@ -20,7 +21,10 @@ export function waitForTabReady(
     };
     const onUpdated = (id: number, change: chrome.tabs.TabChangeInfo) => {
       if (id !== tabId) return;
-      if (change.status) loaded = change.status === 'complete';
+      if (waitForUpdate && change.status) {
+        receivedStatusEvent = true;
+        loaded = change.status === 'complete';
+      }
       check();
     };
     const onActivated = (info: chrome.tabs.TabActiveInfo) => {
@@ -34,7 +38,7 @@ export function waitForTabReady(
     chrome.tabs.onActivated.addListener(onActivated);
     chrome.tabs.get(tabId).then(
       tab => {
-        loaded ||= tab.status === 'complete';
+        if (!receivedStatusEvent) loaded ||= tab.status === 'complete';
         active ||= tab.active;
         check();
       },
