@@ -48,4 +48,33 @@ describe('Markdown in a DOM-less MV3 worker', () => {
     expect(result).toMatchObject({ ok: true });
     if (result.ok) expect(result.markdown).toContain('[Learn more](https://example.test/help)');
   });
+
+  it('extracts the supplied agent tab rather than the user-focused tab', async () => {
+    const query = vi.fn();
+    const executeScript = vi.fn(async () => [{ result: { title: 'Agent page', text: 'x'.repeat(240), links: [] } }]);
+    vi.stubGlobal('chrome', {
+      tabs: { query, get: vi.fn(async () => ({ id: 41, url: 'https://example.test/' })) },
+      scripting: { executeScript },
+    });
+    await extractActiveTabAsMarkdown({ tabId: 41 });
+    expect(query).not.toHaveBeenCalled();
+    expect(executeScript).toHaveBeenCalledWith(expect.objectContaining({ target: { tabId: 41 } }));
+  });
+
+  it('handles readerable articles with the browser Turndown distribution', async () => {
+    const paragraph =
+      'Documentation uses reserved domains to show examples without depending on a real service. '.repeat(10);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => ({
+        ok: !url.includes('r.jina.ai'),
+        status: 503,
+        text: async () =>
+          `<html><head><title>Guide</title></head><body><main><article><h1>Guide</h1><p>${paragraph}</p><p>${paragraph}</p><a href="/source">Source</a></article></main></body></html>`,
+      })),
+    );
+    const result = await webFetchMarkdown({ url: 'https://example.test/guide' });
+    expect(result).toMatchObject({ ok: true });
+    if (result.ok) expect(result.markdown).toContain('[Source](https://example.test/source)');
+  });
 });

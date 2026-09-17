@@ -27,6 +27,11 @@ pnpm -F chrome-extension test
 pnpm zip
 ```
 
+Task/model comparison: see `docs/model-evaluations.md`. The opt-in
+`pnpm -F chrome-extension test:eval:models` runs real models + Judge against
+the real graph with a fixture browser. Normal tests stay offline. Judge is
+not a runtime gate; hard assertions cannot be overridden by its verdict.
+
 Prefer scoped commands when working in one workspace:
 
 ```bash

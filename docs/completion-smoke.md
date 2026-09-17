@@ -43,3 +43,27 @@ Offline regressions prove code contracts, not live model/browser performance.
 HTML changes additionally require extension reload and actual extraction in
 the MV3 worker before release. Paid candidate/judge calls are opt-in. No
 cross-model success rate is claimed without completed, recorded runs.
+
+## Local follow-up implementation
+
+📄 Separate commits address tab creation/readiness, worker-safe link extraction
+and active-plan retirement. Regressions were observed failing before their fixes.
+The model-comparison runner is described in [model-evaluations.md](model-evaluations.md).
+It is wired to Judge and tested offline; paid model comparisons and a reload
+smoke of these follow-up changes remain pending before release.
+
+📄 Final local checks: 251 tests passed, 6 opt-in/historical checks skipped;
+extension type-check, changed-file ESLint and production build passed.
+The existing component-eval command passed 5 checks with 3 stub scenarios
+skipped. A paid-run invocation with configuration deliberately removed failed
+at startup as expected; no provider calls were made.
+
+## Not resolved by this patch
+
+- 📄 The initial invalid-key attempt in the supplied trace passed through
+  multiple model-call paths. Authentication fail-fast policy is not changed.
+- 🤖 Model/task interpretation remains a separate quality problem. The new
+  rubric can flag product/site substitution; it does not make arbitrary models
+  reliably resolve ambiguous requests or independently verify every live task.
+- Full single-loop migration and real-browser integration automation remain
+  separate work; neither is implied by these fixes.

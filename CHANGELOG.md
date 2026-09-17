@@ -15,6 +15,19 @@ All notable changes to Browd are documented here. The format is based on
   success events. Cancellation remains distinct from failure.
 - Completion mixed with other tool calls is rejected before dispatch, so
   browser actions cannot run alongside a task's final result.
+- Slow new tabs report their created identity and loading state instead of
+  a misleading creation failure. Agent attention follows owned new tabs;
+  readiness listeners and timers are cleaned on every exit.
+- Page extraction preserves visible link destinations, resolves relative
+  links, works without DOM globals in the worker and follows the agent tab.
+- Active plan checklists are retired on completion, failure and cancellation
+  without marking unexecuted future steps as done.
+
+### Added
+
+- Opt-in multi-model task evaluations with five synthetic scenarios, the real
+  agent graph, deterministic assertions and a separately invoked LLM Judge.
+  Fixture-browser reports do not imply real-browser end-to-end verification.
 
 ## [0.1.16] — 2026-09-13
 
