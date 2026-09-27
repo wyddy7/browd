@@ -19,7 +19,7 @@ export const doneActionSchema: ActionSchema = {
 export const taskCompleteActionSchema: ActionSchema = {
   name: 'task_complete',
   description:
-    'End the entire user task and deliver response verbatim. Call alone, after all other actions have finished. Set success=false if the task is blocked or incomplete and explain what remains. For a completed subgoal with work remaining, return a subgoal summary instead.',
+    'End the entire user task and deliver response verbatim. Call alone, after all other actions have finished. Call it only when the whole user task is answered, or with success=false when the whole task is blocked (explain what blocked it). When only the current subgoal is done and more work remains, do not call it: reply with a subgoal summary instead.',
   schema: z.object({
     intent: z.string().default('').describe('purpose of this action'),
     response: z
@@ -30,7 +30,7 @@ export const taskCompleteActionSchema: ActionSchema = {
     success: z
       .boolean()
       .default(true)
-      .describe('true only if the user task is completed; false for a blocked or incomplete task'),
+      .describe('true only if the user task is completed; false only if the whole task is blocked'),
   }),
 };
 

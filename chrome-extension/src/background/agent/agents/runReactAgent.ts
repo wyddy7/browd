@@ -1,8 +1,10 @@
 /**
  * Unified Plan-and-Execute runtime. Nonterminal subgoal summaries go to the
  * replanner; a typed TaskOutcome ends the graph immediately. task_complete is
- * a returnDirect tool, so neither the inner model nor the replanner rewrites
- * an accepted answer. Tool budgets and recursion limits bound unfinished work.
+ * a returnDirect tool: from the last planned subgoal it ends the task; from an
+ * earlier one it is a proposal the replanner confirms or sends back to work.
+ * An accepted answer is delivered verbatim, never rewritten. Tool budgets and
+ * recursion limits bound unfinished work.
  */
 import { createReactAgent } from '@langchain/langgraph/prebuilt';
 import { MemorySaver, StateGraph, Annotation, START, END } from '@langchain/langgraph';
@@ -23,7 +25,7 @@ import { createUsageTracker } from './usageTracker';
 import { computeStateFingerprint, isInnerRecursionLimitError } from '../guardrails/unifiedStuckDetector';
 import { TabGoneError } from '@src/background/browser/views';
 import { bridgeStreamEvents, type LiveEvent } from './streamBridge';
-import { readTaskOutcome, TaskToolNode, InvalidTaskToolBatchError, type TaskOutcome } from '../taskOutcome';
+import { readTaskCompletion, TaskToolNode, InvalidTaskToolBatchError, type TaskOutcome } from '../taskOutcome';
 
 const logger = createLogger('runReactAgent');
 
@@ -398,7 +400,7 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
     stepIndex: number,
     params: PlanType['taskParameters'],
     fpStart: string | null,
-  ): Promise<{ summary: string; outcome?: TaskOutcome }> => {
+  ): Promise<{ summary: string; outcome?: TaskOutcome; completion?: TaskOutcome }> => {
     const stepSystemPrompt = buildSystemPromptForStep(currentStep, completed, params);
     const agent = createReactAgent({
       llm,
@@ -495,11 +497,14 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
       logger.info(`recursion-limit soft-fail with progress (fp_start≠fp_now) — handing partial to replanner`);
       return { summary: `partial: ${summary}` };
     }
-    const outcome = readTaskOutcome(stepResult.messages);
-    return {
-      summary: outcome?.response ?? extractSubgoalSummary(stepResult.messages) ?? 'no observable result',
-      outcome: outcome ?? undefined,
-    };
+    const read = readTaskCompletion(stepResult.messages);
+    if (!read) return { summary: extractSubgoalSummary(stepResult.messages) ?? 'no observable result' };
+    // An executed task_complete is the executor's claim that the whole task is
+    // done; agentNode decides whether that claim ends the graph. A rejected or
+    // malformed call is a terminal failure.
+    return read.executed
+      ? { summary: read.outcome.response, completion: read.outcome }
+      : { summary: read.outcome.response, outcome: read.outcome };
   };
 
   // ---- StateGraph definition (planner → agent → replanner) ----
@@ -511,6 +516,9 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
       default: () => [],
     }),
     outcome: Annotation<TaskOutcome | null>({ reducer: (current, next) => current ?? next, default: () => null }),
+    // An executed task_complete from a subgoal that still had later subgoals
+    // planned. Not terminal: the replanner reviews it. Reset by every agent step.
+    proposal: Annotation<TaskOutcome | null>({ reducer: (_, next) => next, default: () => null }),
     // T2f-task-params: structured params from the user task, set by
     // the planner once and re-read by every executor step.
     taskParameters: Annotation<PlanType['taskParameters']>({
@@ -597,6 +605,7 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
 
     let summary: string;
     let outcome: TaskOutcome | undefined;
+    let completion: TaskOutcome | undefined;
     try {
       const step = await runReactStep(
         currentStep,
@@ -607,6 +616,7 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
       );
       summary = step.summary;
       outcome = step.outcome;
+      completion = step.completion;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       summary = `failed: ${message}`;
@@ -616,6 +626,16 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
       }
     }
 
+    // task_complete ends the task only from the last planned subgoal. With later
+    // subgoals still planned it is a proposal for the replanner to review: in the
+    // 2026-09-27 Online-Mind2Web run, subgoal agents called it after subgoal 1
+    // with progress reports ("Subgoal complete… Next, …") and those reports
+    // became the final answer.
+    let proposal: TaskOutcome | null = null;
+    if (completion && !outcome) {
+      if (remainingAfter.length === 0) outcome = completion;
+      else proposal = completion;
+    }
     if (isCancelled()) outcome = cancelledOutcome;
     // Accepted completion is final: do not probe the browser or call another model.
     if (!outcome) {
@@ -635,6 +655,7 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
     emitStep(outcome ? outcome.status === 'completed' : stepSucceeded(summary));
     return {
       pastSteps: [[currentStep, summary] as [string, string]],
+      proposal: outcome ? null : proposal,
       ...(outcome ? { outcome } : {}),
     };
   };
@@ -644,6 +665,10 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
     const remaining = state.plan.slice(1);
     const completedBlock = state.pastSteps.map(([s, r]) => `- ${s} → ${r}`).join('\n');
     const remainingBlock = remaining.length ? remaining.join('\n') : '(none)';
+    const proposal = state.proposal;
+    const proposalBlock = proposal
+      ? `\n\nThe executor of the last subgoal called task_complete (success=${proposal.status === 'completed'}) although the plan was not finished. Its proposed final answer:\n<proposed-final-answer>\n${proposal.response}\n</proposed-final-answer>\nIf it fully answers the user task, decide finish with success=true and it is delivered verbatim. If requested work is still undone, decide continue with the subgoals that remain.`
+      : '';
     // T2f-final-fix-7 + T2i-fix1.5: repeated-failure guard. If the
     // last N subgoals all came back as "failed:", finish honestly with
     // partial result rather than replan into the same wall. N is
@@ -672,12 +697,17 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
     try {
       const result = (await replanner.invoke([
         new SystemMessage(
-          `You are the replanner half of a browser-agent loop. After a nonterminal subgoal, decide whether more work is needed (decision="continue", plan, response=null, success=null), or deliver the final result (decision="finish", response, success). The response must contain the requested data, not a statement that you presented it elsewhere. Set success=true only when the user's task is completed; use success=false for blocked or incomplete work and explain what remains. Replan around failed steps rather than blindly retrying.`,
+          `You are the replanner half of a browser-agent loop. After a nonterminal subgoal, decide whether more work is needed (decision="continue", plan, response=null, success=null), or deliver the final result (decision="finish", response, success). The response must contain the requested data, not a statement that you presented it elsewhere. Set success=true only when the user's task is completed; use success=false for blocked or incomplete work and explain what remains. Replan around failed steps rather than blindly retrying. When the executor proposes a final answer before the plan is finished, judge it against the user task: a progress report, a located page, or a note about a next step is not a final answer.`,
         ),
         new HumanMessage(
-          `User task:\n${task}\n\nCompleted so far:\n${completedBlock}\n\nRemaining plan:\n${remainingBlock}\n\nDecide: continue with new plan, or finish with a response to the user.`,
+          `User task:\n${task}\n\nCompleted so far:\n${completedBlock}\n\nRemaining plan:\n${remainingBlock}${proposalBlock}\n\nDecide: continue with new plan, or finish with a response to the user.`,
         ),
       ])) as z.infer<typeof replanSchema>;
+      if (result.decision === 'finish' && result.success === true && proposal?.status === 'completed') {
+        // Confirmed early completion: deliver the executor's answer verbatim.
+        emitPlanChecklist(state.pastSteps.map(([text, summary]) => ({ text, done: stepSucceeded(summary) })));
+        return { outcome: proposal };
+      }
       if (result.decision === 'finish') {
         if (!result.response?.trim() || typeof result.success !== 'boolean') {
           return failed('The replanner ended without a valid task result.');

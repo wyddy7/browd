@@ -13,15 +13,27 @@ export type TaskOutcome = z.infer<typeof taskOutcomeSchema>;
 
 export class InvalidTaskToolBatchError extends Error {}
 
-/** Only an executed terminal tool can supply a completion artifact. */
-export function readTaskOutcome(messages: BaseMessage[]): TaskOutcome | null {
+/**
+ * The first task_complete result in a ReAct transcript. `executed` is true only
+ * for a call that ran and returned a valid artifact; a rejected or malformed
+ * call yields a failed outcome with `executed: false`.
+ */
+export function readTaskCompletion(messages: BaseMessage[]): { outcome: TaskOutcome; executed: boolean } | null {
   for (const message of messages) {
     if (!(message instanceof ToolMessage) || message.name !== 'task_complete') continue;
     const parsed = taskOutcomeSchema.safeParse(message.artifact);
-    if (message.status !== 'error' && parsed.success) return parsed.data;
-    return { status: 'failed', response: 'The task completion tool failed to return a valid result.' };
+    if (message.status !== 'error' && parsed.success) return { outcome: parsed.data, executed: true };
+    return {
+      outcome: { status: 'failed', response: 'The task completion tool failed to return a valid result.' },
+      executed: false,
+    };
   }
   return null;
+}
+
+/** Only an executed terminal tool can supply a completion artifact. */
+export function readTaskOutcome(messages: BaseMessage[]): TaskOutcome | null {
+  return readTaskCompletion(messages)?.outcome ?? null;
 }
 
 /**

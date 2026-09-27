@@ -67,3 +67,19 @@ at startup as expected; no provider calls were made.
   reliably resolve ambiguous requests or independently verify every live task.
 - Full single-loop migration and real-browser integration automation remain
   separate work; neither is implied by these fixes.
+
+## Early completion from a subgoal (2026-09-27)
+
+📄 The Online-Mind2Web run on this branch (`16ebcf1`) showed the opposite
+failure: a subgoal agent called `task_complete` after subgoal 1 with a progress
+report ("Subgoal complete… Next, …", "The monthly forecast remains to be
+opened"), and the report became the final answer — 6 tasks ended early.
+The tool text also told the model to use `success=false` for an *incomplete*
+task, which it did after a finished subgoal.
+
+Contract since then: `task_complete` from the last planned subgoal is terminal
+and verbatim, as above. From an earlier subgoal it is a proposal the replanner
+reviews; a confirmed proposal is still delivered verbatim, a rejected one sends
+the plan on. A malformed or rejected call stays a terminal failure. Regressions:
+`runReactAgent.completion.test.ts` (red on `16ebcf1`). Not covered: a
+single-subgoal plan, or a progress report on the last subgoal.

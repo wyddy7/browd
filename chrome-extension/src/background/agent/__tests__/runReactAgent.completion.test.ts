@@ -80,7 +80,38 @@ function terminalStates(events: RecordedEvent[]) {
 describe('runReactAgent authoritative completion', () => {
   // 2026-09-16: red on c1fc521 for answer overwrite, rejected completion,
   // dead-tab success and a side effect dispatched alongside completion.
-  it('uses the executed task_complete result verbatim, ends the inner loop, and never lets replanning overwrite it', async () => {
+  it('uses a task_complete on the last subgoal verbatim, ends the inner loop, and never calls the replanner', async () => {
+    const { context, events } = makeContext();
+    const answer = '# Extracted result\n\n' + 'Evidence preserved verbatim. '.repeat(120);
+    const llm = new ScriptedChatModel(
+      [
+        new AIMessage({
+          content: '',
+          tool_calls: [{ id: 'complete-1', name: 'task_complete', args: { response: answer } }],
+        }),
+        // If this is consumed, task_complete did not actually stop ReAct.
+        new AIMessage('This extra LLM round must never run.'),
+      ],
+      [plan(), { decision: 'finish', success: true, plan: null, response: 'REPLANNER MUST NOT RUN.' }],
+    );
+
+    const result = await runReactAgent({
+      context,
+      llm: llm as BaseChatModel,
+      actions: [realTaskComplete(context)],
+      task: 'Return the extracted value.',
+    });
+
+    expect(result).toEqual({ finalAnswer: answer, error: null });
+    expect(context.finalAnswer).toBe(answer);
+    expect(llm.chatInvocations).toBe(1);
+    expect(llm.structuredInvocations).toBe(1);
+    expect(terminalStates(events)).toEqual([
+      expect.objectContaining({ state: ExecutionState.TASK_OK, details: answer }),
+    ]);
+  });
+
+  it('publishes an early task_complete verbatim once the replanner confirms it, never the replanner text', async () => {
     const { context, events } = makeContext();
     const answer = '# Extracted result\n\n' + 'Evidence preserved verbatim. '.repeat(120);
     const llm = new ScriptedChatModel(
@@ -108,7 +139,8 @@ describe('runReactAgent authoritative completion', () => {
     expect(result).toEqual({ finalAnswer: answer, error: null });
     expect(context.finalAnswer).toBe(answer);
     expect(llm.chatInvocations).toBe(1);
-    expect(llm.structuredInvocations).toBe(1);
+    // The planner, then the replanner reviewing the early completion.
+    expect(llm.structuredInvocations).toBe(2);
     expect(terminalStates(events)).toEqual([
       expect.objectContaining({ state: ExecutionState.TASK_OK, details: answer }),
     ]);
@@ -313,6 +345,80 @@ describe('runReactAgent authoritative completion', () => {
     });
     expect(result).toEqual({ finalAnswer: answer, error: null });
     expect(llm.chatInvocations).toBe(2);
+    expect(llm.structuredInvocations).toBe(2);
+    expect(terminalStates(events).map(event => event.state)).toEqual([ExecutionState.TASK_OK]);
+  });
+
+  // 2026-09-27 Online-Mind2Web baseline (P0-1): the subgoal agent called
+  // task_complete after subgoal 1 of 2 with a progress report, and that
+  // report became the task's final answer. Red on 16ebcf1.
+  it('does not let a subgoal task_complete end the task while later subgoals remain', async () => {
+    const { context, events } = makeContext();
+    const progress =
+      'Subgoal complete: Florida City, FL is selected in the search suggestions. Next, open the monthly forecast.';
+    const answer = 'Monthly forecast for Florida City, FL: October highs 86–88°F, lows 72–75°F.';
+    const llm = new ScriptedChatModel(
+      [
+        new AIMessage({
+          content: '',
+          tool_calls: [{ id: 'complete-1', name: 'task_complete', args: { response: progress } }],
+        }),
+        new AIMessage({
+          content: '',
+          tool_calls: [{ id: 'complete-2', name: 'task_complete', args: { response: answer } }],
+        }),
+      ],
+      [
+        { ...plan(), plan: ['Search for Florida City', 'Open its monthly forecast'] },
+        { decision: 'continue', plan: ['Open its monthly forecast'], response: null, success: null },
+      ],
+    );
+
+    const result = await runReactAgent({
+      context,
+      llm: llm as BaseChatModel,
+      actions: [realTaskComplete(context)],
+      task: 'Show me the monthly weather forecast for Florida City.',
+    });
+
+    expect(result).toEqual({ finalAnswer: answer, error: null });
+    expect(llm.chatInvocations).toBe(2);
+    expect(llm.structuredInvocations).toBe(2);
+    expect(terminalStates(events)).toEqual([
+      expect.objectContaining({ state: ExecutionState.TASK_OK, details: answer }),
+    ]);
+    expect(events.some(event => event.details === progress)).toBe(false);
+  });
+
+  it('routes a subgoal task_complete(success=false) to the replanner while later subgoals remain', async () => {
+    const { context, events } = makeContext();
+    const partial = 'The highest-prize competition is ARC Prize 2026. The next step is to open its Code tab.';
+    const answer = 'ARC Prize 2026 ($850,000); most-voted notebook: "ARC baseline" (1,204 votes).';
+    const llm = new ScriptedChatModel(
+      [
+        new AIMessage({
+          content: '',
+          tool_calls: [{ id: 'complete-1', name: 'task_complete', args: { response: partial, success: false } }],
+        }),
+        new AIMessage({
+          content: '',
+          tool_calls: [{ id: 'complete-2', name: 'task_complete', args: { response: answer } }],
+        }),
+      ],
+      [
+        { ...plan(), plan: ['Find the highest-prize competition', 'Find its most-voted code'] },
+        { decision: 'continue', plan: ['Find its most-voted code'], response: null, success: null },
+      ],
+    );
+
+    const result = await runReactAgent({
+      context,
+      llm: llm as BaseChatModel,
+      actions: [realTaskComplete(context)],
+      task: 'Find the most-voted code in the highest-prize competition.',
+    });
+
+    expect(result).toEqual({ finalAnswer: answer, error: null });
     expect(llm.structuredInvocations).toBe(2);
     expect(terminalStates(events).map(event => event.state)).toEqual([ExecutionState.TASK_OK]);
   });

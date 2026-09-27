@@ -11,6 +11,10 @@ All notable changes to Browd are documented here. The format is based on
 - Completed agent answers are delivered verbatim: `task_complete` now stops
   the inner loop and bypasses replanning, preventing repeated completion
   calls and replacement of requested data with a generic acknowledgement.
+- A subgoal can no longer end the whole task early. `task_complete` called
+  while later subgoals are still planned is reviewed by the replanner, which
+  either confirms it (delivered verbatim) or continues the plan. Previously a
+  progress report such as "Subgoal complete… Next, …" became the final answer.
 - Failed and incomplete tasks, lost tabs, and exhausted plans no longer emit
   success events. Cancellation remains distinct from failure.
 - Completion mixed with other tool calls is rejected before dispatch, so

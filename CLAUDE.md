@@ -146,9 +146,14 @@ separate `visionMode` toggle:
   returns a validated `ActionResult` (`isDone`, `success`, verbatim answer),
   and becomes a LangGraph `returnDirect` tool with a typed result artifact.
   `TaskOutcome` is the graph's only terminal state. The agent routes directly
-  to END when it exists; replanning is only for nonterminal subgoals. Never
-  infer completion from model tool-call arguments, text prefixes, a nonempty
-  answer, or an exhausted plan. Failed/incomplete results emit TASK_FAIL;
+  to END when it exists; replanning is only for nonterminal subgoals.
+  `task_complete` from the **last** planned subgoal is terminal. From an
+  earlier subgoal it is a `proposal`: the replanner sees it and either
+  confirms it (`finish` + `success=true` → the proposal, verbatim) or
+  continues the plan. Reason: on the 2026-09-27 Online-Mind2Web run subgoal
+  agents called it after subgoal 1 with progress reports and ended 6 tasks
+  early. Never infer completion from model tool-call arguments, text
+  prefixes, a nonempty answer, or an exhausted plan. Failed/incomplete results emit TASK_FAIL;
   user cancellation emits TASK_CANCEL. Completion must be a standalone tool
   call: mixed batches are rejected before any tool executes. Offline tests
   exercise the actual LangGraph runtime with a scripted provider transport.
