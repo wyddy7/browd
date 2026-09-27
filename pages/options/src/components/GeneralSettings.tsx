@@ -8,6 +8,7 @@ import {
   agentModelStore,
   AgentNameEnum,
   modelSupportsVision,
+  preloadOpenRouterModels,
   DEFAULT_GENERAL_SETTINGS,
 } from '@extension/storage';
 import { ToggleSwitch, ToggleTheme } from '@extension/ui';
@@ -47,8 +48,9 @@ export const GeneralSettings = ({ onAppearanceThemeChange }: GeneralSettingsProp
     // runtime. agentModelStore has liveUpdate; the Options page is
     // also the only place where it is mutated, so a single read on
     // mount is enough — re-render happens via the model select itself.
-    agentModelStore
-      .getAgentModel(AgentNameEnum.Navigator)
+    // The capability check reads the OpenRouter catalog cache first.
+    preloadOpenRouterModels()
+      .then(() => agentModelStore.getAgentModel(AgentNameEnum.Navigator))
       .then(model => {
         setNavigatorSupportsVision(modelSupportsVision(model?.provider ?? '', model?.modelName ?? ''));
       })
