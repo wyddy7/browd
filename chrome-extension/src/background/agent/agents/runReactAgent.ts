@@ -174,9 +174,12 @@ id: ${browserState.tabId}, url: ${browserState.url}, title: ${browserState.title
 id: ${browserState.tabId}, url: ${browserState.url}, title: ${browserState.title}
 </active-tab>`;
 
+  const stateNote = browserState.stateNote
+    ? `<page-state-warning>${browserState.stateNote}</page-state-warning>\n`
+    : '';
   const text = `[Browser state @ ${timeStr}]
 ${agentTabHeader}
-${userTabsBlock}
+${stateNote}${userTabsBlock}
 ${pageTextSection}Interactive elements (in your tab):
 ${wrapped || '(empty page)'}
 ${formsSection ? `\n${formsSection}\n` : ''}

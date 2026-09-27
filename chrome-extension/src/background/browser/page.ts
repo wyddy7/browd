@@ -28,6 +28,7 @@ import {
 import { createLogger } from '@src/background/log';
 import { ClickableElementProcessor } from './dom/clickable/service';
 import { isUrlAllowed } from './util';
+import { STATE_BUILD_DEADLINE_MS, withStateDeadline } from './stateDeadline';
 
 const logger = createLogger('Page');
 
@@ -378,7 +379,16 @@ export default class Page {
       return build_initial_state(this._tabId);
     }
     await this.waitForPageAndFramesLoad();
-    const updatedState = await this._updateState(useVision, -1, signal);
+    const updatedState = await withStateDeadline(
+      deadlineSignal => this._updateState(useVision, -1, deadlineSignal),
+      signal,
+    );
+    if (!updatedState) {
+      logger.warning(
+        `getState: DOM build on tab ${this._tabId} exceeded ${STATE_BUILD_DEADLINE_MS} ms; serving URL/title only`,
+      );
+      return this._degradedState();
+    }
 
     // Find out which elements are new
     // Do this only if url has not changed
@@ -407,6 +417,24 @@ export default class Page {
     this._cachedState = updatedState;
 
     return updatedState;
+  }
+
+  /**
+   * URL and title only, with no interactive elements, so a stale selector
+   * map can never route a click to the wrong element. Not cached: the next
+   * getState tries a full build again.
+   */
+  private async _degradedState(): Promise<PageState> {
+    let title = '';
+    try {
+      title = (await chrome.tabs.get(this._tabId)).title ?? '';
+    } catch {
+      // tab metadata is best effort; the URL is enough to act on
+    }
+    return {
+      ...build_initial_state(this._tabId, this._puppeteerPage?.url() || this._state.url, title),
+      stateNote: `Reading this page's structure did not finish within ${STATE_BUILD_DEADLINE_MS / 1000} s (a heavy or still-loading page), so interactive elements are unavailable for this step. Look again after a short wait, scroll, take a screenshot if that tool is available, or go to a more specific URL.`,
+    };
   }
 
   async _updateState(useVision = false, focusElement = -1, signal?: AbortSignal): Promise<PageState> {
