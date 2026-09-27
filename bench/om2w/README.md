@@ -19,7 +19,7 @@ trajectories with the benchmark's own judge, WebJudge.
 pnpm build                                   # from the repo root
 cd bench/om2w && npm install && npx playwright install chromium
 printf 'OPENROUTER_API_KEY=...\nBENCH_MODEL=openai/gpt-6-luna\n' > ../../.env.bench.local   # gitignored
-node run.mjs --mode site                     # or --mode as-shipped; --only <ids>; --sw-log for worker console
+node run.mjs --mode site                     # or --mode as-shipped; --only <ids>; --sw-log; --headed (default is headless)
 uv run --with openai --with pillow python judge.py ../../bench-runs/<run> --model openai/gpt-6-sol
 python3 analyze.py ../../bench-runs/<run>
 ```

@@ -26,7 +26,10 @@ const OUT = path.resolve(HERE, arg('out', `../../bench-runs/om2w-${new Date().to
 const MAX_STEPS = Number(arg('max-steps', 30));
 const TIMEOUT_MS = Number(arg('timeout-min', 8)) * 60_000;
 const BUDGET = Number(arg('budget', 3.5));
-const HEADLESS = Boolean(arg('headless', false));
+// Headless by default so no window steals focus / switches macOS Spaces. The full Chromium build
+// (channel 'chromium') runs new headless, which loads extensions; --headed shows a window, which
+// some anti-bot walls treat more kindly (the 2026-09-27 benchmark ran headed).
+const HEADLESS = !arg('headed', false);
 // as-shipped = benchmark task text verbatim; site = one sentence naming the start site (the usual OM2W harness setup)
 const MODE = arg('mode', 'as-shipped');
 const SW_LOG = Boolean(arg('sw-log', false)); // capture the extension service-worker console via CDP (debug runs)
@@ -104,6 +107,7 @@ async function runTask(task, env) {
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'browd-bench-'));
   const ctx = await chromium.launchPersistentContext(profile, {
     headless: HEADLESS,
+    channel: 'chromium',
     viewport: { width: 1280, height: 900 },
     args: [
       `--disable-extensions-except=${EXT}`,
