@@ -50,6 +50,34 @@ Production build output is `dist/`.
 4. Load unpacked extension from `dist/`.
 5. After rebuilding, reload the extension card and reopen the side panel.
 
+### Automated QA — prefer this to clicking by hand
+
+`bench/om2w/run.mjs` drives the real built extension with no human in the loop:
+`node bench/om2w/run.mjs --task "<task>" --url <start page>` runs one task in a fresh
+Chromium profile and writes the answer, every tool call, the plan, a screenshot per
+step and the event log under `bench-runs/`. The same runner does the Online-Mind2Web
+benchmark (see Commands). How it works, and the traps already paid for:
+
+- Playwright `launchPersistentContext` with `--load-extension=dist` (MV3 workers do not
+  survive ephemeral contexts). Headed, window pushed off-screen: headless and fresh
+  bot-fingerprinted profiles trip more anti-bot walls. Uses Playwright's own Chromium.
+- Write `llm-api-keys` / `agent-models` / `general-settings` / `firewall-settings` into
+  `chrome.storage.local` from an extension page — the worker handle Playwright returns
+  has no `chrome.storage`.
+- The background accepts the `side-panel-connection` port only from the exact
+  `side-panel/index.html` URL: open it as a tab, wrap `chrome.runtime.connect` via
+  `addInitScript` to tap the React app's own port, and post `new_task` with an explicit
+  `tabId` (the side panel's "active tab" would be itself).
+- HITL requests arrive as runtime messages `browd:hitl:request`; answer with
+  `{type:'hitl_decision', id, decision}` on the port. Automated runs always reject.
+- Service-worker console: `--sw-log` adds `--remote-debugging-port` and reads
+  `Runtime.consoleAPICalled` over the worker's CDP WebSocket — that is how the
+  `_updateState` hang was pinned.
+- Deny `google.com` in the firewall for automated runs: repeated agent searches from one
+  IP hit Google's captcha wall within minutes.
+- Result fields worth grepping: `terminal_state`, `premature_stop_suspect` (answer text
+  says work remains — the signature of the subgoal-ends-task bug), `tools`, `seconds`.
+
 `pnpm dev` can be used for watch builds, but background/content-script changes may still require extension reload.
 
 ## Agent Runtime — read before touching `chrome-extension/src/background/agent/**`

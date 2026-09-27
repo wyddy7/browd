@@ -2,8 +2,9 @@
 // Playwright Chromium, configures it through chrome.storage, drives one task per
 // fresh profile through the side-panel port, and writes WebJudge-format output:
 //   <out>/<task_id>/result.json + trajectory/<n>.png
-// Usage: node run.mjs [--only id1,id2] [--limit N] [--max-steps 30]
+// Usage: node run.mjs [--only id1,id2 (full ids or 8-char prefixes)] [--limit N] [--max-steps 30]
 //                     [--timeout-min 8] [--budget 3.5] [--out dir] [--headless]
+//        node run.mjs --task "<any task>" --url <start url>   # ad-hoc manual-QA replacement, no judge needed
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -115,6 +116,7 @@ async function runTask(task, env) {
   const actions = [];
   const hitl = [];
   const tools = {};
+  let lastPlan = [];
   const usage = { in: 0, out: 0, cacheRead: 0 };
   let shot = 0;
   let final = { state: 'harness.error', details: '' };
@@ -236,6 +238,12 @@ async function runTask(task, env) {
         }
         const details = m.data && m.data.details;
         log.push({ t: Date.now() - t0, actor: m.actor, state: m.state, step: m.data && m.data.step, details });
+        if (m.state === 'step.ok' && typeof details === 'string' && details.startsWith('{"type":"plan"')) {
+          try {
+            const items = JSON.parse(details).items || [];
+            if (items.length) lastPlan = items; // the terminal event retires the plan with []
+          } catch {}
+        }
         if (m.state === 'task.usage') {
           try {
             const u = JSON.parse(details);
@@ -288,6 +296,11 @@ async function runTask(task, env) {
     fs.rmSync(profile, { recursive: true, force: true });
   }
   // Upper bound (tracker's inputTokens may already include cached reads); the key endpoint is authoritative.
+  // Signature of the "subgoal ended the whole task" bug, checkable without a judge. Validated on the
+  // 2026-09-27 baseline: the answer text flags 5 of the 6 judge-confirmed premature stops and no real
+  // success. Plan progress is NOT a signal — Browd often marks only subgoal 1 done on genuine successes.
+  const planDone = lastPlan.filter(i => i.done).length;
+  const answerSaysUnfinished = /subgoal complete|remains to be|remaining (task|work|step)|next step/i.test(final.details || '');
   const estCost = (usage.in * PRICE.in + usage.cacheRead * PRICE.cached + usage.out * PRICE.out) / 1e6;
   const result = {
     task_id: task.task_id,
@@ -305,6 +318,9 @@ async function runTask(task, env) {
     tokens: usage,
     est_cost_usd: Number(estCost.toFixed(4)),
     screenshots: shot,
+    plan_done: planDone,
+    plan_total: lastPlan.length,
+    premature_stop_suspect: answerSaysUnfinished,
   };
   fs.writeFileSync(path.join(dir, 'result.json'), JSON.stringify(result, null, 1));
   fs.writeFileSync(path.join(dir, 'events.json'), JSON.stringify(log, null, 1));
@@ -314,7 +330,13 @@ async function runTask(task, env) {
 const env = loadEnv();
 let tasks = JSON.parse(fs.readFileSync(path.join(HERE, 'subset30.json'), 'utf8'));
 const only = arg('only', null);
-if (only) tasks = tasks.filter(t => only.split(',').includes(t.task_id));
+if (only) tasks = tasks.filter(t => only.split(',').some(id => t.task_id.startsWith(id)));
+const adhoc = arg('task', null);
+if (adhoc) {
+  const url = arg('url', null);
+  if (!url) throw new Error('--task needs --url (the start page)');
+  tasks = [{ task_id: `adhoc-${Date.now()}`, confirmed_task: adhoc, website: url, level: 'adhoc' }];
+}
 const limit = arg('limit', null);
 if (limit) tasks = tasks.slice(0, Number(limit));
 fs.mkdirSync(OUT, { recursive: true });
@@ -330,6 +352,6 @@ for (const task of tasks) {
   const r = await runTask(task, env);
   const after = await keyUsage(env.key);
   console.log(
-    `${task.level.padEnd(6)} ${r.terminal_state.padEnd(15)} ${String(r.seconds).padStart(4)}s acts=${r.action_history.length} tools=${JSON.stringify(r.tools)} shots=${r.screenshots} est=$${r.est_cost_usd} key=$${(after - used).toFixed(4)} | ${task.confirmed_task.slice(0, 70)}`,
+    `${task.level.padEnd(6)} ${r.terminal_state.padEnd(15)} ${String(r.seconds).padStart(4)}s acts=${r.action_history.length} tools=${JSON.stringify(r.tools)} shots=${r.screenshots} est=$${r.est_cost_usd} key=$${(after - used).toFixed(4)} plan=${r.plan_done}/${r.plan_total}${r.premature_stop_suspect ? ' PREMATURE_STOP?' : ''} | ${task.confirmed_task.slice(0, 70)}`,
   );
 }

@@ -24,6 +24,12 @@ uv run --with openai --with pillow python judge.py ../../bench-runs/<run> --mode
 python3 analyze.py ../../bench-runs/<run>
 ```
 
+Ad-hoc: `node run.mjs --task "<any task>" --url <start page>` — one task, no judge; read
+`result.json` (answer, tools, `premature_stop_suspect`) and the screenshots.
+
+Regression without a judge: rerun only the tasks that showed a bug (`--only <8-char id prefixes>`)
+and check the field that encodes it, e.g. `premature_stop_suspect` for the subgoal-ends-task bug.
+
 Modes: `as-shipped` sends the task text verbatim; `site` appends one sentence naming the start site
 ("Start at <url> (already open in your tab) and complete the task on that website"), which is how
 Online-Mind2Web harnesses usually frame a task.
