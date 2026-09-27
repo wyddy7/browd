@@ -13,6 +13,8 @@ import type { ChatResult } from '@langchain/core/outputs';
 export class ScriptedChatModel extends BaseChatModel {
   chatInvocations = 0;
   structuredInvocations = 0;
+  /** Messages each planner/replanner call received, in call order. */
+  structuredInputs: unknown[] = [];
 
   constructor(
     private readonly chatResponses: AIMessage[],
@@ -23,8 +25,9 @@ export class ScriptedChatModel extends BaseChatModel {
     // level. This test transport always returns parsed data, so replace the
     // provider boundary once with the inherited overload type intact.
     this.withStructuredOutput = (() =>
-      RunnableLambda.from(async () => {
+      RunnableLambda.from(async (input: unknown) => {
         this.structuredInvocations += 1;
+        this.structuredInputs.push(input);
         const next = this.structuredResponses.shift();
         if (!next) throw new Error('unexpected structured-output invocation');
         return next;

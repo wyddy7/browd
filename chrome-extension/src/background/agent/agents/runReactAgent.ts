@@ -530,6 +530,11 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
     }),
   });
 
+  // Planner and replanner resolve "tomorrow" / "next week" into absolute
+  // dates for the subgoals; without today's date they invented one
+  // (2026-09-27: "tomorrow" became "May 7, 2026" on Ryanair).
+  const todayLine = `Current date: ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}.`;
+
   const plannerNode = async () => {
     const messages: BaseMessage[] = [
       new SystemMessage(
@@ -547,7 +552,9 @@ Examples of bad (DO NOT WRITE):
 - "Search the requested term" — term is missing
 - "Read the README" without saying which repo
 
-Subgoals should be observable steps — "open X", "find Y on the page", "compare Z". Avoid micro-actions like "wait" or "scroll a bit". If the request is trivial (1-2 actions) emit a short plan; do not pad. If the request is unclear, plan around the most plausible interpretation rather than asking the user.`,
+Subgoals should be observable steps — "open X", "find Y on the page", "compare Z". Avoid micro-actions like "wait" or "scroll a bit". If the request is trivial (1-2 actions) emit a short plan; do not pad. If the request is unclear, plan around the most plausible interpretation rather than asking the user.
+
+${todayLine} Write relative dates from the request ("tomorrow", "next week") as absolute dates computed from it.`,
       ),
       ...priorMessagesToBaseMessages(priorMessages ?? []),
       new HumanMessage(task),
@@ -703,7 +710,7 @@ Subgoals should be observable steps — "open X", "find Y on the page", "compare
           `You are the replanner half of a browser-agent loop. After a nonterminal subgoal, decide whether more work is needed (decision="continue", plan, response=null, success=null), or deliver the final result (decision="finish", response, success). The response must contain the requested data, not a statement that you presented it elsewhere. Set success=true only when the user's task is completed; use success=false for blocked or incomplete work and explain what remains. Replan around failed steps rather than blindly retrying. When the executor proposes a final answer before the plan is finished, judge it against the user task: a progress report, a located page, or a note about a next step is not a final answer.`,
         ),
         new HumanMessage(
-          `User task:\n${task}\n\nCompleted so far:\n${completedBlock}\n\nRemaining plan:\n${remainingBlock}${proposalBlock}\n\nDecide: continue with new plan, or finish with a response to the user.`,
+          `${todayLine}\n\nUser task:\n${task}\n\nCompleted so far:\n${completedBlock}\n\nRemaining plan:\n${remainingBlock}${proposalBlock}\n\nDecide: continue with new plan, or finish with a response to the user.`,
         ),
       ])) as z.infer<typeof replanSchema>;
       if (result.decision === 'finish' && result.success === true && proposal?.status === 'completed') {

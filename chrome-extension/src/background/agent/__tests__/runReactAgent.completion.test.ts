@@ -423,6 +423,24 @@ describe('runReactAgent authoritative completion', () => {
     expect(terminalStates(events).map(event => event.state)).toEqual([ExecutionState.TASK_OK]);
   });
 
+  // 2026-09-27: without today's date the replanner turned "tomorrow" into
+  // "May 7, 2026" on the Ryanair task.
+  it("gives the planner and the replanner today's date", async () => {
+    const { context } = makeContext();
+    const llm = new ScriptedChatModel(
+      [new AIMessage('Found the search form.')],
+      [plan(), { decision: 'finish', success: true, plan: null, response: 'Flights listed.' }],
+    );
+
+    await runReactAgent({ context, llm: llm as BaseChatModel, actions: [], task: 'Find a flight for tomorrow.' });
+
+    const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    const text = (input: unknown) => JSON.stringify(input);
+    expect(llm.structuredInputs).toHaveLength(2);
+    expect(text(llm.structuredInputs[0])).toContain(today);
+    expect(text(llm.structuredInputs[1])).toContain(today);
+  });
+
   it('fails closed when the replanner exhausts the plan without a completed task result', async () => {
     const { context, events } = makeContext();
     const llm = new ScriptedChatModel(
