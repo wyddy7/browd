@@ -47,3 +47,9 @@ store-assets/
 promo.md
 
 output/
+
+# local benchmark secrets and outputs
+.env.bench.local
+bench-runs/
+!bench/om2w/**/*.py
+__pycache__/
