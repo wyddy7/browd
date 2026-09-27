@@ -40,7 +40,6 @@ import {
 } from './schemas';
 import { webFetchMarkdown, webSearch, extractActiveTabAsMarkdown } from '../tools/webTools';
 import { findFieldByLabel } from '@src/background/browser/dom/fieldFinder';
-import { makeActionError } from '../agentErrors';
 import type { HITLRequest } from '../hitl/types';
 import { z } from 'zod';
 import { createLogger } from '@src/background/log';
@@ -306,15 +305,13 @@ export class ActionBuilder {
     }, doneActionSchema);
     actions.push(done);
 
-    // T2w — unified-mode termination sentinel. The handler is pure:
-    // it returns an ActionResult whose extractedContent carries a
-    // `TASK_COMPLETE: ` prefix. runReactAgent inspects the ToolMessage
-    // stream for that prefix and routes the StateGraph directly to END
-    // via `state.response`, bypassing the replanner. No HITL gate, no
-    // tab-isolation check — terminal signal only.
+    // The adapter turns this validated ActionResult into a terminal
+    // artifact. The answer is delivered verbatim, without another LLM call.
     const taskComplete = new Action(async (input: z.infer<typeof taskCompleteActionSchema.schema>) => {
       return new ActionResult({
-        extractedContent: `TASK_COMPLETE: ${input.response}`,
+        isDone: true,
+        success: input.success,
+        extractedContent: input.response,
         includeInMemory: true,
       });
     }, taskCompleteActionSchema);
@@ -464,8 +461,11 @@ export class ActionBuilder {
     const openTab = new Action(async (input: z.infer<typeof openTabActionSchema.schema>) => {
       const intent = input.intent || t('act_openTab_start', [input.url]);
       this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_START, intent);
-      await this.context.browserContext.openTab(input.url);
-      const msg = t('act_openTab_ok', [input.url]);
+      const created = await this.context.browserContext.openTab(input.url);
+      const msg =
+        `${t('act_openTab_ok', [input.url])} Tab ID: ${created.tabId}; status: ${created.status}.` +
+        (created.status === 'loading' ? ' Tab already exists; wait or inspect it, do not repeat open_tab.' : '') +
+        (created.detail ? ` ${created.detail}` : '');
       this.context.emitEvent(Actors.NAVIGATOR, ExecutionState.ACT_OK, msg);
       return new ActionResult({ extractedContent: msg, includeInMemory: true });
     }, openTabActionSchema);
@@ -1273,7 +1273,8 @@ export class ActionBuilder {
     const extractMd = new Action(async (input: z.infer<typeof extractPageMarkdownActionSchema.schema>) => {
       // T2f-untrusted-wrap: extracted page markdown is also third-
       // party content; wrap it before showing to the LLM.
-      const result = await extractActiveTabAsMarkdown({ maxChars: input.maxChars });
+      const page = await this.context.browserContext.getCurrentPage();
+      const result = await extractActiveTabAsMarkdown({ maxChars: input.maxChars, tabId: page.tabId });
       if (!result.ok) {
         return new ActionResult({ error: `extract_page_as_markdown failed: ${result.errorType}: ${result.message}` });
       }

@@ -160,10 +160,12 @@ have rather than thrashing.
 
 # Termination
 
-When you have the answer the user asked for, call \`task_complete(response='your answer here')\`. This is the only correct way to finish. Don't just write the answer as text — call the tool.
+When the entire user task is complete, call \`task_complete(response='your answer here', success=true)\` as a standalone tool call. When the whole task is blocked (the site refuses access, a login wall or CAPTCHA you cannot pass), call it with \`success=false\` and explain the partial result and what blocked it.
 
-The runtime detects termination from that tool call and returns
-\`response\` to the user. No further tools run.
+Completing only a subgoal is different: do not call \`task_complete\`; return the subgoal's findings as text so the next step can continue. A located page, a filled form, or "next, do X" is a subgoal result, not a task result.
+
+On the last planned subgoal the runtime returns \`response\` verbatim to the user.
+Called earlier, it is reviewed against the user task first and delivered verbatim only if it answers it.
 
 When you write the \`response\` argument to \`task_complete\`:
 - Cite specific evidence inline. Example: "DeepSeek V3.2 — \\$0.28/1M

@@ -20,7 +20,7 @@
  * `invoke()` does. The StateGraph root emits an `on_chain_end` whose
  * `data.output` carries the full Annotation.Root shape — for
  * runReactAgent that means `pastSteps` plus `plan` / `taskParameters`
- * / `response`. We detect the root by SHAPE (not by name), which is
+ * / `outcome`. We detect the root by SHAPE (not by name), which is
  * stable across LangGraph version renames: any chain-end output that
  * has `pastSteps` (the marker key set by the agent node every round)
  * is our root. Additional defensive fallback: last seen object-typed
@@ -46,7 +46,7 @@ const SURFACED_NODE_NAMES = new Set(['planner', 'agent', 'replanner']);
  * Shape-based detection of the root StateGraph output. The runReactAgent
  * StateGraph annotation always carries `pastSteps` (assigned by the
  * agent node every round); inner node outputs (planner emits
- * `{plan, taskParameters}`, replanner emits `{plan}` or `{response}`)
+ * `{plan, taskParameters}`, replanner emits `{plan}` or `{outcome}`)
  * do NOT carry it. This avoids hard-coding `'LangGraph'` as the root
  * name, which the advisor flagged as a silent-break risk if LangGraph
  * ever renames it.

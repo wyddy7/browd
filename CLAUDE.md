@@ -27,6 +27,11 @@ pnpm -F chrome-extension test
 pnpm zip
 ```
 
+Task/model comparison: see `docs/model-evaluations.md`. The opt-in
+`pnpm -F chrome-extension test:eval:models` runs real models + Judge against
+the real graph with a fixture browser. Normal tests stay offline. Judge is
+not a runtime gate; hard assertions cannot be overridden by its verdict.
+
 Live-web benchmark (Online-Mind2Web subset, graded by the official WebJudge):
 `bench/om2w/README.md`. Needs a built `dist/` and an OpenRouter key in the
 gitignored `.env.bench.local`; run output lands in the gitignored `bench-runs/`.
@@ -137,14 +142,34 @@ separate `visionMode` toggle:
   Until migration ships, do not add new guards that try to "detect"
   a silent inner-step exit — that signal is the framework's
   termination, not a stall.
+- **Authoritative completion.** `task_complete` runs through `Action.call`,
+  returns a validated `ActionResult` (`isDone`, `success`, verbatim answer),
+  and becomes a LangGraph `returnDirect` tool with a typed result artifact.
+  `TaskOutcome` is the graph's only terminal state. The agent routes directly
+  to END when it exists; replanning is only for nonterminal subgoals.
+  `task_complete` from the **last** planned subgoal is terminal. From an
+  earlier subgoal it is a `proposal`: the replanner sees it and either
+  confirms it (`finish` + `success=true` → the proposal, verbatim) or
+  continues the plan. Reason: on the 2026-09-27 Online-Mind2Web run subgoal
+  agents called it after subgoal 1 with progress reports and ended 6 tasks
+  early. Never infer completion from model tool-call arguments, text
+  prefixes, a nonempty answer, or an exhausted plan. Failed/incomplete results emit TASK_FAIL;
+  user cancellation emits TASK_CANCEL. Completion must be a standalone tool
+  call: mixed batches are rejected before any tool executes. Offline tests
+  exercise the actual LangGraph runtime with a scripted provider transport.
 - **Tab isolation contract (T2f-tab-iso).** In `agentMode='unified'`
-  the Executor opens an `agentTab` via `BrowserContext.openAgentTab()`
-  on TASK_START. `getCurrentPage()` resolves to that tab even if
+  the Executor anchors the user's active tab via `BrowserContext.openAgentTab()`
+  on TASK_START and groups it. `getCurrentPage()` resolves to that tab even if
   the user switches focus. State message renders `<agent-tab>` (full
   DOM) and `<user-tabs>` (id/url/title only, marked read-only).
   Cross-over to a user tab happens only via `take_over_user_tab(tabId, reason)`
   Action — explicit, never implicit. Title prefix `[Browd] ` is
   injected so the user sees which tab is the agent's.
+  - `openTab` separates creation from readiness: once created, it returns
+    the tab ID and `ready`/`loading`/`unavailable`, never a generic retryable
+    creation failure. Owned new tabs become the agent's attention target;
+    debugger attachment is lazy. Grouping failure preserves the old anchor.
+    `tabReadiness.ts` owns event/timer cleanup on all exit paths.
   - **Side-effect new-tab handling (fixed 2026-05-17, commit `094f56f`).**
     `click_element` / `click_at` / `type_at` previously auto-switched
     to any new tab spawned by the click (target="_blank", window.open).
@@ -190,6 +215,8 @@ separate `visionMode` toggle:
   agent node emits `inProgress: true` for the current subgoal at
   start, `done: true` at end. `currentPhaseRef = 'thinking'` is
   set on TASK_START so messages get phase-tagged at append time.
+  Terminal outcomes retire the active pinned checklist with an empty plan
+  event. Never mark unexecuted future subgoals done to make a counter reach N/N.
 - **Markdown is the LLM output contract.** Chat content renders
   through `react-markdown` (links open in new tab, code blocks
   on soft surface, no hard borders). When asking the LLM for a
@@ -237,6 +264,10 @@ provides them; the actual SW does not.
   markdown prefer Jina Reader (`https://r.jina.ai/<url>`) — server
   renders + extracts, no DOM in SW. Local fallback in
   `chrome-extension/src/background/agent/tools/webTools.ts`.
+  Pass a parsed node, not an HTML string, into Turndown: its browser build
+  otherwise calls global `document`. Worker regressions must exercise that
+  distribution, not its Node DOM fallback. Visible-text extraction includes
+  visible link destinations and targets the agent page, not user focus.
 - **No `node:async_hooks`.** `@langchain/langgraph` calls
   `new AsyncLocalStorage()` at module load. Vite alias redirects
   `node:async_hooks` → `chrome-extension/src/background/shims/asyncLocalStorage.ts`

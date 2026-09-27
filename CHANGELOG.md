@@ -4,6 +4,35 @@ All notable changes to Browd are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Completed agent answers are delivered verbatim: `task_complete` now stops
+  the inner loop and bypasses replanning, preventing repeated completion
+  calls and replacement of requested data with a generic acknowledgement.
+- A subgoal can no longer end the whole task early. `task_complete` called
+  while later subgoals are still planned is reviewed by the replanner, which
+  either confirms it (delivered verbatim) or continues the plan. Previously a
+  progress report such as "Subgoal complete… Next, …" became the final answer.
+- Failed and incomplete tasks, lost tabs, and exhausted plans no longer emit
+  success events. Cancellation remains distinct from failure.
+- Completion mixed with other tool calls is rejected before dispatch, so
+  browser actions cannot run alongside a task's final result.
+- Slow new tabs report their created identity and loading state instead of
+  a misleading creation failure. Agent attention follows owned new tabs;
+  readiness listeners and timers are cleaned on every exit.
+- Page extraction preserves visible link destinations, resolves relative
+  links, works without DOM globals in the worker and follows the agent tab.
+- Active plan checklists are retired on completion, failure and cancellation
+  without marking unexecuted future steps as done.
+
+### Added
+
+- Opt-in multi-model task evaluations with five synthetic scenarios, the real
+  agent graph, deterministic assertions and a separately invoked LLM Judge.
+  Fixture-browser reports do not imply real-browser end-to-end verification.
+
 ## [0.1.16] — 2026-09-13
 
 ### Changed
