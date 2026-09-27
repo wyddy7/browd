@@ -93,6 +93,12 @@ def main():
             WebJudge_Online_Mind2Web_eval(r["task"], actions, [str(p) for p in shots], engine, SCORE_THRESHOLD)
         )
         verdict = engine.generate(messages)[0]
+        if not verdict or not verdict.strip():
+            # A failed judge call (e.g. key limit, 403) returns no text. Writing it
+            # as label 0 would count a provider error as an agent failure and
+            # make a rerun skip the task. Stop instead; a rerun resumes here.
+            print(f"judge returned no verdict for {r['task_id']}; stopping without recording it")
+            break
         try:
             label = 1 if "success" in verdict.lower().split("status:")[1] else 0
         except IndexError:
