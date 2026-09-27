@@ -22,6 +22,8 @@ All notable changes to Browd are documented here. The format is based on
   custom models. `openai/gpt-6-luna` was running without screenshots.
 - A page whose structure cannot be read within 20 s no longer freezes the
   agent. It gets the URL and title with a warning and decides what to do.
+- The planner and replanner know today's date, so "tomorrow" in a task is
+  no longer turned into a guessed date.
 - Failed and incomplete tasks, lost tabs, and exhausted plans no longer emit
   success events. Cancellation remains distinct from failure.
 - Completion mixed with other tool calls is rejected before dispatch, so
