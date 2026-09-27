@@ -59,8 +59,10 @@ step and the event log under `bench-runs/`. The same runner does the Online-Mind
 benchmark (see Commands). How it works, and the traps already paid for:
 
 - Playwright `launchPersistentContext` with `--load-extension=dist` (MV3 workers do not
-  survive ephemeral contexts). Headed, window pushed off-screen: headless and fresh
-  bot-fingerprinted profiles trip more anti-bot walls. Uses Playwright's own Chromium.
+  survive ephemeral contexts), `channel: 'chromium'` so it runs Chrome's new headless,
+  which loads extensions. Headless is the default because a headed window steals focus
+  and switches macOS Spaces on every task; `--headed` is for sites whose anti-bot wall
+  rejects headless (the 2026-09-27 benchmark ran headed). Uses Playwright's own Chromium.
 - Write `llm-api-keys` / `agent-models` / `general-settings` / `firewall-settings` into
   `chrome.storage.local` from an extension page — the worker handle Playwright returns
   has no `chrome.storage`.
