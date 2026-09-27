@@ -110,7 +110,15 @@ separate `visionMode` toggle:
   drive its own perception loop. Executor degrades `'on'` to
   `'off'` at runtime when the Navigator model has no vision
   capability (`modelSupportsVision` in
-  `packages/storage/lib/settings/types.ts`).
+  `packages/storage/lib/settings/types.ts`). The OpenRouter catalog's
+  `input_modalities` (cached by `openrouterModels.ts`) answers first;
+  the name-hint list is only a fallback for local runtimes and custom
+  endpoints. Never decide model capabilities from a name list alone —
+  it silently disabled vision for `gpt-6-*` (2026-09-27).
+- **Tool policy: the site first.** When the task names a website or the
+  page is already open, the agent works on that site; `web_search` is for
+  open-web questions that name no site. A "search first, never open a tab"
+  rule once sent every "find X" task away from the site it was about.
 - Screenshot capture path: every `screenshot()` call MUST go through
   the `Action.call()` pipeline so it lands in `globalTracer` and the
   side-panel TRACE / chat thumbnail. Do not bypass with a direct
@@ -253,6 +261,15 @@ separate `visionMode` toggle:
   this reason. The `pendingForceScreenshot` flag set by `switchTab` /
   `navigateTo` is preserved for a future cookie-overlay / tab-settle
   surface (e.g. prompt hint) but is intentionally unread today.
+
+## Page State Deadline
+
+`Page.getState` gives the DOM-tree build `STATE_BUILD_DEADLINE_MS` (20 s,
+`browser/stateDeadline.ts`). On the deadline it aborts the build and returns
+URL and title with **no** interactive elements plus `stateNote`, which the
+state message renders as `<page-state-warning>`. Empty elements on purpose:
+a stale selector map would send clicks to the wrong element. The degraded
+state is not cached. Tab-gone aborts still reject as `TabGoneError`.
 
 ## MV3 Service Worker Gotchas
 
