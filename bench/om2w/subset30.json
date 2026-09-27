@@ -1,0 +1,452 @@
+[
+  {
+    "task_id": "4e0f5561a76478da87995dee00b09572",
+    "confirmed_task": "Show me the monthly weather forecast for Florida City.",
+    "website": "https://www.accuweather.com/",
+    "reference_length": 3,
+    "level": "easy",
+    "human_labels": {
+      "Operator": "1",
+      "Agent-E": "1",
+      "Browser_Use": "0",
+      "Claude_Computer_Use_3.5": "1",
+      "Claude_Computer_Use_3.7": "1",
+      "SeeAct": "1"
+    }
+  },
+  {
+    "task_id": "52efbab520734ef9bf7c09ba0f62cdc8",
+    "confirmed_task": "Find the app for iOS.",
+    "website": "https://www.recreation.gov/",
+    "reference_length": 2,
+    "level": "easy",
+    "human_labels": {
+      "Operator": "1",
+      "Agent-E": "1",
+      "Browser_Use": "1",
+      "Claude_Computer_Use_3.5": "0",
+      "Claude_Computer_Use_3.7": "1",
+      "SeeAct": "1"
+    }
+  },
+  {
+    "task_id": "29526b17a32485742b5ab63507e99417",
+    "confirmed_task": "Browse Humira dosage information.",
+    "website": "https://www.drugs.com/",
+    "reference_length": 3,
+    "level": "easy",
+    "human_labels": {
+      "Operator": "1",
+      "Agent-E": "1",
+      "Browser_Use": "1",
+      "Claude_Computer_Use_3.5": "1",
+      "Claude_Computer_Use_3.7": "1",
+      "SeeAct": "1"
+    }
+  },
+  {
+    "task_id": "26a0e5c21c145dd8448aa92f35bec5ea",
+    "confirmed_task": "Browse optometrists who offer telehealth services in Columbus, OH.",
+    "website": "https://www.healthgrades.com/",
+    "reference_length": 3,
+    "level": "easy",
+    "human_labels": {
+      "Operator": "1",
+      "Agent-E": "1",
+      "Browser_Use": "0",
+      "Claude_Computer_Use_3.5": "0",
+      "Claude_Computer_Use_3.7": "1",
+      "SeeAct": "0"
+    }
+  },
+  {
+    "task_id": "95cad96f2e43f3c0d8efad1331c77c8c",
+    "confirmed_task": "View the list of the Most Popular TV on rotten tomatoes.",
+    "website": "https://www.rottentomatoes.com/",
+    "reference_length": 3,
+    "level": "easy",
+    "human_labels": {
+      "Operator": "1",
+      "Agent-E": "0",
+      "Browser_Use": "1",
+      "Claude_Computer_Use_3.5": "1",
+      "Claude_Computer_Use_3.7": "1",
+      "SeeAct": "1"
+    }
+  },
+  {
+    "task_id": "3621b099326c7aebd2e2dac6be3b52d1",
+    "confirmed_task": "Open the profile page of the leader of the Nvidia Learning and Perception Lab.",
+    "website": "https://www.nvidia.com/",
+    "reference_length": 5,
+    "level": "easy",
+    "human_labels": {
+      "Operator": "0",
+      "Agent-E": "0",
+      "Browser_Use": "0",
+      "Claude_Computer_Use_3.5": "0",
+      "Claude_Computer_Use_3.7": "1",
+      "SeeAct": "0"
+    }
+  },
+  {
+    "task_id": "23204728192da9f73197a613d9681c18",
+    "confirmed_task": "What are the Symptoms and causes of fever?",
+    "website": "https://www.mayoclinic.org/",
+    "reference_length": 3,
+    "level": "easy",
+    "human_labels": {
+      "Operator": "1",
+      "Agent-E": "1",
+      "Browser_Use": "1",
+      "Claude_Computer_Use_3.5": "1",
+      "Claude_Computer_Use_3.7": "1",
+      "SeeAct": "1"
+    }
+  },
+  {
+    "task_id": "a6f0434ce6aff5f9b03681241b03ad82",
+    "confirmed_task": "Find the closing stock price for Tesla on March 17, 2023.",
+    "website": "https://finance.yahoo.com/",
+    "reference_length": 3,
+    "level": "easy",
+    "human_labels": {
+      "Operator": "1",
+      "Agent-E": "0",
+      "Browser_Use": "0",
+      "Claude_Computer_Use_3.5": "0",
+      "Claude_Computer_Use_3.7": "1",
+      "SeeAct": "1"
+    }
+  },
+  {
+    "task_id": "2532fd402d3c741b79894e6ff2269f53",
+    "confirmed_task": "find electricians near 10203.",
+    "website": "https://www.thumbtack.com/",
+    "reference_length": 3,
+    "level": "easy",
+    "human_labels": {
+      "Operator": "1",
+      "Agent-E": "1",
+      "Browser_Use": "1",
+      "Claude_Computer_Use_3.5": "0",
+      "Claude_Computer_Use_3.7": "1",
+      "SeeAct": "1"
+    }
+  },
+  {
+    "task_id": "828c2d98616a9478d5864d847d5a1b28",
+    "confirmed_task": "Browse the list of Civil Division forms.",
+    "website": "https://www.justice.gov/",
+    "reference_length": 4,
+    "level": "easy",
+    "human_labels": {
+      "Operator": "1",
+      "Agent-E": "0",
+      "Browser_Use": "0",
+      "Claude_Computer_Use_3.5": "1",
+      "Claude_Computer_Use_3.7": "1",
+      "SeeAct": "1"
+    }
+  },
+  {
+    "task_id": "2e4e21cf1449c6894b17d571c47b77ea",
+    "confirmed_task": "Find an English bulldog near zip code 90028 that was cared for by a private owner.",
+    "website": "https://www.adoptapet.com/",
+    "reference_length": 8,
+    "level": "medium",
+    "human_labels": {
+      "Operator": "1",
+      "Agent-E": "0",
+      "Browser_Use": "0",
+      "Claude_Computer_Use_3.5": "0",
+      "Claude_Computer_Use_3.7": "1",
+      "SeeAct": "0"
+    }
+  },
+  {
+    "task_id": "070c907d34a4ce71dfdbea38f9c5d4d8",
+    "confirmed_task": "Find a dentist who specializes in pediatric dentistry and is located near zip code 90210 (within 5-mile distance).",
+    "website": "https://www.healthgrades.com/",
+    "reference_length": 7,
+    "level": "medium",
+    "human_labels": {
+      "Operator": "1",
+      "Agent-E": "1",
+      "Browser_Use": "0",
+      "Claude_Computer_Use_3.5": "0",
+      "Claude_Computer_Use_3.7": "0",
+      "SeeAct": "0"
+    }
+  },
+  {
+    "task_id": "eb2db4b769c145dbe6ba4f74f3e0de98",
+    "confirmed_task": "Find an energetic hairless dog with medium barking.",
+    "website": "https://www.akc.org/",
+    "reference_length": 10,
+    "level": "medium",
+    "human_labels": {
+      "Operator": "0",
+      "Agent-E": "0",
+      "Browser_Use": "0",
+      "Claude_Computer_Use_3.5": "0",
+      "Claude_Computer_Use_3.7": "0",
+      "SeeAct": "0"
+    }
+  },
+  {
+    "task_id": "47bfe8a7e0e4e7efc837287b407fbe90",
+    "confirmed_task": "Compare the first and second most popular smartphones manufactured by Xiaomi and show the comparison chart.",
+    "website": "https://versus.com/",
+    "reference_length": 10,
+    "level": "medium",
+    "human_labels": {
+      "Operator": "2",
+      "Agent-E": "0",
+      "Browser_Use": "0",
+      "Claude_Computer_Use_3.5": "0",
+      "Claude_Computer_Use_3.7": "0",
+      "SeeAct": "0"
+    }
+  },
+  {
+    "task_id": "9586827ad04ee2362f4f0076bf0f0468",
+    "confirmed_task": "Find the side effects of taking Montelukast.",
+    "website": "https://www.drugs.com/",
+    "reference_length": 6,
+    "level": "medium",
+    "human_labels": {
+      "Operator": "1",
+      "Agent-E": "1",
+      "Browser_Use": "1",
+      "Claude_Computer_Use_3.5": "1",
+      "Claude_Computer_Use_3.7": "1",
+      "SeeAct": "1"
+    }
+  },
+  {
+    "task_id": "8103786e0e5976ebf961bd062d5f39cd",
+    "confirmed_task": "Find possible causes for the symptoms of chest pain which is sharp which is accompanied by anxiety.",
+    "website": "https://www.mayoclinic.org/",
+    "reference_length": 9,
+    "level": "medium",
+    "human_labels": {
+      "Operator": "0",
+      "Agent-E": "0",
+      "Browser_Use": "0",
+      "Claude_Computer_Use_3.5": "0",
+      "Claude_Computer_Use_3.7": "0",
+      "SeeAct": "0"
+    }
+  },
+  {
+    "task_id": "fb7b4f784cfde003e2548fdf4e8d6b4f",
+    "confirmed_task": "Open the page with an overview of the submission of releases on Discogs.",
+    "website": "https://www.discogs.com/",
+    "reference_length": 6,
+    "level": "medium",
+    "human_labels": {
+      "Operator": "1",
+      "Agent-E": "1",
+      "Browser_Use": "1",
+      "Claude_Computer_Use_3.5": "0",
+      "Claude_Computer_Use_3.7": "1",
+      "SeeAct": "1"
+    }
+  },
+  {
+    "task_id": "85b284c18d7e78c9b5a9e074e7aa3b98",
+    "confirmed_task": "View the cheapest apartment available for students at the University of Leeds with bills that include WIFI and cleaning services.",
+    "website": "https://www.student.com/",
+    "reference_length": 10,
+    "level": "medium",
+    "human_labels": {
+      "Operator": "1",
+      "Agent-E": "0",
+      "Browser_Use": "0",
+      "Claude_Computer_Use_3.5": "0",
+      "Claude_Computer_Use_3.7": "0",
+      "SeeAct": "0"
+    }
+  },
+  {
+    "task_id": "6b2cfae0ef25c73d1224b6ab74cb8b63",
+    "confirmed_task": "Find Devin Booker's highest-scoring points per game playoff run.",
+    "website": "https://www.nba.com/",
+    "reference_length": 7,
+    "level": "medium",
+    "human_labels": {
+      "Operator": "2",
+      "Agent-E": "0",
+      "Browser_Use": "0",
+      "Claude_Computer_Use_3.5": "0",
+      "Claude_Computer_Use_3.7": "1",
+      "SeeAct": "1"
+    }
+  },
+  {
+    "task_id": "7e6993f2c5cd72c44809024f0bc85dc1",
+    "confirmed_task": "Create a meme with a frog as the background and leave the only text with \"Enjoy your life\".",
+    "website": "https://imgur.com/",
+    "reference_length": 8,
+    "level": "medium",
+    "human_labels": {
+      "Operator": "0",
+      "Agent-E": "0",
+      "Browser_Use": "0",
+      "Claude_Computer_Use_3.5": "0",
+      "Claude_Computer_Use_3.7": "0",
+      "SeeAct": "0"
+    }
+  },
+  {
+    "task_id": "9af05e392cf3f5a8ff17aa764ba5bda6",
+    "confirmed_task": "Get a quote from C and above-rated solar energy equipment company within 10 miles of Miami, Florida.",
+    "website": "https://www.bbb.org/",
+    "reference_length": 16,
+    "level": "hard",
+    "human_labels": {
+      "Operator": "1",
+      "Agent-E": "0",
+      "Browser_Use": "0",
+      "Claude_Computer_Use_3.5": "0",
+      "Claude_Computer_Use_3.7": "1",
+      "SeeAct": "0"
+    }
+  },
+  {
+    "task_id": "8f2611047de227a2ca8bda13f6e2e5fb",
+    "confirmed_task": "Find the used 2012-2013 Honda Crosstour with the lowest mileage for under $25,000 near zip code 49102 on CarGurus.",
+    "website": "https://www.cargurus.com/",
+    "reference_length": 17,
+    "level": "hard",
+    "human_labels": {
+      "Operator": "0",
+      "Agent-E": "0",
+      "Browser_Use": "0",
+      "Claude_Computer_Use_3.5": "0",
+      "Claude_Computer_Use_3.7": "0",
+      "SeeAct": "0"
+    }
+  },
+  {
+    "task_id": "1bc154377120ec15b18dbabdba49c741",
+    "confirmed_task": "Book 4 tickets in the upper for any Kevin Hart show in New York in the next three months and view ticket prices with estimated fees.",
+    "website": "https://www.stubhub.com/",
+    "reference_length": 12,
+    "level": "hard",
+    "human_labels": {
+      "Operator": "0",
+      "Agent-E": "0",
+      "Browser_Use": "0",
+      "Claude_Computer_Use_3.5": "0",
+      "Claude_Computer_Use_3.7": "1",
+      "SeeAct": "0"
+    }
+  },
+  {
+    "task_id": "f2be37a9a60fbc25b6b11cf622d17352",
+    "confirmed_task": "Find obedience trials in state of New York during the month of May.",
+    "website": "https://www.akc.org/",
+    "reference_length": 14,
+    "level": "hard",
+    "human_labels": {
+      "Operator": "0",
+      "Agent-E": "0",
+      "Browser_Use": "0",
+      "Claude_Computer_Use_3.5": "1",
+      "Claude_Computer_Use_3.7": "1",
+      "SeeAct": "0"
+    }
+  },
+  {
+    "task_id": "1c3b747ae12ccee895745f82e3f2ef8a",
+    "confirmed_task": "Identify the ongoing competition that offers the highest prize and find the code that received the most votes in that competition.",
+    "website": "https://www.kaggle.com/",
+    "reference_length": 11,
+    "level": "hard",
+    "human_labels": {
+      "Operator": "1",
+      "Agent-E": "0",
+      "Browser_Use": "0",
+      "Claude_Computer_Use_3.5": "0",
+      "Claude_Computer_Use_3.7": "0",
+      "SeeAct": "0"
+    }
+  },
+  {
+    "task_id": "f27c0a7b8b0bb33d37698dff227fc8d7",
+    "confirmed_task": "Browse used Mercedes-Benz cars from model years 2004 to 2012 on KBB and sort by highest price.",
+    "website": "https://www.kbb.com/",
+    "reference_length": 11,
+    "level": "hard",
+    "human_labels": {
+      "Operator": "0",
+      "Agent-E": "0",
+      "Browser_Use": "0",
+      "Claude_Computer_Use_3.5": "0",
+      "Claude_Computer_Use_3.7": "1",
+      "SeeAct": "1"
+    }
+  },
+  {
+    "task_id": "afcebfed28bea091d58f49ea6cb8194b",
+    "confirmed_task": "Find the most reviewed gluten-free multivitamins from CVS Health Brand under $15.",
+    "website": "https://www.cvs.com/",
+    "reference_length": 12,
+    "level": "hard",
+    "human_labels": {
+      "Operator": "0",
+      "Agent-E": "0",
+      "Browser_Use": "0",
+      "Claude_Computer_Use_3.5": "0",
+      "Claude_Computer_Use_3.7": "0",
+      "SeeAct": "0"
+    }
+  },
+  {
+    "task_id": "0b838cd54f826c59c71f600c56b89a11",
+    "confirmed_task": "Find all the locations for the second-best-rated used car dealer less than 5 miles from New York.",
+    "website": "https://www.bbb.org/",
+    "reference_length": 11,
+    "level": "hard",
+    "human_labels": {
+      "Operator": "1",
+      "Agent-E": "0",
+      "Browser_Use": "0",
+      "Claude_Computer_Use_3.5": "0",
+      "Claude_Computer_Use_3.7": "0",
+      "SeeAct": "0"
+    }
+  },
+  {
+    "task_id": "cf757a775fa1224acfc7998489e199a8",
+    "confirmed_task": "Find a flight from Dublin to anywhere under $100 tomorrow on Ryanair.",
+    "website": "https://www.ryanair.com/",
+    "reference_length": 13,
+    "level": "hard",
+    "human_labels": {
+      "Operator": "1",
+      "Agent-E": "0",
+      "Browser_Use": "0",
+      "Claude_Computer_Use_3.5": "0",
+      "Claude_Computer_Use_3.7": "0",
+      "SeeAct": "0"
+    }
+  },
+  {
+    "task_id": "eb323dc584156d0eb3a2b90bb8c4b791",
+    "confirmed_task": "Find the latest 2 bed and 1.5+ bath apartment listing for rent in New York.",
+    "website": "https://www.redfin.com/",
+    "reference_length": 12,
+    "level": "hard",
+    "human_labels": {
+      "Operator": "1",
+      "Agent-E": "0",
+      "Browser_Use": "0",
+      "Claude_Computer_Use_3.5": "0",
+      "Claude_Computer_Use_3.7": "0",
+      "SeeAct": "0"
+    }
+  }
+]
