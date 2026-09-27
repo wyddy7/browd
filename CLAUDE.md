@@ -27,6 +27,10 @@ pnpm -F chrome-extension test
 pnpm zip
 ```
 
+Live-web benchmark (Online-Mind2Web subset, graded by the official WebJudge):
+`bench/om2w/README.md`. Needs a built `dist/` and an OpenRouter key in the
+gitignored `.env.bench.local`; run output lands in the gitignored `bench-runs/`.
+
 Prefer scoped commands when working in one workspace:
 
 ```bash
