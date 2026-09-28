@@ -1,4 +1,4 @@
-import { resolveModelContextWindow } from './modelContextHints';
+import { resolveModelContextWindow, resolveModelImageInput } from './modelContextHints';
 
 // Agent name, used to identify the agent in the settings
 export enum AgentNameEnum {
@@ -31,12 +31,14 @@ export enum ProviderTypeEnum {
  * `visionMode='off'` at runtime when the user's chosen Navigator model
  * cannot ingest images.
  *
- * The list is intentionally hint-based rather than exhaustive: model
- * IDs in OpenRouter / CustomOpenAI are user-supplied strings, so a
- * pattern match on well-known family tokens (gpt-4o, claude, gemini,
- * llama-4, qwen-vl, …) catches the long tail without us maintaining
- * a per-version registry. False positives surface only as a wasted
- * image upload that the provider will reject; we log and degrade.
+ * The OpenRouter live catalog (`input_modalities`) answers first, for
+ * any cloud model with an OpenRouter route. The hint list below only
+ * covers models outside the catalog (local runtimes, custom endpoints,
+ * a cold cache): model IDs there are user-supplied strings, so a
+ * pattern match on well-known family tokens catches the long tail.
+ * The list alone once disabled vision for `gpt-6-*` (2026-09-27).
+ * False positives surface only as a wasted image upload that the
+ * provider will reject; we log and degrade.
  */
 const VISION_CAPABLE_HINTS = [
   'gpt-4o',
@@ -79,6 +81,8 @@ export function modelSupportsVision(provider: string, modelName: string): boolea
     // Local Ollama needs explicit multimodal weights (llava, qwen-vl, …).
     return m.includes('llava') || m.includes('-vl') || m.includes('multimodal');
   }
+  const live = resolveModelImageInput(modelName);
+  if (live !== undefined) return live;
   return VISION_CAPABLE_HINTS.some(h => m.includes(h));
 }
 

@@ -102,6 +102,8 @@ export interface PageState extends DOMState {
   visualViewportHeight: number;
   /** Truncated plain-text of the page body for LLM context. */
   pageText?: string;
+  /** Set when the state is degraded (e.g. the DOM build hit its deadline); shown to the model. */
+  stateNote?: string;
 }
 
 export interface TabInfo {

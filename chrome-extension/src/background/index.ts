@@ -371,7 +371,9 @@ async function setupExecutor(
   const navigatorLLM = createChatModel(navigatorProviderConfig, navigatorModel);
   // Capability flag for vision input. Resolved here once per task
   // setup; the Executor uses it to degrade visionMode='on' to 'off'
-  // when the user picked a non-vision Navigator.
+  // when the user picked a non-vision Navigator. The OpenRouter catalog
+  // answers first, so give its startup preload a short chance to land.
+  await Promise.race([preloadOpenRouterModels(), new Promise(resolve => setTimeout(resolve, 2000))]);
   const navigatorSupportsVision = modelSupportsVision(navigatorModel.provider, navigatorModel.modelName);
   // T2f-final-2: model context window for the side-panel token ring.
   const navigatorContextWindow = getModelContextWindow(navigatorModel.provider, navigatorModel.modelName);

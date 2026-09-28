@@ -1,6 +1,8 @@
 """Grade a Browd Online-Mind2Web run with the official WebJudge (vendored, MIT).
 
 Usage: uv run --with openai --with pillow python judge.py <run_dir> [--model openai/gpt-6-sol] [--stop-usd 4.7]
+       ... judge.py <run_dir> --codex gpt-6-astra [--only id1,id2]   # same protocol through the local
+       Codex CLI on a ChatGPT login: no API spend, writes judged_codex_<model>.jsonl
 Writes <run_dir>/judged.jsonl (one line per task) and prints a summary.
 The only change to the method: the engine talks to OpenRouter, drops `temperature`
 (reasoning judges reject it) and lifts the 512-token cap, which a reasoning model
@@ -67,12 +69,73 @@ class Engine:
         return [""]
 
 
+class CodexEngine:
+    """Same WebJudge messages, sent through `codex exec` (ChatGPT subscription) instead of OpenRouter.
+
+    System text and user text become one prompt; data-URI images become temp files passed with -i
+    in their original order. Read-only sandbox, ephemeral session, empty working directory.
+    """
+
+    def __init__(self, model):
+        import tempfile
+
+        self.model = model
+        self.cost = 0.0
+        self.workdir = Path(tempfile.mkdtemp(prefix="codex-judge-"))
+        self.gate = threading.Semaphore(3)
+
+    def generate(self, messages, **kwargs):
+        import base64
+        import subprocess
+        import tempfile
+
+        parts, images = [], []
+        with tempfile.TemporaryDirectory(dir=self.workdir) as tmp:
+            for m in messages:
+                content = m["content"]
+                items = content if isinstance(content, list) else [{"type": "text", "text": content}]
+                label = "SYSTEM INSTRUCTIONS" if m["role"] == "system" else "USER"
+                texts = []
+                for it in items:
+                    if it.get("type") == "text":
+                        texts.append(it["text"])
+                    elif it.get("type") == "image_url":
+                        data = it["image_url"]["url"].split(",", 1)[1]
+                        f = Path(tmp) / f"img{len(images) + 1}.jpg"
+                        f.write_bytes(base64.b64decode(data))
+                        images.append(str(f))
+                        texts.append(f"[Image {len(images)} attached]")
+                parts.append(f"{label}:\n" + "\n".join(texts))
+            prompt = (
+                "You are a grader. Do not run any commands or tools; answer directly in text.\n\n"
+                + "\n\n".join(parts)
+            )
+            out = Path(tmp) / "answer.txt"
+            cmd = ["codex", "exec", "--skip-git-repo-check", "--ephemeral", "-s", "read-only", "-C", tmp,
+                   "-m", self.model, "-c", 'model_reasoning_effort="medium"', "-o", str(out)]
+            for f in images:
+                cmd += ["-i", f]
+            # `-i` takes several files; without `--` the prompt is read as one more image.
+            cmd += ["--", prompt]
+            for attempt in range(3):
+                with self.gate:
+                    # stdin closed: `codex exec` otherwise also waits on an inherited stdin.
+                    p = subprocess.run(cmd, capture_output=True, text=True, timeout=600, stdin=subprocess.DEVNULL)
+                if out.exists() and out.read_text().strip():
+                    return [out.read_text()]
+                print(f"  codex call failed (exit {p.returncode}): {p.stderr.strip().splitlines()[-1:] }")
+                time.sleep(3 * (attempt + 1))
+        return [""]
+
+
 def main():
     run = Path(sys.argv[1])
-    model = sys.argv[sys.argv.index("--model") + 1] if "--model" in sys.argv else "openai/gpt-6-sol"
-    engine = Engine(model)
+    codex = sys.argv[sys.argv.index("--codex") + 1] if "--codex" in sys.argv else None
+    model = codex or (sys.argv[sys.argv.index("--model") + 1] if "--model" in sys.argv else "openai/gpt-6-sol")
+    engine = CodexEngine(model) if codex else Engine(model)
+    only = sys.argv[sys.argv.index("--only") + 1].split(",") if "--only" in sys.argv else None
     stop_usd = float(sys.argv[sys.argv.index("--stop-usd") + 1]) if "--stop-usd" in sys.argv else 4.7
-    out = run / "judged.jsonl"
+    out = run / (f"judged_codex_{codex}.jsonl" if codex else "judged.jsonl")
     ne = run / "not_executable.json"
     blocked = set(json.loads(ne.read_text())) if ne.exists() else set()
     done = {json.loads(l)["task_id"] for l in out.read_text().splitlines()} if out.exists() else set()
@@ -80,7 +143,9 @@ def main():
         r = json.loads((d / "result.json").read_text())
         if r["task_id"] in done or r["task_id"] in blocked:
             continue
-        used = key_usage()
+        if only and not any(r["task_id"].startswith(o) for o in only):
+            continue
+        used = 0.0 if codex else key_usage()
         if used >= stop_usd:
             print(f"budget stop: key usage ${used:.3f} >= ${stop_usd}")
             break
@@ -93,6 +158,12 @@ def main():
             WebJudge_Online_Mind2Web_eval(r["task"], actions, [str(p) for p in shots], engine, SCORE_THRESHOLD)
         )
         verdict = engine.generate(messages)[0]
+        if not verdict or not verdict.strip():
+            # A failed judge call (e.g. key limit, 403) returns no text. Writing it
+            # as label 0 would count a provider error as an agent failure and
+            # make a rerun skip the task. Stop instead; a rerun resumes here.
+            print(f"judge returned no verdict for {r['task_id']}; stopping without recording it")
+            break
         try:
             label = 1 if "success" in verdict.lower().split("status:")[1] else 0
         except IndexError:

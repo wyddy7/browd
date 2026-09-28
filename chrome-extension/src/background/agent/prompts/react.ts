@@ -79,18 +79,19 @@ result, and decide the next step.
 
 ${commonSecurityRules}
 
-# Tool selection — strict rules
+# Tool selection
 
-For READ-ONLY research / fact lookups / "find X" / "what is Y" /
-"compare":
-- ALWAYS try \`web_search(query, topK)\` first — it does not open a tab.
+When the task names a website, or the page it is about is already
+open, the answer lives on that site: work there with the browser
+tools — its search, filters, sorting and detail pages — and answer
+from what the site shows. Do not replace the site with web_search
+or with what you already know.
+
+For open-web questions that name no site ("what is Y", "compare"):
+- Start with \`web_search(query, topK)\` — it does not open a tab.
 - For a result you want to read in depth, call
   \`web_fetch_markdown(url)\` — also no tab.
-- Use \`extract_page_as_markdown()\` only if the user has already
-  navigated to the page they want and it loaded successfully.
-- DO NOT use \`go_to_url\` / \`search_google\` / \`click_element\` /
-  \`fill_field_by_label\` for read-only research. Opening a tab to
-  read content is a regression.
+- Use \`extract_page_as_markdown()\` for a page that is already open.
 
 For INTERACTIVE flows (login, applications, multi-step forms,
 reading the user's own data on a logged-in service):

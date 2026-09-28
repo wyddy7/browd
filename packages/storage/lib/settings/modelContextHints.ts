@@ -27,7 +27,7 @@
  *     small — doesn't rot, doesn't lie.
  */
 
-import { lookupOpenRouterContextWindow } from './openrouterModels';
+import { lookupOpenRouterContextWindow, lookupOpenRouterImageInput } from './openrouterModels';
 
 const DEFAULT_CONTEXT_WINDOW_HINT = 32_000;
 
@@ -91,19 +91,29 @@ function modelNameVariants(name: string): string[] {
  * Try every normalization variant × provider prefix against the
  * OpenRouter live cache. O(1) lookups in a Map, ~24 attempts max.
  */
-function findInOpenRouterCache(modelName: string): number | undefined {
+function findInOpenRouterCache<T>(modelName: string, lookup: (id: string) => T | undefined): T | undefined {
   for (const variant of modelNameVariants(modelName)) {
-    const direct = lookupOpenRouterContextWindow(variant);
+    const direct = lookup(variant);
     if (direct !== undefined) return direct;
 
     if (!variant.includes('/')) {
       for (const prefix of OPENROUTER_PROVIDER_PREFIXES) {
-        const hit = lookupOpenRouterContextWindow(`${prefix}/${variant}`);
+        const hit = lookup(`${prefix}/${variant}`);
         if (hit !== undefined) return hit;
       }
     }
   }
   return undefined;
+}
+
+/**
+ * Whether the model accepts image input according to the OpenRouter
+ * live catalog. Undefined when the catalog is not loaded or the model
+ * has no OpenRouter route — the caller then uses name hints.
+ */
+export function resolveModelImageInput(modelName: string): boolean | undefined {
+  if (!modelName) return undefined;
+  return findInOpenRouterCache(modelName, lookupOpenRouterImageInput);
 }
 
 /**
@@ -115,7 +125,7 @@ export function resolveModelContextWindow(modelName: string): number {
   if (!modelName) return DEFAULT_CONTEXT_WINDOW_HINT;
 
   // 1. OpenRouter live cache — primary path for all cloud models.
-  const live = findInOpenRouterCache(modelName);
+  const live = findInOpenRouterCache(modelName, lookupOpenRouterContextWindow);
   if (live !== undefined) return live;
 
   // 2. Local-only hardcoded fallback (Ollama and edge cases).
