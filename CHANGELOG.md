@@ -28,6 +28,10 @@ All notable changes to Browd are documented here. The format is based on
   success events. Cancellation remains distinct from failure.
 - Completion mixed with other tool calls is rejected before dispatch, so
   browser actions cannot run alongside a task's final result.
+- Cached prompt tokens are counted once per model call. The usage tracker
+  summed every mirror of the same cache counter, doubling cache reads on
+  OpenAI-compatible streams (OpenRouter) in the token ring and the benchmark
+  cost estimate.
 - Slow new tabs report their created identity and loading state instead of
   a misleading creation failure. Agent attention follows owned new tabs;
   readiness listeners and timers are cleaned on every exit.

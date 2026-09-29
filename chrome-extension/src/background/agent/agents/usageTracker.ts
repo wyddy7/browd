@@ -77,11 +77,12 @@ export function createUsageTracker(context: AgentContext, contextWindow = 100_00
       //   - response_metadata.usage.* mirrors of the above
       // Adding a new provider rarely needs new code — start by trusting
       // usage_metadata.input_token_details (the LangChain standard).
-      const u0 = o.llmOutput?.usage;
-      if (u0) {
-        dCacheRead += u0.cache_read_input_tokens ?? u0.prompt_tokens_details?.cached_tokens ?? 0;
-        dCacheCreation += u0.cache_creation_input_tokens ?? u0.prompt_tokens_details?.cache_write_tokens ?? 0;
-      }
+      // The locations above mirror one another for the same call, so each
+      // counter takes ONE source: standard → response_metadata.usage →
+      // llmOutput.usage. Summing them double-counted OpenAI-compatible
+      // streams and triple-counted Anthropic non-streaming responses.
+      let cacheReadSeen = false;
+      let cacheCreationSeen = false;
       if (Array.isArray(o.generations)) {
         for (const generation of o.generations) {
           for (const item of generation) {
@@ -91,18 +92,32 @@ export function createUsageTracker(context: AgentContext, contextWindow = 100_00
                 dIn += u.input_tokens ?? 0;
                 dOut += u.output_tokens ?? 0;
               }
-              const um = item.message?.usage_metadata;
-              if (um?.input_token_details) {
-                dCacheRead += um.input_token_details.cache_read ?? um.input_token_details.cached_tokens ?? 0;
-                dCacheCreation += um.input_token_details.cache_creation ?? 0;
-              }
+              const um = item.message?.usage_metadata?.input_token_details;
               const ur = item.message?.response_metadata?.usage;
-              if (ur) {
-                dCacheRead += ur.cache_read_input_tokens ?? ur.prompt_tokens_details?.cached_tokens ?? 0;
-                dCacheCreation += ur.cache_creation_input_tokens ?? ur.prompt_tokens_details?.cache_write_tokens ?? 0;
+              const read =
+                um?.cache_read ??
+                um?.cached_tokens ??
+                ur?.cache_read_input_tokens ??
+                ur?.prompt_tokens_details?.cached_tokens;
+              const creation =
+                um?.cache_creation ?? ur?.cache_creation_input_tokens ?? ur?.prompt_tokens_details?.cache_write_tokens;
+              if (read != null) {
+                dCacheRead += read;
+                cacheReadSeen = true;
+              }
+              if (creation != null) {
+                dCacheCreation += creation;
+                cacheCreationSeen = true;
               }
             }
           }
+        }
+      }
+      const u0 = o.llmOutput?.usage;
+      if (u0) {
+        if (!cacheReadSeen) dCacheRead += u0.cache_read_input_tokens ?? u0.prompt_tokens_details?.cached_tokens ?? 0;
+        if (!cacheCreationSeen) {
+          dCacheCreation += u0.cache_creation_input_tokens ?? u0.prompt_tokens_details?.cache_write_tokens ?? 0;
         }
       }
       if (dIn || dOut) {
