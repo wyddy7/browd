@@ -1,0 +1,98 @@
+[
+  {
+    "task_id": "dead-reset",
+    "level": "broken",
+    "confirmed_task": "Find today's opening hours of the Riverside branch.",
+    "website": "http://cityhall.test/"
+  },
+  {
+    "task_id": "dead-hang",
+    "level": "broken",
+    "confirmed_task": "Show me the return policy for opened electronics.",
+    "website": "http://gadgetshop.test/"
+  },
+  {
+    "task_id": "reset-then-hang",
+    "level": "broken",
+    "confirmed_task": "Show me the monthly weather forecast for Lakeview.",
+    "website": "http://weather.test/"
+  },
+  {
+    "task_id": "blocked-403",
+    "level": "broken",
+    "confirmed_task": "What are the symptoms and causes of seasonal allergies?",
+    "website": "http://healthinfo.test/"
+  },
+  {
+    "task_id": "empty-spa",
+    "level": "broken",
+    "confirmed_task": "Find the departure time of the first bus to Northgate.",
+    "website": "http://transit.test/"
+  },
+  {
+    "task_id": "target-dead",
+    "level": "broken",
+    "confirmed_task": "What is the price of the Aurora 2 desk lamp?",
+    "website": "http://homegoods.test/"
+  },
+  {
+    "task_id": "not-on-site",
+    "level": "broken",
+    "confirmed_task": "What is the price of the Zephyr X9 blender?",
+    "website": "http://kitchenstore.test/"
+  },
+  {
+    "task_id": "endless-next",
+    "level": "broken",
+    "confirmed_task": "Find the listing for the blue 3-seat sofa and give its code.",
+    "website": "http://furniture.test/"
+  },
+  {
+    "task_id": "plain",
+    "level": "working",
+    "confirmed_task": "What is the booking code for Room 12?",
+    "website": "http://hostel.test/"
+  },
+  {
+    "task_id": "slow-35s",
+    "level": "working",
+    "confirmed_task": "What is the order code of the Oslo backpack?",
+    "website": "http://outdoorgear.test/"
+  },
+  {
+    "task_id": "flaky-first",
+    "level": "working",
+    "confirmed_task": "What is the voucher code on the spring sale page?",
+    "website": "http://bookstore.test/"
+  },
+  {
+    "task_id": "pagination-6",
+    "level": "working",
+    "confirmed_task": "Find the listing for the green armchair and give its code.",
+    "website": "http://secondhand.test/"
+  },
+  {
+    "task_id": "heavy-dom",
+    "level": "working",
+    "confirmed_task": "What is the part code for bolt size M7x45?",
+    "website": "http://hardware.test/"
+  },
+  {
+    "task_id": "long-flow",
+    "level": "working",
+    "confirmed_task": "Find a waterproof hiking boot in size 44 under €120 and give its product code.",
+    "website": "http://shoes.test/"
+  },
+  {
+    "task_id": "real-florida",
+    "level": "real",
+    "confirmed_task": "Show me the monthly weather forecast for Florida City.",
+    "website": "https://www.accuweather.com/"
+  },
+  {
+    "task_id": "real-booker",
+    "level": "real",
+    "confirmed_task": "Find Devin Booker's highest-scoring points per game playoff run.",
+    "website": "https://www.nba.com/"
+  }
+]

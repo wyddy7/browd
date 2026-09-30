@@ -5,6 +5,9 @@
 // Usage: node run.mjs [--only id1,id2 (full ids or 8-char prefixes)] [--limit N] [--max-steps 30]
 //                     [--timeout-min 8] [--budget 3.5] [--out dir] [--headless]
 //        node run.mjs --task "<any task>" --url <start url>   # ad-hoc manual-QA replacement, no judge needed
+//        node run.mjs --cases <file.json> [--host-rules "MAP *.test 127.0.0.1:8765"] [--before-each <url>]
+//          # own task list (same fields as subset30.json); host rules go to Chromium verbatim;
+//          # --before-each is fetched before every task (e.g. a fixture server's state reset)
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -33,6 +36,8 @@ const HEADLESS = !arg('headed', false);
 // as-shipped = benchmark task text verbatim; site = one sentence naming the start site (the usual OM2W harness setup)
 const MODE = arg('mode', 'as-shipped');
 const SW_LOG = Boolean(arg('sw-log', false)); // capture the extension service-worker console via CDP (debug runs)
+const HOST_RULES = arg('host-rules', null);
+const BEFORE_EACH = arg('before-each', null);
 let swPort = 9333;
 const taskText = t =>
   MODE === 'site' ? `${t.confirmed_task}\n\nStart at ${t.website} (already open in your tab) and complete the task on that website.` : t.confirmed_task;
@@ -113,6 +118,7 @@ async function runTask(task, env) {
       `--disable-extensions-except=${EXT}`,
       `--load-extension=${EXT}`,
       '--window-position=2600,0',
+      ...(HOST_RULES ? [`--host-resolver-rules=${HOST_RULES}`] : []),
       ...(SW_LOG ? [`--remote-debugging-port=${++swPort}`] : []),
     ],
   });
@@ -332,7 +338,7 @@ async function runTask(task, env) {
 }
 
 const env = loadEnv();
-let tasks = JSON.parse(fs.readFileSync(path.join(HERE, 'subset30.json'), 'utf8'));
+let tasks = JSON.parse(fs.readFileSync(path.resolve(arg('cases', path.join(HERE, 'subset30.json'))), 'utf8'));
 const only = arg('only', null);
 if (only) tasks = tasks.filter(t => only.split(',').some(id => t.task_id.startsWith(id)));
 const adhoc = arg('task', null);
@@ -353,6 +359,7 @@ for (const task of tasks) {
     console.log(`budget stop: key usage $${used} >= $${BUDGET}`);
     break;
   }
+  if (BEFORE_EACH) await fetch(BEFORE_EACH);
   const r = await runTask(task, env);
   const after = await keyUsage(env.key);
   console.log(
