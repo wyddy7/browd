@@ -92,6 +92,14 @@ export interface ToolBudgetOptions {
  */
 export interface DuplicateGuardState {
   recentKeys: string[];
+  /**
+   * Outcome of each recent tool call: the normalised error text, or '' for a success.
+   * Created on first use. The key guard above misses a model that retries the same dead
+   * target with fresh wording each time (2026-10-01 fixture run: seven clicks on a dead
+   * product link, seven different `intent` texts, the same «not found» error every time,
+   * then the LangGraph recursion limit); the error itself does not change, so count that.
+   */
+  recentErrors?: string[];
 }
 
 const DUPLICATE_WINDOW = 5;
@@ -124,6 +132,36 @@ function canonicaliseArgsForGuard(name: string, input: unknown): string {
   } catch {
     return '<unserialisable>';
   }
+}
+
+const REPEATED_ERROR_THRESHOLD = 3;
+
+/** Same failure, whatever page path it was hit on: URLs are masked before comparing. */
+function normaliseToolError(name: string, rendered: string): string {
+  return `${name}:${rendered.replace(/[a-z][a-z0-9+.-]*:\/\/\S+/gi, '<url>').trim()}`;
+}
+
+/**
+ * Records one tool outcome and, when the same error has now come back
+ * REPEATED_ERROR_THRESHOLD times in the last DUPLICATE_WINDOW calls, appends a note to it.
+ * The call already ran; this only tells the model the result will not change on retry.
+ */
+function noteRepeatedError(dupGuard: DuplicateGuardState | undefined, name: string, rendered: ToolReturn): ToolReturn {
+  if (!dupGuard) return rendered;
+  const errors = (dupGuard.recentErrors ??= []);
+  const isError = typeof rendered === 'string' && rendered.startsWith('Error:');
+  const key = isError ? normaliseToolError(name, rendered) : '';
+  errors.push(key);
+  if (errors.length > DUPLICATE_WINDOW) errors.shift();
+  if (!isError) return rendered;
+  const count = errors.filter(k => k === key).length;
+  if (count < REPEATED_ERROR_THRESHOLD) return rendered;
+  logger.info(`[tool] ${name} → same error ${count}× in last ${errors.length}`);
+  return (
+    `${rendered}\n\nThis same error has now come back ${count} times in your last ${errors.length} tool calls, ` +
+    `so repeating the action will not change the result. Try a clearly different approach; if the site ` +
+    `keeps failing, finish with task_complete(success=false) and say what failed.`
+  );
 }
 
 function dupGuardErrorMessage(name: string, count: number): string {
@@ -285,13 +323,13 @@ export function actionToTool(action: Action, budget?: ToolBudgetOptions, dupGuar
         } else {
           logger.info(`[tool] ${name} ${argSummary} → ok ${ms}ms`);
         }
-        return renderResult(result);
+        return noteRepeatedError(dupGuard, name, renderResult(result));
       } catch (err) {
         const ms = Date.now() - callStart;
         const msg = err instanceof Error ? err.message : String(err);
         logger.info(`[tool] ${name} ${argSummary} → error ${ms}ms msg="${msg.slice(0, 120)}"`);
         // Surface as plain string — LangGraph will wrap in ToolMessage.
-        return `Error: ${msg}`;
+        return noteRepeatedError(dupGuard, name, `Error: ${msg}`);
       }
     },
     {
