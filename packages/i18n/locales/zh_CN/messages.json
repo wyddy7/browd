@@ -649,6 +649,15 @@
       }
     }
   },
+  "act_goToUrl_timeout": {
+    "message": "$URL$ 未能及时加载完成",
+    "placeholders": {
+      "url": {
+        "content": "$1",
+        "example": "https://example.com"
+      }
+    }
+  },
   "act_goBack_start": {
     "message": "正在回到上一页"
   },

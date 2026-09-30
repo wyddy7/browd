@@ -661,6 +661,15 @@
       }
     }
   },
+  "act_goToUrl_timeout": {
+    "message": "$URL$ не загрузилась вовремя",
+    "placeholders": {
+      "url": {
+        "content": "$1",
+        "example": "https://example.com"
+      }
+    }
+  },
   "act_goBack_start": {
     "message": "Возвращаемся назад"
   },

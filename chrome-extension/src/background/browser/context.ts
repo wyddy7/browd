@@ -7,6 +7,7 @@ import {
   URLNotAllowedError,
   TabGoneError,
   isTabGoneErrorMessage,
+  type NavigationOutcome,
 } from './views';
 import Page, { build_initial_state } from './page';
 import { createLogger } from '@src/background/log';
@@ -486,7 +487,7 @@ export default class BrowserContext {
     return page;
   }
 
-  public async navigateTo(url: string): Promise<void> {
+  public async navigateTo(url: string): Promise<NavigationOutcome> {
     if (!isUrlAllowed(url, this._config.allowedUrls, this._config.deniedUrls)) {
       throw new URLNotAllowedError(`URL: ${url} is not allowed`);
     }
@@ -500,12 +501,11 @@ export default class BrowserContext {
     const page = await this.getCurrentPage();
     if (!page) {
       await this.openTab(url);
-      return;
+      return { status: 'loaded' };
     }
     // if page is attached, use puppeteer to navigate to the url
     if (page.attached) {
-      await page.navigateTo(url);
-      return;
+      return page.navigateTo(url);
     }
     //  Use chrome.tabs.update only if the page is not attached
     const tabId = page.tabId;
@@ -517,6 +517,7 @@ export default class BrowserContext {
     const updatedPage = await this._getOrCreatePage(await chrome.tabs.get(tabId), true);
     await this.attachPage(updatedPage);
     this._currentTabId = tabId;
+    return { status: 'loaded' };
   }
 
   public async openTab(url: string): Promise<OpenTabResult> {
