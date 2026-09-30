@@ -57,9 +57,11 @@ function maxRepeat(calls) {
 function grade(c, r) {
   const st = r.terminal_state;
   const answer = r.final_result_response || '';
-  // A verdict counts only when the agent itself called task_complete. A crash (e.g. the LangGraph
-  // recursion limit) also ends in task.fail, but it is not the agent deciding the site is broken.
-  const own = r.tools && r.tools.task_complete > 0 ? 1 : 0;
+  // A verdict counts when the agent's own loop decided it — task_complete or the replanner's finish.
+  // A runtime crash (the LangGraph recursion limit, a lost tab) also ends in task.fail, but then the
+  // «answer» is the error text, not anyone deciding the site is broken.
+  const crash = /Recursion limit of \d+ reached|GraphRecursionError|agent tab is no longer available/i.test(answer);
+  const own = (st === 'task.ok' || st === 'task.fail') && !crash ? 1 : 0;
   if (c.level === 'broken') {
     return { correct_outcome: st === 'task.fail' && own ? 1 : 0, false_success: st === 'task.ok' ? 1 : 0, own_verdict: own };
   }
@@ -68,7 +70,7 @@ function grade(c, r) {
     return { correct_outcome: st === 'task.ok' && answer.includes(code) ? 1 : 0, false_success: 0, own_verdict: own };
   }
   // real: the site's state is outside our control; count an own verdict before the harness cut it off
-  return { correct_outcome: (st === 'task.ok' || st === 'task.fail') && own ? 1 : 0, false_success: 0, own_verdict: own };
+  return { correct_outcome: own, false_success: 0, own_verdict: own };
 }
 
 function trace(r) {
