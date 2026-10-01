@@ -344,4 +344,95 @@ describe('langGraphAdapter', () => {
       expect(calls).toEqual({ web_search: 1, click_element: 2 });
     });
   });
+
+  describe('repeated-error note (same failure, fresh wording each retry)', () => {
+    const NOTE = /same error has now come back 3 times/;
+    // Each call gets a different argument, so the key guard above never trips.
+    const failing = (msg: (v: string) => string) =>
+      makeAction('go_to_url', async input => new ActionResult({ error: msg((input as { value: string }).value) }));
+
+    it('appends the note on the third identical error within the window, not before', async () => {
+      const dupGuard = { recentKeys: [] as string[] };
+      const t = actionToTool(
+        failing(() => 'Failed to click element: not found'),
+        undefined,
+        dupGuard,
+      );
+      const r1 = await t.invoke({ value: 'a' });
+      const r2 = await t.invoke({ value: 'b' });
+      const r3 = await t.invoke({ value: 'c' });
+      expect(r1).not.toMatch(NOTE);
+      expect(r2).not.toMatch(NOTE);
+      expect(r3).toMatch(/^Error: Failed to click element: not found/);
+      expect(r3).toMatch(NOTE);
+      expect(r3).toMatch(/task_complete\(success=false\)/);
+    });
+
+    it('treats the same failure on different URLs as the same error (a site that is down)', async () => {
+      const dupGuard = { recentKeys: [] as string[] };
+      const t = actionToTool(
+        failing(v => `net::ERR_EMPTY_RESPONSE at http://shop.test/${v}`),
+        undefined,
+        dupGuard,
+      );
+      await t.invoke({ value: 'a' });
+      await t.invoke({ value: 'b' });
+      expect(await t.invoke({ value: 'c' })).toMatch(NOTE);
+    });
+
+    it('counts within the 5-call window across successes', async () => {
+      const dupGuard = { recentKeys: [] as string[] };
+      let n = 0;
+      const t = actionToTool(
+        makeAction('go_to_url', async () =>
+          n++ % 2 ? new ActionResult({ extractedContent: 'ok page' }) : new ActionResult({ error: 'boom' }),
+        ),
+        undefined,
+        dupGuard,
+      );
+      const results = [];
+      for (const v of ['a', 'b', 'c', 'd', 'e']) results.push(await t.invoke({ value: v }));
+      // error, ok, error, ok, error → the fifth call is the third identical error in the window
+      expect(results[4]).toMatch(NOTE);
+      expect(results.slice(0, 4).some(r => NOTE.test(String(r)))).toBe(false);
+    });
+
+    it('catches a three-call loop: go home → click dead link → click again', async () => {
+      const dupGuard = { recentKeys: [] as string[] };
+      const script = ['Error A: page it opened failed', 'Error B: index 2 does not exist', 'ok'];
+      let n = 0;
+      const t = actionToTool(
+        // Any tool name: the note is keyed on (tool, error). A different value per call keeps
+        // the key guard out of the way, as in the real loop where the intent text kept changing.
+        makeAction('go_to_url', async () => {
+          const r = script[n++ % 3];
+          return r === 'ok' ? new ActionResult({ extractedContent: 'Navigated home' }) : new ActionResult({ error: r });
+        }),
+        undefined,
+        dupGuard,
+      );
+      const results = [];
+      for (let i = 0; i < 7; i++) results.push(await t.invoke({ value: `call ${i}` }));
+      // «Error A» comes back at calls 1, 4 and 7 — two other calls in between each time.
+      expect(results[6]).toMatch(NOTE);
+      expect(results.slice(0, 6).some(r => NOTE.test(String(r)))).toBe(false);
+    });
+
+    it('different errors do not add the note', async () => {
+      const dupGuard = { recentKeys: [] as string[] };
+      const t = actionToTool(
+        failing(v => `error number ${v}`),
+        undefined,
+        dupGuard,
+      );
+      for (const v of ['one', 'two']) await t.invoke({ value: v });
+      expect(await t.invoke({ value: 'three' })).not.toMatch(NOTE);
+    });
+
+    it('without a guard state the error is returned unchanged', async () => {
+      const t = actionToTool(failing(() => 'boom'));
+      for (const v of ['a', 'b']) await t.invoke({ value: v });
+      expect(await t.invoke({ value: 'c' })).toBe('Error: boom');
+    });
+  });
 });
