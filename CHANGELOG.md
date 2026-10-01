@@ -6,8 +6,51 @@ All notable changes to Browd are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.1.17] — 2026-10-02
+
+The agent ends tasks honestly on broken, slow and hostile sites. When a site
+never loads, blocks the agent, or does not have what was asked, the answer
+says so and the task is reported as failed instead of as a success, and it
+gets there faster. Running out of steps ends with the agent's own account of
+what it tried. Browser permissions and stored settings are unchanged.
+
+### Added
+
+- Opt-in multi-model task evaluations with five synthetic scenarios, the real
+  agent graph, deterministic assertions and a separately invoked LLM Judge.
+  Fixture-browser reports do not imply real-browser end-to-end verification.
+- A broken-site robustness eval for the repo's benchmark: local fixture sites
+  that reset, hang, wall off or loop, plus slow-but-working counterparts,
+  graded by code. The benchmark's judge can now skip duplicate screenshots.
+  Both are development tools and are not part of the extension.
+
+### Changed
+
+- **Current models in the OpenRouter defaults:** `openai/gpt-6-luna`,
+  `anthropic/claude-sonnet-5.5`, `google/gemini-3.8-flash`,
+  `deepseek/deepseek-v4.1-flash` and `qwen/qwen3.8-flash`, each checked to
+  accept images, tools and tool choice. Providers you already set up keep
+  their own model lists.
+
 ### Fixed
 
+- **"Not on this site" is no longer reported as success.** The agent states
+  the outcome — answered, not on the site, or blocked — before it writes the
+  answer, and only "answered" counts as success. Previously «I couldn't verify
+  the price» could finish as a success, and the planner could override an
+  honest «not found».
+- **Running out of steps ends with the agent's own report.** At the step limit
+  the agent gets one last turn to say what it tried and found, instead of the
+  user receiving «Recursion limit of 25 reached without hitting a stop
+  condition…». This also works on models that do not accept a forced tool
+  choice, such as Claude Sonnet 5.5 and Qwen 3.8.
+- **A site that never loads is reported as failed.** Navigation no longer says
+  «Navigated» when the tab is on the browser's error page, and the agent no
+  longer waits 20 s reading that error page.
+- **Web search and page fetch give up after 20 s** instead of hanging until
+  the whole task is cancelled.
+- **Repeated errors are pointed out.** When the same tool error comes back a
+  third time, the agent is told that retrying will not change it.
 - Completed agent answers are delivered verbatim: `task_complete` now stops
   the inner loop and bypasses replanning, preventing repeated completion
   calls and replacement of requested data with a generic acknowledgement.
@@ -39,12 +82,6 @@ All notable changes to Browd are documented here. The format is based on
   links, works without DOM globals in the worker and follows the agent tab.
 - Active plan checklists are retired on completion, failure and cancellation
   without marking unexecuted future steps as done.
-
-### Added
-
-- Opt-in multi-model task evaluations with five synthetic scenarios, the real
-  agent graph, deterministic assertions and a separately invoked LLM Judge.
-  Fixture-browser reports do not imply real-browser end-to-end verification.
 
 ## [0.1.16] — 2026-09-13
 
