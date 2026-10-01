@@ -195,3 +195,51 @@ describe('webSearch (DuckDuckGo parsing)', () => {
     if (!result.ok) expect(result.errorType).toBe('parse_failed');
   });
 });
+
+describe('request deadline', () => {
+  /**
+   * A server that accepts the request and never answers: fetch settles only when its signal aborts.
+   * AbortSignal.timeout is replaced by a signal the test fires, so no real 20 s wait is needed.
+   */
+  function hangingServerWithControlledDeadline() {
+    const deadlines: AbortController[] = [];
+    vi.spyOn(AbortSignal, 'timeout').mockImplementation(() => {
+      const c = new AbortController();
+      deadlines.push(c);
+      return c.signal;
+    });
+    globalThis.fetch = vi.fn(
+      (_url: string, init?: RequestInit) =>
+        new Promise<Response>((_, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(init.signal!.reason));
+        }),
+    ) as unknown as typeof fetch;
+    const fireAll = () => deadlines.forEach(c => c.abort(new DOMException('The operation timed out.', 'TimeoutError')));
+    return { deadlines, fireAll };
+  }
+
+  it('every web_fetch_markdown request carries a deadline signal', async () => {
+    const { deadlines, fireAll } = hangingServerWithControlledDeadline();
+    const pending = webFetchMarkdown({ url: 'http://hanging.test/' });
+    // Jina first, then the local fallback: each one must be abortable.
+    await vi.waitFor(() => expect(deadlines.length).toBe(1));
+    fireAll();
+    await vi.waitFor(() => expect(deadlines.length).toBe(2));
+    fireAll();
+    const result = await pending;
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toMatch(/no response within 20 s/);
+  });
+
+  it('web_search gives up on an engine that never answers', async () => {
+    const { deadlines, fireAll } = hangingServerWithControlledDeadline();
+    const pending = webSearch({ query: 'anything' });
+    await vi.waitFor(() => expect(deadlines.length).toBe(1));
+    fireAll();
+    await vi.waitFor(() => expect(deadlines.length).toBe(2));
+    fireAll();
+    const result = await pending;
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toMatch(/no response within 20 s/);
+  });
+});
