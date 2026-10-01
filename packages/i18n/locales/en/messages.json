@@ -682,6 +682,15 @@
       }
     }
   },
+  "act_goToUrl_timeout": {
+    "message": "$URL$ did not finish loading in time",
+    "placeholders": {
+      "url": {
+        "content": "$1",
+        "example": "https://example.com"
+      }
+    }
+  },
   "act_goBack_start": {
     "message": "Navigating back"
   },

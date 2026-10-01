@@ -24,6 +24,9 @@ import {
   URLNotAllowedError,
   TabGoneError,
   isTabGoneErrorMessage,
+  NavigationFailedError,
+  isBrowserErrorPage,
+  type NavigationOutcome,
 } from './views';
 import { createLogger } from '@src/background/log';
 import { ClickableElementProcessor } from './dom/clickable/service';
@@ -378,6 +381,13 @@ export default class Page {
       // return the initial state
       return build_initial_state(this._tabId);
     }
+    // The browser's error page has nothing to read, and building its DOM stalls until the
+    // deadline (20 s per step on 2026-09-30, eight times in one task). Say what it is instead.
+    if (isBrowserErrorPage(this.url())) {
+      return this._degradedState(
+        "The tab shows the browser's error page: the last navigation failed and the site returned no page, so there is nothing here to read or click. Waiting will not change this page; open a different address or report that the site is unreachable.",
+      );
+    }
     await this.waitForPageAndFramesLoad();
     const updatedState = await withStateDeadline(
       deadlineSignal => this._updateState(useVision, -1, deadlineSignal),
@@ -424,7 +434,9 @@ export default class Page {
    * map can never route a click to the wrong element. Not cached: the next
    * getState tries a full build again.
    */
-  private async _degradedState(): Promise<PageState> {
+  private async _degradedState(
+    stateNote = `Reading this page's structure did not finish within ${STATE_BUILD_DEADLINE_MS / 1000} s (a heavy or still-loading page), so interactive elements are unavailable for this step. Look again after a short wait, scroll, take a screenshot if that tool is available, or go to a more specific URL.`,
+  ): Promise<PageState> {
     let title = '';
     try {
       title = (await chrome.tabs.get(this._tabId)).title ?? '';
@@ -433,7 +445,7 @@ export default class Page {
     }
     return {
       ...build_initial_state(this._tabId, this._puppeteerPage?.url() || this._state.url, title),
-      stateNote: `Reading this page's structure did not finish within ${STATE_BUILD_DEADLINE_MS / 1000} s (a heavy or still-loading page), so interactive elements are unavailable for this step. Look again after a short wait, scroll, take a screenshot if that tool is available, or go to a more specific URL.`,
+      stateNote,
     };
   }
 
@@ -714,9 +726,9 @@ export default class Page {
     return this._state.title;
   }
 
-  async navigateTo(url: string): Promise<void> {
+  async navigateTo(url: string): Promise<NavigationOutcome> {
     if (!this._puppeteerPage) {
-      return;
+      return { status: 'loaded' };
     }
     logger.info('navigateTo', url);
 
@@ -725,17 +737,33 @@ export default class Page {
       throw new URLNotAllowedError(`URL: ${url} is not allowed`);
     }
 
+    const previousUrl = this._puppeteerPage.url();
+    // A failed load can still resolve: Chromium commits its own error page and goto returns.
+    const failIfErrorPage = () => {
+      if (isBrowserErrorPage(this._puppeteerPage?.url())) {
+        throw new NavigationFailedError(
+          `Navigation to ${url} failed: the browser shows its error page, so the site returned no page (connection failed or was refused).`,
+        );
+      }
+    };
+
     try {
       await Promise.all([this.waitForPageAndFramesLoad(), this._puppeteerPage.goto(url)]);
+      failIfErrorPage();
       logger.info('navigateTo complete');
+      return { status: 'loaded' };
     } catch (error) {
-      if (error instanceof URLNotAllowedError) {
+      if (error instanceof URLNotAllowedError || error instanceof NavigationFailedError) {
         throw error;
       }
 
       if (error instanceof Error && error.message.includes('timeout')) {
+        // The load may still finish, so this is not an error — but it is not a
+        // completed navigation either, and the caller must be told which it is.
+        failIfErrorPage();
+        const currentUrl = this._puppeteerPage.url();
         logger.warning('Navigation timeout, but page might still be usable:', error);
-        return;
+        return { status: 'timeout', committed: currentUrl !== previousUrl, currentUrl };
       }
 
       logger.error('Navigation failed:', error);

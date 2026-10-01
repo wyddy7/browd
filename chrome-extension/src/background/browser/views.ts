@@ -144,6 +144,29 @@ export class BrowserError extends Error {
   }
 }
 
+/**
+ * A navigation ended on the browser's own error page (connection reset or refused,
+ * DNS failure, protocol error): the site sent no page at all.
+ */
+export class NavigationFailedError extends BrowserError {
+  constructor(message?: string) {
+    super(message);
+    this.name = 'NavigationFailedError';
+  }
+}
+
+/**
+ * How a navigation ended when it did not throw. `timeout` means the load did not finish
+ * within the navigation timeout; `committed` says whether the tab left the previous page
+ * (false: the site has not answered yet and the tab still shows what it showed before).
+ */
+export type NavigationOutcome = { status: 'loaded' } | { status: 'timeout'; committed: boolean; currentUrl: string };
+
+/** Chromium shows `chrome-error://chromewebdata/` when a navigation fails. */
+export function isBrowserErrorPage(url: string | undefined | null): boolean {
+  return typeof url === 'string' && url.startsWith('chrome-error://');
+}
+
 export class URLNotAllowedError extends BrowserError {
   /**
    * Error raised when a URL is not allowed

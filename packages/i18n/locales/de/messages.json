@@ -649,6 +649,15 @@
       }
     }
   },
+  "act_goToUrl_timeout": {
+    "message": "$URL$ wurde nicht rechtzeitig fertig geladen",
+    "placeholders": {
+      "url": {
+        "content": "$1",
+        "example": "https://example.com"
+      }
+    }
+  },
   "act_goBack_start": {
     "message": "Navigiere zurück"
   },

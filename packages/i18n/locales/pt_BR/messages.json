@@ -649,6 +649,15 @@
       }
     }
   },
+  "act_goToUrl_timeout": {
+    "message": "$URL$ não terminou de carregar a tempo",
+    "placeholders": {
+      "url": {
+        "content": "$1",
+        "example": "https://example.com"
+      }
+    }
+  },
   "act_goBack_start": {
     "message": "Navegando para trás"
   },
