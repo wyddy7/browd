@@ -397,6 +397,27 @@ describe('langGraphAdapter', () => {
       expect(results.slice(0, 4).some(r => NOTE.test(String(r)))).toBe(false);
     });
 
+    it('catches a three-call loop: go home → click dead link → click again', async () => {
+      const dupGuard = { recentKeys: [] as string[] };
+      const script = ['Error A: page it opened failed', 'Error B: index 2 does not exist', 'ok'];
+      let n = 0;
+      const t = actionToTool(
+        // Any tool name: the note is keyed on (tool, error). A different value per call keeps
+        // the key guard out of the way, as in the real loop where the intent text kept changing.
+        makeAction('go_to_url', async () => {
+          const r = script[n++ % 3];
+          return r === 'ok' ? new ActionResult({ extractedContent: 'Navigated home' }) : new ActionResult({ error: r });
+        }),
+        undefined,
+        dupGuard,
+      );
+      const results = [];
+      for (let i = 0; i < 7; i++) results.push(await t.invoke({ value: `call ${i}` }));
+      // «Error A» comes back at calls 1, 4 and 7 — two other calls in between each time.
+      expect(results[6]).toMatch(NOTE);
+      expect(results.slice(0, 6).some(r => NOTE.test(String(r)))).toBe(false);
+    });
+
     it('different errors do not add the note', async () => {
       const dupGuard = { recentKeys: [] as string[] };
       const t = actionToTool(

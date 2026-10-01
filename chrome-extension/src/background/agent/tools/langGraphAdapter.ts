@@ -135,6 +135,9 @@ function canonicaliseArgsForGuard(name: string, input: unknown): string {
 }
 
 const REPEATED_ERROR_THRESHOLD = 3;
+// Wider than the key guard's window: a loop like «open home → click dead link → click again» puts
+// two other calls between each repeat of the same error (2026-10-01 fixture run).
+const REPEATED_ERROR_WINDOW = 8;
 
 /** Same failure, whatever page path it was hit on: URLs are masked before comparing. */
 function normaliseToolError(name: string, rendered: string): string {
@@ -143,7 +146,7 @@ function normaliseToolError(name: string, rendered: string): string {
 
 /**
  * Records one tool outcome and, when the same error has now come back
- * REPEATED_ERROR_THRESHOLD times in the last DUPLICATE_WINDOW calls, appends a note to it.
+ * REPEATED_ERROR_THRESHOLD times in the last REPEATED_ERROR_WINDOW calls, appends a note to it.
  * The call already ran; this only tells the model the result will not change on retry.
  */
 function noteRepeatedError(dupGuard: DuplicateGuardState | undefined, name: string, rendered: ToolReturn): ToolReturn {
@@ -152,7 +155,7 @@ function noteRepeatedError(dupGuard: DuplicateGuardState | undefined, name: stri
   const isError = typeof rendered === 'string' && rendered.startsWith('Error:');
   const key = isError ? normaliseToolError(name, rendered) : '';
   errors.push(key);
-  if (errors.length > DUPLICATE_WINDOW) errors.shift();
+  if (errors.length > REPEATED_ERROR_WINDOW) errors.shift();
   if (!isError) return rendered;
   const count = errors.filter(k => k === key).length;
   if (count < REPEATED_ERROR_THRESHOLD) return rendered;
