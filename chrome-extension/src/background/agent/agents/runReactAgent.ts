@@ -22,7 +22,8 @@ import { Actors, ExecutionState } from '../event/types';
 import { createLogger } from '@src/background/log';
 import { createObservabilityCallback } from './observabilityCallback';
 import { createUsageTracker } from './usageTracker';
-import { computeStateFingerprint, isInnerRecursionLimitError } from '../guardrails/unifiedStuckDetector';
+import { isInnerRecursionLimitError } from '../guardrails/unifiedStuckDetector';
+import { runFinalTurn } from './finalTurn';
 import { TabGoneError } from '@src/background/browser/views';
 import { bridgeStreamEvents, type LiveEvent } from './streamBridge';
 import {
@@ -196,18 +197,14 @@ Current date: ${timeStr}
 }
 
 /**
- * T2p-3 — soft-fail summary on inner-recursion exhaustion WITH progress.
+ * Last progress of a subgoal that hit its step limit, for the failure text
+ * shown when the final turn (agents/finalTurn.ts) delivers no task_complete.
  *
- * Walks `messages` from the end and stitches a 1-2 sentence partial
- * summary out of the last AIMessage text (the agent's most recent
- * reasoning) plus the last ToolMessage name (what it actually did).
- * Exported for unit testing. Does NOT call the LLM — the replanner
- * runs an LLM round next anyway, that's the polishing layer.
- *
- * Returned string is always non-empty; if neither component is present
- * it falls back to a generic "no observable progress" marker. The
- * caller is expected to prefix this with `partial: ` before handing
- * it back to the replanner.
+ * Walks `messages` from the end and stitches a 1-2 sentence summary out of
+ * the last AIMessage text (the agent's most recent reasoning) plus the last
+ * ToolMessage name (what it actually did). Does NOT call the LLM. Returned
+ * string is always non-empty; with neither component it falls back to a
+ * generic "no observable progress" marker.
  */
 export function extractPartialSummary(messages: BaseMessage[]): string {
   let lastAiText = '';
@@ -411,7 +408,6 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
     completed: Array<[string, string]>,
     stepIndex: number,
     params: PlanType['taskParameters'],
-    fpStart: string | null,
   ): Promise<{ summary: string; outcome?: TaskOutcome; completion?: TaskOutcome }> => {
     const stepSystemPrompt = buildSystemPromptForStep(currentStep, completed, params);
     const agent = createReactAgent({
@@ -461,53 +457,44 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
       );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      // T2p-3 — distinguish BUDGET signal from STUCK signal. T2p-2 treated
-      // every inner GraphRecursionError as a terminal stuck verdict, but
-      // test20 showed the agent often makes real navigation progress and
-      // exhausts the 25-round budget just before producing its answer.
-      // Compare the page fingerprint captured at agentNode entry against
-      // the fingerprint at exhaustion: same → real stuck (rethrow so the
-      // outer catch reports a failure), different → observable
-      // progress → soft-fail with a "partial:" summary so the replanner
-      // can decide END or CONTINUE on the next round.
       if (!isInnerRecursionLimitError(msg)) throw err;
-      let fpNow: string | null = null;
+      // Issue #10: the step budget is spent. One more turn with task_complete as the
+      // only tool lets the subgoal end with the agent's own outcome and report.
+      let snapshot: BaseMessage[] = [];
       try {
-        const liveState = await context.browserContext.getState(false);
-        fpNow = computeStateFingerprint(liveState);
-      } catch (fpErr) {
-        // T2u-runaway-loop — same logic as the fp_start probe. If
-        // the tab is gone there is nothing to compare against, so
-        // rethrow the original recursion-limit error and let the
-        // outer agentNode catch turn it into a clean stop.
-        const fpMsg = fpErr instanceof Error ? fpErr.message : String(fpErr);
-        if (fpErr instanceof TabGoneError || /No tab with id|No frame with id/i.test(fpMsg)) {
-          logger.warning(`fp_now probe saw tab gone (${fpMsg}); rethrowing recursion-limit error`);
-          throw err;
-        }
-        logger.warning('fp_now probe failed during recursion-limit soft-fail check', fpErr);
-        fpNow = null;
-      }
-      // Conservative-stuck path: any null fingerprint means we can't
-      // confirm progress, so preserve T2p-2 terminal behaviour.
-      if (fpStart === null || fpNow === null || fpNow === fpStart) {
-        throw err;
-      }
-      // Progress confirmed: stitch a partial summary from the
-      // checkpointer state. Rethrow if the snapshot is unreadable
-      // (we cannot manufacture a useful soft-fail without messages).
-      let snapshotMessages: BaseMessage[] = [];
-      try {
-        const snapshot = await agent.getState(stepConfig);
-        const v = (snapshot as { values?: { messages?: BaseMessage[] } }).values;
-        if (v && Array.isArray(v.messages)) snapshotMessages = v.messages;
+        const values = ((await agent.getState(stepConfig)) as { values?: { messages?: BaseMessage[] } }).values;
+        if (values && Array.isArray(values.messages)) snapshot = values.messages;
       } catch (snapErr) {
-        logger.warning('agent.getState() failed during recursion-limit soft-fail', snapErr);
-        throw err;
+        logger.warning('agent.getState() failed at the step limit', snapErr);
       }
-      const summary = extractPartialSummary(snapshotMessages);
-      logger.info(`recursion-limit soft-fail with progress (fp_start≠fp_now) — handing partial to replanner`);
-      return { summary: `partial: ${summary}` };
+      const taskComplete = tools.find(t => t.name === 'task_complete');
+      let final: Awaited<ReturnType<typeof runFinalTurn>> = null;
+      if (taskComplete) {
+        try {
+          final = await runFinalTurn({
+            llm,
+            systemPrompt: stepSystemPrompt,
+            messages: snapshot,
+            taskComplete,
+            config: stepConfig,
+          });
+        } catch (finalErr) {
+          logger.warning(
+            `final turn at the step limit failed: ${JSON.stringify((finalErr as { error?: unknown })?.error ?? String(finalErr))}`,
+          );
+        }
+      }
+      if (final?.executed) {
+        logger.info(`step limit reached on "${currentStep}" — final turn delivered task_complete`);
+        // A forced «not answered» is a failed subgoal: the consecutive-failure guard
+        // then stops a replanner that keeps planning new routes around the same wall.
+        const failedPrefix = final.outcome.status === 'completed' ? '' : 'failed: ';
+        return { summary: `${failedPrefix}${final.outcome.response}`, completion: final.outcome };
+      }
+      // No completion from the final turn: a failed subgoal for the replanner, which
+      // continues the plan or finishes in its own words; the consecutive-failure
+      // guard stops a plan whose every step runs out.
+      return { summary: `failed: ran out of steps on "${currentStep}". ${extractPartialSummary(snapshot)}` };
     }
     const read = readTaskCompletion(stepResult.messages);
     if (!read) return { summary: extractSubgoalSummary(stepResult.messages) ?? 'no observable result' };
@@ -610,29 +597,21 @@ ${todayLine} Write relative dates from the request ("tomorrow", "next week") as 
     logger.info(`executing subgoal ${state.pastSteps.length + 1}: ${currentStep}`);
     emitStep(false, true);
 
-    // Used only to distinguish progress at recursion-budget exhaustion.
-    let fpStart: string | null = null;
     try {
-      fpStart = computeStateFingerprint(await context.browserContext.getState(false));
+      await context.browserContext.getState(false);
     } catch (err) {
       if (isTabGone(err)) {
         emitStep(false);
         return failed('The agent tab is no longer available (closed or crashed). Run ended.');
       }
-      logger.warning('Initial state probe failed; recursion exhaustion will fail closed', err);
+      logger.warning('Initial state probe failed; continuing', err);
     }
 
     let summary: string;
     let outcome: TaskOutcome | undefined;
     let completion: TaskOutcome | undefined;
     try {
-      const step = await runReactStep(
-        currentStep,
-        state.pastSteps,
-        state.pastSteps.length,
-        state.taskParameters,
-        fpStart,
-      );
+      const step = await runReactStep(currentStep, state.pastSteps, state.pastSteps.length, state.taskParameters);
       summary = step.summary;
       outcome = step.outcome;
       completion = step.completion;
@@ -640,7 +619,7 @@ ${todayLine} Write relative dates from the request ("tomorrow", "next week") as 
       const message = err instanceof Error ? err.message : String(err);
       summary = `failed: ${message}`;
       logger.warning(`subgoal "${currentStep}" failed: ${message}`);
-      if (isInnerRecursionLimitError(message) || isTabGone(err) || err instanceof InvalidTaskToolBatchError) {
+      if (isTabGone(err) || err instanceof InvalidTaskToolBatchError) {
         outcome = { status: 'failed', response: message };
       }
     }
@@ -709,8 +688,15 @@ ${todayLine} Write relative dates from the request ("tomorrow", "next week") as 
         ...finishedSubgoals.map(s => ({ text: s, done: true })),
         { text: `${failedSubgoal} (blocked)`, done: false },
       ]);
+      // The last failed step's own report (e.g. a final turn at the step limit) is
+      // what the user needs to read; partial results list only finished steps.
+      const lastReport = tail[tail.length - 1][1].replace(/^failed:\s*/, '');
       return failed(
-        `The task is incomplete: ${failuresCap} consecutive subgoals failed at "${failedSubgoal}".\n\nPartial results:\n${partial || '(none)'}`,
+        [
+          `The task is incomplete: ${failuresCap} consecutive subgoals failed at "${failedSubgoal}".`,
+          `Last attempt: ${lastReport}`,
+          ...(partial ? [`Partial results:\n${partial}`] : []),
+        ].join('\n\n'),
       );
     }
     try {
@@ -822,6 +808,13 @@ ${todayLine} Write relative dates from the request ("tomorrow", "next week") as 
     if (isCancelled()) return publishOutcome(cancelledOutcome);
     const message = err instanceof Error ? err.message : String(err);
     logger.error('runReactAgent failed', err);
+    if (isInnerRecursionLimitError(message)) {
+      // The task-level budget (planner + subgoals + replanner visits) is spent; say so in words.
+      return publishOutcome({
+        status: 'failed',
+        response: `The task used all ${config.recursionLimit} of its steps without reaching a result.`,
+      });
+    }
     return publishOutcome({ status: 'failed', response: message });
   } finally {
     emitLive({ kind: 'idle' });

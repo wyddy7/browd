@@ -626,7 +626,10 @@ describe('runReactAgent authoritative completion', () => {
 
     expect(llm.chatInvocations).toBeGreaterThan(1);
     expect(result.finalAnswer).toBeNull();
-    expect(result.error).toMatch(/recursion/i);
+    // No task_complete in this registry, so the final turn cannot run: the failure is still
+    // worded for the user, not LangGraph's «Recursion limit of 25 reached…» (issue #10).
+    expect(result.error).toMatch(/ran out of steps on "Keep observing"/);
+    expect(result.error).not.toMatch(/Recursion limit/);
     expect(terminalStates(events).map(event => event.state)).toEqual([ExecutionState.TASK_FAIL]);
   });
 });

@@ -177,6 +177,20 @@ separate `visionMode` toggle:
   user cancellation emits TASK_CANCEL. Completion must be a standalone tool
   call: mixed batches are rejected before any tool executes. Offline tests
   exercise the actual LangGraph runtime with a scripted provider transport.
+- **Step limit ends with a final turn (issue #10).** A subgoal's inner ReAct
+  graph runs with `recursionLimit: 25`. When it is reached, `agents/finalTurn.ts`
+  gives the model one more turn with `task_complete` as the only tool; the
+  result follows the completion rules above (last subgoal → terminal, earlier
+  → proposal). A forced final that is not `answered`, or a final turn with no
+  completion, counts as a failed subgoal for the replanner, so the
+  consecutive-failure guard ends a plan whose every step runs out — its message
+  carries the last attempt's own report. The transcript passed to the final
+  turn is cut at the first unanswered tool call, matched by message type: a
+  streamed graph stores `AIMessageChunk`, not `AIMessage`, and the provider
+  rejects an unanswered call («No tool output found for function call …»).
+  LangGraph's «Recursion limit of N reached…» text never reaches the user —
+  neither from a subgoal nor from the task-level limit. This replaced the
+  page-fingerprint soft-fail (T2p-3).
 - **Tab isolation contract (T2f-tab-iso).** In `agentMode='unified'`
   the Executor anchors the user's active tab via `BrowserContext.openAgentTab()`
   on TASK_START and groups it. `getCurrentPage()` resolves to that tab even if
