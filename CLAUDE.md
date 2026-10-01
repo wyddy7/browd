@@ -36,6 +36,10 @@ Live-web benchmark (Online-Mind2Web subset, graded by the official WebJudge):
 `bench/om2w/README.md`. Needs a built `dist/` and an OpenRouter key in the
 gitignored `.env.bench.local`; run output lands in the gitignored `bench-runs/`.
 
+Broken-site robustness eval (local fixture sites that reset, hang, wall off or
+loop, plus slow-but-working counterparts; graded by code, no judge):
+`bench/robustness/CASES.md`. Same runner and key; costs about $0.004 per case.
+
 Prefer scoped commands when working in one workspace:
 
 ```bash

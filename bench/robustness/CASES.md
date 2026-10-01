@@ -27,7 +27,7 @@ the harness timeout; a slow-but-working site must still be solved. One flow, one
 | pagination-6 | working | answer on page 6 of 8, reachable only by clicking «Next» 5 times | `task.ok` + code |
 | heavy-dom | working | 6 000-row table, the answer in row 4 812 | `task.ok` + code |
 | long-flow | working | search → category → filter → detail page (6–10 actions) | `task.ok` + code |
-| real-florida | real | OM2W `4e0f5561` (AccuWeather refuses the headless browser 📄) | own verdict before timeout |
+| real-florida | real | OM2W `4e0f5561` (AccuWeather refuses the headless browser) | own verdict before timeout |
 | real-booker | real | OM2W `6b2cfae0` (NBA.com denies the homepage, heavy stats pages) | own verdict before timeout |
 
 8 broken · 6 working · 2 real = 16 cases.
