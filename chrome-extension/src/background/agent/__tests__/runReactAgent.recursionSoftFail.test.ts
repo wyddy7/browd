@@ -1,19 +1,8 @@
 /**
- * T2p-3 — `extractPartialSummary` helper tests.
- *
- * The full soft-fail branch (fp_start vs fp_now comparison, getState
- * checkpoint read, rethrow vs partial:-return) lives inside the
- * `runReactStep` closure in `runReactAgent.ts` and is exercised by
- * the live extension under recursion-limit exhaustion. These tests
- * cover the small pure helper that stitches a 1-2 sentence partial
- * summary out of the agent step's accumulated messages — i.e. the
- * piece that determines what the replanner sees on the next round.
- *
- * Why no closure-level tests: the closure is built from `llm`,
- * `tools`, `context.browserContext` and `createReactAgent` — driving
- * a real LangGraph through a thrown GraphRecursionError to verify
- * the catch path is not worth the rathole. The helper is the
- * load-bearing piece; the dispatch logic around it is straight-line.
+ * `extractPartialSummary` helper tests. It words the last progress of a
+ * subgoal that hit its step limit when the final turn delivers no
+ * task_complete; the step-limit path itself is covered end to end in
+ * runReactAgent.finalTurn.test.ts.
  */
 import { describe, it, expect, vi } from 'vitest';
 import { AIMessage, HumanMessage, ToolMessage, SystemMessage } from '@langchain/core/messages';
