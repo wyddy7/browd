@@ -479,20 +479,22 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
             config: stepConfig,
           });
         } catch (finalErr) {
-          logger.warning('final turn at the step limit failed', finalErr);
+          logger.warning(
+            `final turn at the step limit failed: ${JSON.stringify((finalErr as { error?: unknown })?.error ?? String(finalErr))}`,
+          );
         }
       }
       if (final?.executed) {
         logger.info(`step limit reached on "${currentStep}" — final turn delivered task_complete`);
-        return { summary: final.outcome.response, completion: final.outcome };
+        // A forced «not answered» is a failed subgoal: the consecutive-failure guard
+        // then stops a replanner that keeps planning new routes around the same wall.
+        const failedPrefix = final.outcome.status === 'completed' ? '' : 'failed: ';
+        return { summary: `${failedPrefix}${final.outcome.response}`, completion: final.outcome };
       }
-      return {
-        summary: `failed: step limit`,
-        outcome: {
-          status: 'failed',
-          response: `I ran out of steps on "${currentStep}" without a result. Last progress: ${extractPartialSummary(snapshot)}`,
-        },
-      };
+      // No completion from the final turn: a failed subgoal for the replanner, which
+      // continues the plan or finishes in its own words; the consecutive-failure
+      // guard stops a plan whose every step runs out.
+      return { summary: `failed: ran out of steps on "${currentStep}". ${extractPartialSummary(snapshot)}` };
     }
     const read = readTaskCompletion(stepResult.messages);
     if (!read) return { summary: extractSubgoalSummary(stepResult.messages) ?? 'no observable result' };
@@ -686,8 +688,15 @@ ${todayLine} Write relative dates from the request ("tomorrow", "next week") as 
         ...finishedSubgoals.map(s => ({ text: s, done: true })),
         { text: `${failedSubgoal} (blocked)`, done: false },
       ]);
+      // The last failed step's own report (e.g. a final turn at the step limit) is
+      // what the user needs to read; partial results list only finished steps.
+      const lastReport = tail[tail.length - 1][1].replace(/^failed:\s*/, '');
       return failed(
-        `The task is incomplete: ${failuresCap} consecutive subgoals failed at "${failedSubgoal}".\n\nPartial results:\n${partial || '(none)'}`,
+        [
+          `The task is incomplete: ${failuresCap} consecutive subgoals failed at "${failedSubgoal}".`,
+          `Last attempt: ${lastReport}`,
+          ...(partial ? [`Partial results:\n${partial}`] : []),
+        ].join('\n\n'),
       );
     }
     try {

@@ -8,7 +8,7 @@
  * last planned subgoal it ends the task, from an earlier one it is a proposal
  * for the replanner.
  */
-import { AIMessage, HumanMessage, SystemMessage, ToolMessage, type BaseMessage } from '@langchain/core/messages';
+import { AIMessage, HumanMessage, SystemMessage, type BaseMessage, type ToolMessage } from '@langchain/core/messages';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type { RunnableConfig } from '@langchain/core/runnables';
 import type { StructuredToolInterface } from '@langchain/core/tools';
@@ -25,9 +25,11 @@ export const FINAL_TURN_INSTRUCTION =
  * first assistant message whose calls did not all get a result.
  */
 export function closeDanglingToolCalls(messages: BaseMessage[]): BaseMessage[] {
-  const answered = new Set(messages.filter(m => m instanceof ToolMessage).map(m => (m as ToolMessage).tool_call_id));
+  // By type, not class: a streamed graph keeps AIMessageChunk in its state, which is not an AIMessage
+  // (2026-10-01: «No tool output found for function call …» on every final turn).
+  const answered = new Set(messages.filter(m => m._getType() === 'tool').map(m => (m as ToolMessage).tool_call_id));
   const cut = messages.findIndex(
-    m => m instanceof AIMessage && (m.tool_calls ?? []).some(call => !call.id || !answered.has(call.id)),
+    m => m._getType() === 'ai' && ((m as AIMessage).tool_calls ?? []).some(call => !call.id || !answered.has(call.id)),
   );
   return cut === -1 ? messages : messages.slice(0, cut);
 }

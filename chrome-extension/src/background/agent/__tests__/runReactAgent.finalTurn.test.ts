@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { AIMessage, HumanMessage, ToolMessage } from '@langchain/core/messages';
+import { AIMessage, AIMessageChunk, HumanMessage, ToolMessage } from '@langchain/core/messages';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type { ChatResult } from '@langchain/core/outputs';
 import { z } from 'zod';
@@ -137,9 +137,16 @@ describe('final turn at the step limit', () => {
     ]);
   });
 
-  it('never delivers the recursion-limit text when the final turn gives no completion', async () => {
+  it('hands a step without a final-turn completion to the replanner, never the recursion-limit text', async () => {
     const { context, events } = makeContext();
-    const llm = new LoopingModel([new AIMessage('I will keep looking.')], [plan(['Find the blue 3-seat sofa'])]);
+    const answer = 'The listing repeats pages 1–3; I found no blue 3-seat sofa.';
+    const llm = new LoopingModel(
+      [new AIMessage('I will keep looking.')],
+      [
+        plan(['Find the blue 3-seat sofa', 'Read its listing code']),
+        { decision: 'finish', outcome: 'not_on_site', plan: null, response: answer },
+      ],
+    );
 
     const result = await runReactAgent({
       context,
@@ -148,11 +155,15 @@ describe('final turn at the step limit', () => {
       task: 'Find the listing for the blue 3-seat sofa and give its code.',
     });
 
+    // The replanner saw the step as partial work, not as a terminal failure.
+    expect(llm.structuredInvocations).toBe(2);
+    expect(JSON.stringify(llm.structuredInputs[1])).toMatch(
+      /failed: ran out of steps on \\"Find the blue 3-seat sofa\\"/,
+    );
     const [terminal] = terminalStates(events);
     expect(terminal.state).toBe(ExecutionState.TASK_FAIL);
     expect(terminal.details).not.toMatch(/Recursion limit|recursionLimit|GRAPH_RECURSION_LIMIT/);
-    expect(terminal.details).toMatch(/Find the blue 3-seat sofa/);
-    expect(result.error).toBe(terminal.details);
+    expect(result.error).toBe(answer);
   });
 
   it('hands a final-turn completion from an earlier subgoal to the replanner as a proposal', async () => {
@@ -179,7 +190,45 @@ describe('final turn at the step limit', () => {
     });
 
     expect(llm.structuredInvocations).toBe(2);
+    // The forced «not answered» reaches the replanner as a failed step.
+    expect(JSON.stringify(llm.structuredInputs[1])).toContain(`failed: ${report}`);
     expect(terminalStates(events).map(event => event.state)).toEqual([ExecutionState.TASK_FAIL]);
+  });
+});
+
+describe('consecutive forced failures', () => {
+  it('ends with the agent last report, not an empty partial result', async () => {
+    const { context, events } = makeContext();
+    const report = (n: number) => `Attempt ${n}: pages 1–3 repeat and no blue 3-seat sofa is listed.`;
+    const llm = new LoopingModel(
+      [1, 2, 3].map(
+        n =>
+          new AIMessage({
+            content: '',
+            tool_calls: [
+              { id: `final-${n}`, name: 'task_complete', args: { outcome: 'not_on_site', response: report(n) } },
+            ],
+          }),
+      ),
+      [
+        plan(['Find the blue sofa', 'Read its code']),
+        { decision: 'continue', plan: ['Search for the blue sofa', 'Read its code'], outcome: null, response: null },
+        { decision: 'continue', plan: ['Browse sofas by colour', 'Read its code'], outcome: null, response: null },
+      ],
+    );
+
+    const result = await runReactAgent({
+      context,
+      llm: llm as unknown as BaseChatModel,
+      actions: [nextPageAction(), realTaskComplete(context)],
+      task: 'Find the listing for the blue 3-seat sofa and give its code.',
+    });
+
+    const [terminal] = terminalStates(events);
+    expect(terminal.state).toBe(ExecutionState.TASK_FAIL);
+    expect(terminal.details).toContain(report(3));
+    expect(terminal.details).not.toContain('(none)');
+    expect(result.error).toBe(terminal.details);
   });
 });
 
@@ -220,6 +269,12 @@ describe('closeDanglingToolCalls', () => {
       dangling,
     ];
     expect(closeDanglingToolCalls(messages)).toEqual(messages.slice(0, 3));
+  });
+
+  it('drops a dangling call held as an AIMessageChunk, as a streamed graph stores it', () => {
+    const dangling = new AIMessageChunk({ content: '', tool_calls: [{ id: 'b', name: 'next_page', args: {} }] });
+    const messages = [new HumanMessage('find it'), dangling];
+    expect(closeDanglingToolCalls(messages)).toEqual(messages.slice(0, 1));
   });
 
   it('keeps a transcript whose tool calls all have results', () => {
