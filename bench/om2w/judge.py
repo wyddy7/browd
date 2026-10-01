@@ -3,12 +3,16 @@
 Usage: uv run --with openai --with pillow python judge.py <run_dir> [--model openai/gpt-6-sol] [--stop-usd 4.7]
        ... judge.py <run_dir> --codex gpt-6-astra [--only id1,id2]   # same protocol through the local
        Codex CLI on a ChatGPT login: no API spend, writes judged_codex_<model>.jsonl
+       [--effort low|medium|high]  Codex reasoning effort (default medium)
+       [--dedup]                   judge each byte-identical screenshot once (first occurrence kept)
+       [--tag name]                suffix for the output file, so a repeat judging does not resume the first
 Writes <run_dir>/judged.jsonl (one line per task) and prints a summary.
 The only change to the method: the engine talks to OpenRouter, drops `temperature`
 (reasoning judges reject it) and lifts the 512-token cap, which a reasoning model
 can spend entirely on hidden reasoning and return an empty verdict.
 """
 import asyncio
+import hashlib
 import json
 import os
 import re
@@ -76,10 +80,11 @@ class CodexEngine:
     in their original order. Read-only sandbox, ephemeral session, empty working directory.
     """
 
-    def __init__(self, model):
+    def __init__(self, model, effort="medium"):
         import tempfile
 
         self.model = model
+        self.effort = effort
         self.cost = 0.0
         self.workdir = Path(tempfile.mkdtemp(prefix="codex-judge-"))
         self.gate = threading.Semaphore(3)
@@ -112,7 +117,7 @@ class CodexEngine:
             )
             out = Path(tmp) / "answer.txt"
             cmd = ["codex", "exec", "--skip-git-repo-check", "--ephemeral", "-s", "read-only", "-C", tmp,
-                   "-m", self.model, "-c", 'model_reasoning_effort="medium"', "-o", str(out)]
+                   "-m", self.model, "-c", f'model_reasoning_effort="{self.effort}"', "-o", str(out)]
             for f in images:
                 cmd += ["-i", f]
             # `-i` takes several files; without `--` the prompt is read as one more image.
@@ -132,10 +137,14 @@ def main():
     run = Path(sys.argv[1])
     codex = sys.argv[sys.argv.index("--codex") + 1] if "--codex" in sys.argv else None
     model = codex or (sys.argv[sys.argv.index("--model") + 1] if "--model" in sys.argv else "openai/gpt-6-sol")
-    engine = CodexEngine(model) if codex else Engine(model)
+    effort = sys.argv[sys.argv.index("--effort") + 1] if "--effort" in sys.argv else "medium"
+    dedup = "--dedup" in sys.argv
+    tag = sys.argv[sys.argv.index("--tag") + 1] if "--tag" in sys.argv else ""
+    engine = CodexEngine(model, effort) if codex else Engine(model)
     only = sys.argv[sys.argv.index("--only") + 1].split(",") if "--only" in sys.argv else None
     stop_usd = float(sys.argv[sys.argv.index("--stop-usd") + 1]) if "--stop-usd" in sys.argv else 4.7
-    out = run / (f"judged_codex_{codex}.jsonl" if codex else "judged.jsonl")
+    suffix = ("_dedup" if dedup else "") + (f"_{effort}" if codex and effort != "medium" else "") + (f"_{tag}" if tag else "")
+    out = run / (f"judged_codex_{codex}{suffix}.jsonl" if codex else f"judged{suffix}.jsonl")
     ne = run / "not_executable.json"
     blocked = set(json.loads(ne.read_text())) if ne.exists() else set()
     done = {json.loads(l)["task_id"] for l in out.read_text().splitlines()} if out.exists() else set()
@@ -150,6 +159,17 @@ def main():
             print(f"budget stop: key usage ${used:.3f} >= ${stop_usd}")
             break
         shots = sorted((d / "trajectory").glob("*.png"), key=lambda p: int(re.findall(r"\d+", p.name)[0]))
+        total_shots = len(shots)
+        if dedup:
+            # A looping agent leaves runs of identical screenshots. Each would get the same score,
+            # and above-threshold copies take MAX_IMAGE slots in the final call from later frames.
+            seen, unique = set(), []
+            for p in shots:
+                h = hashlib.md5(p.read_bytes()).hexdigest()
+                if h not in seen:
+                    seen.add(h)
+                    unique.append(p)
+            shots = unique
         actions = list(r["action_history"])
         if r.get("final_result_response"):
             actions.append(f"final answer: {r['final_result_response']}")
@@ -178,10 +198,13 @@ def main():
             "key_points": key_points,
             "judge_cost_usd": round(engine.cost - before, 5),
             "judge_model": model,
+            "judge_effort": effort if codex else None,
+            "screenshots": total_shots,
+            "screenshots_judged": len(shots),
         }
         with out.open("a") as f:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
-        print(f"{r['level']:6} {'PASS' if label else 'fail'} ${row['judge_cost_usd']:.4f} | {r['task'][:70]}")
+        print(f"{r['level']:6} {'PASS' if label else 'fail'} ${row['judge_cost_usd']:.4f} shots={len(shots)}/{total_shots} | {r['task'][:70]}")
     rows = [json.loads(l) for l in out.read_text().splitlines()]
     print(f"judged={len(rows)} pass={sum(x['label'] for x in rows)} judge_cost_total=${sum(x['judge_cost_usd'] for x in rows):.4f}")
 

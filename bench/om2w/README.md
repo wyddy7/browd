@@ -21,8 +21,16 @@ cd bench/om2w && npm install && npx playwright install chromium
 printf 'OPENROUTER_API_KEY=...\nBENCH_MODEL=openai/gpt-6-luna\n' > ../../.env.bench.local   # gitignored
 node run.mjs --mode site                     # or --mode as-shipped; --only <ids>; --sw-log; --headed (default is headless)
 uv run --with openai --with pillow python judge.py ../../bench-runs/<run> --model openai/gpt-6-sol
+uv run --with openai --with pillow python judge.py ../../bench-runs/<run> --codex gpt-5.6-sol --dedup   # ChatGPT plan, $0
 python3 analyze.py ../../bench-runs/<run>
 ```
+
+`--dedup` judges each byte-identical screenshot once. A looping agent leaves runs of identical
+frames: in the 2026-09-30 run 243 of 601 screenshots were exact copies. On the 17 tasks judged
+through Codex `gpt-5.6-sol` both with and without it, the verdicts matched 17/17 while the judge
+read 214 screenshots instead of 356. Each screenshot is one judge call, so it is 40% less plan
+usage. It is a change to the protocol — report such numbers as «WebJudge, duplicate screenshots
+removed».
 
 Ad-hoc: `node run.mjs --task "<any task>" --url <start page>` — one task, no judge; read
 `result.json` (answer, tools, `premature_stop_suspect`) and the screenshots.
