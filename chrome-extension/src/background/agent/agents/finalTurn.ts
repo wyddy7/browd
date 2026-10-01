@@ -44,11 +44,19 @@ export async function runFinalTurn(args: {
 }): Promise<{ outcome: TaskOutcome; executed: boolean } | null> {
   const { llm, systemPrompt, messages, taskComplete, config } = args;
   if (!llm.bindTools) return null;
-  const model = llm.bindTools([taskComplete], { tool_choice: taskComplete.name });
-  const reply = await model.invoke(
-    [new SystemMessage(systemPrompt), ...closeDanglingToolCalls(messages), new HumanMessage(FINAL_TURN_INSTRUCTION)],
-    config,
-  );
+  const input = [
+    new SystemMessage(systemPrompt),
+    ...closeDanglingToolCalls(messages),
+    new HumanMessage(FINAL_TURN_INSTRUCTION),
+  ];
+  let reply: AIMessage;
+  try {
+    reply = await llm.bindTools([taskComplete], { tool_choice: taskComplete.name }).invoke(input, config);
+  } catch {
+    // Some providers reject a forced tool choice (Claude on Bedrock, Qwen — 2026-10-02); OpenRouter wraps the
+    // reason in a generic «Provider returned error». With task_complete as the only tool, «auto» still ends in it.
+    reply = await llm.bindTools([taskComplete], { tool_choice: 'auto' }).invoke(input, config);
+  }
   const call = reply.tool_calls?.find(c => c.name === taskComplete.name);
   if (!call) return null;
   const single = new AIMessage({ content: reply.content, tool_calls: [call] });

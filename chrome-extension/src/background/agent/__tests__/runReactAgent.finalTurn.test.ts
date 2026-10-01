@@ -196,6 +196,52 @@ describe('final turn at the step limit', () => {
   });
 });
 
+/** Rejects a forced tool choice the way some providers do (Claude on Bedrock, Qwen), accepts «auto». */
+class NoForcedChoiceModel extends LoopingModel {
+  forcedAttempts = 0;
+
+  bindTools(tools?: unknown[], options?: { tool_choice?: unknown }) {
+    if (tools?.length === 1 && options?.tool_choice && options.tool_choice !== 'auto') {
+      this.forcedAttempts += 1;
+      const rejecting = new ScriptedChatModel([], []);
+      rejecting._generate = async () => {
+        throw new Error('400 tool_choice: type "tool" and "any" are not supported for this model.');
+      };
+      return rejecting as unknown as this;
+    }
+    return super.bindTools(tools);
+  }
+}
+
+describe('final turn on a model without forced tool choice', () => {
+  it('retries the final turn with tool_choice auto', async () => {
+    const { context, events } = makeContext();
+    const report = 'The listing cycles 1 → 2 → 3 → 1; no blue 3-seat sofa is listed.';
+    const llm = new NoForcedChoiceModel(
+      [
+        new AIMessage({
+          content: '',
+          tool_calls: [{ id: 'final', name: 'task_complete', args: { outcome: 'not_on_site', response: report } }],
+        }),
+      ],
+      [plan(['Find the blue 3-seat sofa and give its code'])],
+    );
+
+    const result = await runReactAgent({
+      context,
+      llm: llm as unknown as BaseChatModel,
+      actions: [nextPageAction(), realTaskComplete(context)],
+      task: 'Find the listing for the blue 3-seat sofa and give its code.',
+    });
+
+    expect(llm.forcedAttempts).toBe(1);
+    expect(result).toEqual({ finalAnswer: null, error: report });
+    expect(terminalStates(events)).toEqual([
+      expect.objectContaining({ state: ExecutionState.TASK_FAIL, details: report }),
+    ]);
+  });
+});
+
 describe('consecutive forced failures', () => {
   it('ends with the agent last report, not an empty partial result', async () => {
     const { context, events } = makeContext();
