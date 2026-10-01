@@ -92,7 +92,7 @@ describe('runReactAgent authoritative completion', () => {
         // If this is consumed, task_complete did not actually stop ReAct.
         new AIMessage('This extra LLM round must never run.'),
       ],
-      [plan(), { decision: 'finish', success: true, plan: null, response: 'REPLANNER MUST NOT RUN.' }],
+      [plan(), { decision: 'finish', outcome: 'answered', plan: null, response: 'REPLANNER MUST NOT RUN.' }],
     );
 
     const result = await runReactAgent({
@@ -125,7 +125,7 @@ describe('runReactAgent authoritative completion', () => {
       ],
       [
         { ...plan(), plan: ['Collect requested data', 'Explain findings', 'Return source links'] },
-        { decision: 'finish', success: true, plan: null, response: 'REPLANNER MUST NOT REPLACE THE ANSWER.' },
+        { decision: 'finish', outcome: 'answered', plan: null, response: 'REPLANNER MUST NOT REPLACE THE ANSWER.' },
       ],
     );
 
@@ -161,7 +161,7 @@ describe('runReactAgent authoritative completion', () => {
         }),
         new AIMessage('The terminal action failed.'),
       ],
-      [plan(), { decision: 'finish', success: true, plan: null, response: 'FALSE SUCCESS' }],
+      [plan(), { decision: 'finish', outcome: 'answered', plan: null, response: 'FALSE SUCCESS' }],
     );
 
     const result = await runReactAgent({
@@ -222,7 +222,7 @@ describe('runReactAgent authoritative completion', () => {
         }),
         new AIMessage('The terminal action failed.'),
       ],
-      [plan(), { decision: 'finish', success: true, plan: null, response: 'FALSE SUCCESS' }],
+      [plan(), { decision: 'finish', outcome: 'answered', plan: null, response: 'FALSE SUCCESS' }],
     );
 
     const result = await runReactAgent({
@@ -310,7 +310,7 @@ describe('runReactAgent authoritative completion', () => {
         }),
         new AIMessage('This retry must never run.'),
       ],
-      [plan(), { decision: 'finish', success: true, plan: null, response: 'FALSE SUCCESS' }],
+      [plan(), { decision: 'finish', outcome: 'answered', plan: null, response: 'FALSE SUCCESS' }],
     );
 
     const result = await runReactAgent({
@@ -355,7 +355,7 @@ describe('runReactAgent authoritative completion', () => {
     const answer = 'The ordinary subgoal result was synthesized by the replanner.';
     const llm = new ScriptedChatModel(
       [new AIMessage('I collected the requested data.')],
-      [plan(), { decision: 'finish', success: true, plan: null, response: answer }],
+      [plan(), { decision: 'finish', outcome: 'answered', plan: null, response: answer }],
     );
 
     const result = await runReactAgent({ context, llm: llm as BaseChatModel, actions: [], task: 'Collect data.' });
@@ -372,7 +372,7 @@ describe('runReactAgent authoritative completion', () => {
     const explanation = 'The target page requires a user sign-in before the remaining data can be read.';
     const llm = new ScriptedChatModel(
       [new AIMessage('I reached the sign-in wall.')],
-      [plan(), { decision: 'finish', success: false, plan: null, response: explanation }],
+      [plan(), { decision: 'finish', outcome: 'blocked', plan: null, response: explanation }],
     );
 
     const result = await runReactAgent({
@@ -399,7 +399,7 @@ describe('runReactAgent authoritative completion', () => {
           tool_calls: [{ id: 'complete-2', name: 'task_complete', args: { outcome: 'answered', response: answer } }],
         }),
       ],
-      [plan(), { decision: 'continue', plan: ['Read the second page'], response: null, success: null }],
+      [plan(), { decision: 'continue', plan: ['Read the second page'], response: null, outcome: null }],
     );
     const result = await runReactAgent({
       context,
@@ -434,7 +434,7 @@ describe('runReactAgent authoritative completion', () => {
       ],
       [
         { ...plan(), plan: ['Search for Florida City', 'Open its monthly forecast'] },
-        { decision: 'continue', plan: ['Open its monthly forecast'], response: null, success: null },
+        { decision: 'continue', plan: ['Open its monthly forecast'], response: null, outcome: null },
       ],
     );
 
@@ -471,7 +471,7 @@ describe('runReactAgent authoritative completion', () => {
       ],
       [
         { ...plan(), plan: ['Find the highest-prize competition', 'Find its most-voted code'] },
-        { decision: 'continue', plan: ['Find its most-voted code'], response: null, success: null },
+        { decision: 'continue', plan: ['Find its most-voted code'], response: null, outcome: null },
       ],
     );
 
@@ -487,13 +487,87 @@ describe('runReactAgent authoritative completion', () => {
     expect(terminalStates(events).map(event => event.state)).toEqual([ExecutionState.TASK_OK]);
   });
 
+  // 2026-10-01 robustness eval: the executor proposed not_on_site three times;
+  // the replanner finished right after the last proposal with its own
+  // success=true, and «I couldn't verify a price» ended as TASK_OK.
+  it('never lets the replanner upgrade a not-answered proposal to answered', async () => {
+    const { context, events } = makeContext();
+    const report = 'KitchenStore lists Zephyr X7 and X8, but no Zephyr X9.';
+    const llm = new ScriptedChatModel(
+      [
+        new AIMessage({
+          content: '',
+          tool_calls: [{ id: 'complete-1', name: 'task_complete', args: { outcome: 'not_on_site', response: report } }],
+        }),
+      ],
+      [
+        { ...plan(), plan: ['Search the store for the item', 'Report its price'] },
+        {
+          decision: 'finish',
+          outcome: 'answered',
+          plan: null,
+          response: "I couldn't verify a price for the Zephyr X9 on KitchenStore.",
+        },
+      ],
+    );
+
+    const result = await runReactAgent({
+      context,
+      llm: llm as BaseChatModel,
+      actions: [realTaskComplete(context)],
+      task: 'What is the price of the Zephyr X9 blender?',
+    });
+
+    expect(result.finalAnswer).toBeNull();
+    expect(terminalStates(events).map(event => event.state)).toEqual([ExecutionState.TASK_FAIL]);
+  });
+
+  it('maps a replanner finish with outcome=not_on_site to TASK_FAIL', async () => {
+    const { context, events } = makeContext();
+    const explanation = 'The store has no Zephyr X9 listing; its blenders are the X7 and the X8.';
+    const llm = new ScriptedChatModel(
+      [new AIMessage('Searched the store: no Zephyr X9.')],
+      [plan(), { decision: 'finish', outcome: 'not_on_site', plan: null, response: explanation }],
+    );
+
+    const result = await runReactAgent({
+      context,
+      llm: llm as BaseChatModel,
+      actions: [],
+      task: 'What is the price of the Zephyr X9 blender?',
+    });
+
+    expect(result).toEqual({ finalAnswer: null, error: explanation });
+    expect(terminalStates(events)).toEqual([
+      expect.objectContaining({ state: ExecutionState.TASK_FAIL, details: explanation }),
+    ]);
+  });
+
+  it('rejects a replanner finish without an outcome', async () => {
+    const { context, events } = makeContext();
+    const llm = new ScriptedChatModel(
+      [new AIMessage('Searched the store.')],
+      [plan(), { decision: 'finish', success: true, plan: null, response: 'A price I could not verify.' }],
+    );
+
+    const result = await runReactAgent({
+      context,
+      llm: llm as BaseChatModel,
+      actions: [],
+      task: 'What is the price of the Zephyr X9 blender?',
+    });
+
+    expect(result.finalAnswer).toBeNull();
+    expect(terminalStates(events).map(event => event.state)).toEqual([ExecutionState.TASK_FAIL]);
+  });
+
   // 2026-09-27: without today's date the replanner turned "tomorrow" into
   // "May 7, 2026" on the Ryanair task.
   it("gives the planner and the replanner today's date", async () => {
     const { context } = makeContext();
     const llm = new ScriptedChatModel(
       [new AIMessage('Found the search form.')],
-      [plan(), { decision: 'finish', success: true, plan: null, response: 'Flights listed.' }],
+      [plan(), { decision: 'finish', outcome: 'answered', plan: null, response: 'Flights listed.' }],
     );
 
     await runReactAgent({ context, llm: llm as BaseChatModel, actions: [], task: 'Find a flight for tomorrow.' });
@@ -509,7 +583,7 @@ describe('runReactAgent authoritative completion', () => {
     const { context, events } = makeContext();
     const llm = new ScriptedChatModel(
       [new AIMessage('I completed the only subgoal but have no final result.')],
-      [plan(), { decision: 'continue', success: null, plan: [], response: null }],
+      [plan(), { decision: 'continue', outcome: null, plan: [], response: null }],
     );
 
     const result = await runReactAgent({

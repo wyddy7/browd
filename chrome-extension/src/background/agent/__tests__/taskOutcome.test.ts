@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AIMessage, ToolMessage } from '@langchain/core/messages';
-import { readTaskOutcome } from '../taskOutcome';
+import { readTaskOutcome, reviewedStatus } from '../taskOutcome';
 
 describe('executed completion outcomes', () => {
   it('does not accept model intent or fetched text as proof of completion', () => {
@@ -57,5 +57,20 @@ describe('executed completion outcomes', () => {
         }),
       ])?.status,
     ).toBe('failed');
+  });
+});
+
+describe('reviewedStatus', () => {
+  const failedProposal = { status: 'failed' as const, response: 'No Zephyr X9 on the site.' };
+  const completedProposal = { status: 'completed' as const, response: 'Zephyr X9 costs €129.' };
+
+  it('keeps a not-answered proposal from becoming a success', () => {
+    expect(reviewedStatus('completed', failedProposal)).toBe('failed');
+  });
+
+  it('leaves the replanner status alone without a failed proposal', () => {
+    expect(reviewedStatus('completed', null)).toBe('completed');
+    expect(reviewedStatus('completed', completedProposal)).toBe('completed');
+    expect(reviewedStatus('failed', completedProposal)).toBe('failed');
   });
 });
