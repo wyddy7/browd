@@ -87,7 +87,7 @@ describe('runReactAgent authoritative completion', () => {
       [
         new AIMessage({
           content: '',
-          tool_calls: [{ id: 'complete-1', name: 'task_complete', args: { response: answer } }],
+          tool_calls: [{ id: 'complete-1', name: 'task_complete', args: { outcome: 'answered', response: answer } }],
         }),
         // If this is consumed, task_complete did not actually stop ReAct.
         new AIMessage('This extra LLM round must never run.'),
@@ -118,7 +118,7 @@ describe('runReactAgent authoritative completion', () => {
       [
         new AIMessage({
           content: '',
-          tool_calls: [{ id: 'complete-1', name: 'task_complete', args: { response: answer } }],
+          tool_calls: [{ id: 'complete-1', name: 'task_complete', args: { outcome: 'answered', response: answer } }],
         }),
         // If this is consumed, task_complete did not actually stop ReAct.
         new AIMessage('This extra LLM round must never run.'),
@@ -155,7 +155,9 @@ describe('runReactAgent authoritative completion', () => {
       [
         new AIMessage({
           content: '',
-          tool_calls: [{ id: 'complete-1', name: 'task_complete', args: { response: 'invented success' } }],
+          tool_calls: [
+            { id: 'complete-1', name: 'task_complete', args: { outcome: 'answered', response: 'invented success' } },
+          ],
         }),
         new AIMessage('The terminal action failed.'),
       ],
@@ -174,14 +176,76 @@ describe('runReactAgent authoritative completion', () => {
     expect(terminalStates(events).map(event => event.state)).toEqual([ExecutionState.TASK_FAIL]);
   });
 
-  it('maps task_complete(success=false) to TASK_FAIL while preserving its explanation', async () => {
+  // 2026-10-01 robustness eval: «the shop does not sell it» was delivered as a
+  // success because only a blocked site counted as failure.
+  it('maps task_complete(outcome=not_on_site) to TASK_FAIL with the response verbatim', async () => {
+    const { context, events } = makeContext();
+    const explanation = 'KitchenStore lists Zephyr X7 and X8, but no Zephyr X9, so there is no price to report.';
+    const llm = new ScriptedChatModel(
+      [
+        new AIMessage({
+          content: '',
+          tool_calls: [
+            { id: 'complete-1', name: 'task_complete', args: { outcome: 'not_on_site', response: explanation } },
+          ],
+        }),
+      ],
+      [plan()],
+    );
+
+    const result = await runReactAgent({
+      context,
+      llm: llm as BaseChatModel,
+      actions: [realTaskComplete(context)],
+      task: 'What is the price of the Zephyr X9 blender?',
+    });
+
+    expect(result).toEqual({ finalAnswer: null, error: explanation });
+    expect(terminalStates(events)).toEqual([
+      expect.objectContaining({ state: ExecutionState.TASK_FAIL, details: explanation }),
+    ]);
+  });
+
+  it('never reports TASK_OK for a completion without an outcome', async () => {
+    const { context, events } = makeContext();
+    const llm = new ScriptedChatModel(
+      [
+        new AIMessage({
+          content: '',
+          tool_calls: [
+            {
+              id: 'complete-1',
+              name: 'task_complete',
+              args: { response: "I couldn't verify a price for the Zephyr X9 blender.", success: true },
+            },
+          ],
+        }),
+        new AIMessage('The terminal action failed.'),
+      ],
+      [plan(), { decision: 'finish', success: true, plan: null, response: 'FALSE SUCCESS' }],
+    );
+
+    const result = await runReactAgent({
+      context,
+      llm: llm as BaseChatModel,
+      actions: [realTaskComplete(context)],
+      task: 'What is the price of the Zephyr X9 blender?',
+    });
+
+    expect(result.finalAnswer).toBeNull();
+    expect(terminalStates(events).map(event => event.state)).toEqual([ExecutionState.TASK_FAIL]);
+  });
+
+  it('maps task_complete(outcome=blocked) to TASK_FAIL while preserving its explanation', async () => {
     const { context, events } = makeContext();
     const explanation = 'The website requires a CAPTCHA before the requested export can be completed.';
     const llm = new ScriptedChatModel(
       [
         new AIMessage({
           content: '',
-          tool_calls: [{ id: 'complete-1', name: 'task_complete', args: { response: explanation, success: false } }],
+          tool_calls: [
+            { id: 'complete-1', name: 'task_complete', args: { outcome: 'blocked', response: explanation } },
+          ],
         }),
       ],
       [plan()],
@@ -209,7 +273,7 @@ describe('runReactAgent authoritative completion', () => {
       [
         new AIMessage({
           content: '',
-          tool_calls: [{ id: 'complete-1', name: 'task_complete', args: { response: '   ' } }],
+          tool_calls: [{ id: 'complete-1', name: 'task_complete', args: { outcome: 'answered', response: '   ' } }],
         }),
       ],
       [plan()],
@@ -240,7 +304,7 @@ describe('runReactAgent authoritative completion', () => {
         new AIMessage({
           content: '',
           tool_calls: [
-            { id: 'complete-1', name: 'task_complete', args: { response: 'answer' } },
+            { id: 'complete-1', name: 'task_complete', args: { outcome: 'answered', response: 'answer' } },
             { id: 'mutation-1', name: 'mutate_page', args: { value: 'must never execute' } },
           ],
         }),
@@ -332,7 +396,7 @@ describe('runReactAgent authoritative completion', () => {
         new AIMessage('The first value is 42; the second page still needs reading.'),
         new AIMessage({
           content: '',
-          tool_calls: [{ id: 'complete-2', name: 'task_complete', args: { response: answer } }],
+          tool_calls: [{ id: 'complete-2', name: 'task_complete', args: { outcome: 'answered', response: answer } }],
         }),
       ],
       [plan(), { decision: 'continue', plan: ['Read the second page'], response: null, success: null }],
@@ -361,11 +425,11 @@ describe('runReactAgent authoritative completion', () => {
       [
         new AIMessage({
           content: '',
-          tool_calls: [{ id: 'complete-1', name: 'task_complete', args: { response: progress } }],
+          tool_calls: [{ id: 'complete-1', name: 'task_complete', args: { outcome: 'answered', response: progress } }],
         }),
         new AIMessage({
           content: '',
-          tool_calls: [{ id: 'complete-2', name: 'task_complete', args: { response: answer } }],
+          tool_calls: [{ id: 'complete-2', name: 'task_complete', args: { outcome: 'answered', response: answer } }],
         }),
       ],
       [
@@ -390,7 +454,7 @@ describe('runReactAgent authoritative completion', () => {
     expect(events.some(event => event.details === progress)).toBe(false);
   });
 
-  it('routes a subgoal task_complete(success=false) to the replanner while later subgoals remain', async () => {
+  it('routes a subgoal task_complete(outcome=blocked) to the replanner while later subgoals remain', async () => {
     const { context, events } = makeContext();
     const partial = 'The highest-prize competition is ARC Prize 2026. The next step is to open its Code tab.';
     const answer = 'ARC Prize 2026 ($850,000); most-voted notebook: "ARC baseline" (1,204 votes).';
@@ -398,11 +462,11 @@ describe('runReactAgent authoritative completion', () => {
       [
         new AIMessage({
           content: '',
-          tool_calls: [{ id: 'complete-1', name: 'task_complete', args: { response: partial, success: false } }],
+          tool_calls: [{ id: 'complete-1', name: 'task_complete', args: { outcome: 'blocked', response: partial } }],
         }),
         new AIMessage({
           content: '',
-          tool_calls: [{ id: 'complete-2', name: 'task_complete', args: { response: answer } }],
+          tool_calls: [{ id: 'complete-2', name: 'task_complete', args: { outcome: 'answered', response: answer } }],
         }),
       ],
       [

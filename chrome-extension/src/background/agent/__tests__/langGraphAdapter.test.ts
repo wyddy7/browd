@@ -365,7 +365,7 @@ describe('langGraphAdapter', () => {
       expect(r2).not.toMatch(NOTE);
       expect(r3).toMatch(/^Error: Failed to click element: not found/);
       expect(r3).toMatch(NOTE);
-      expect(r3).toMatch(/task_complete\(success=false\)/);
+      expect(r3).toMatch(/task_complete with outcome=blocked/);
     });
 
     it('treats the same failure on different URLs as the same error (a site that is down)', async () => {

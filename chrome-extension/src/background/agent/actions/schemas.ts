@@ -19,18 +19,21 @@ export const doneActionSchema: ActionSchema = {
 export const taskCompleteActionSchema: ActionSchema = {
   name: 'task_complete',
   description:
-    'End the entire user task and deliver response verbatim. Call alone, after all other actions have finished. Call it only when the whole user task is answered, or with success=false when the whole task is blocked (explain what blocked it). When only the current subgoal is done and more work remains, do not call it: reply with a subgoal summary instead.',
+    'End the entire user task and deliver response verbatim. Call alone, after all other actions have finished. Call it when the whole user task is answered, or when it cannot be answered (the site does not have it, or something blocks it). When only the current subgoal is done and more work remains, do not call it: reply with a subgoal summary instead.',
   schema: z.object({
     intent: z.string().default('').describe('purpose of this action'),
+    // Decided before the response is written, and required: a defaulted flag
+    // after the response came back «success» on «I couldn't verify…».
+    outcome: z
+      .enum(['answered', 'not_on_site', 'blocked'])
+      .describe(
+        'answered = the response contains everything the user asked for; not_on_site = the site works but does not have it; blocked = access denied, login wall, CAPTCHA, or the site never loaded',
+      ),
     response: z
       .string()
       .min(1)
       .refine(text => text.trim().length > 0, 'Response must not be blank')
       .describe('the final answer to surface to the user'),
-    success: z
-      .boolean()
-      .default(true)
-      .describe('true only if the user task is completed; false only if the whole task is blocked'),
   }),
 };
 

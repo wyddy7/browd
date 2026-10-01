@@ -677,7 +677,7 @@ ${todayLine} Write relative dates from the request ("tomorrow", "next week") as 
     const remainingBlock = remaining.length ? remaining.join('\n') : '(none)';
     const proposal = state.proposal;
     const proposalBlock = proposal
-      ? `\n\nThe executor of the last subgoal called task_complete (success=${proposal.status === 'completed'}) although the plan was not finished. Its proposed final answer:\n<proposed-final-answer>\n${proposal.response}\n</proposed-final-answer>\nIf it fully answers the user task, decide finish with success=true and it is delivered verbatim. If requested work is still undone, decide continue with the subgoals that remain.`
+      ? `\n\nThe executor of the last subgoal called task_complete (outcome: ${proposal.status === 'completed' ? 'answered' : 'not answered'}) although the plan was not finished. Its proposed final answer:\n<proposed-final-answer>\n${proposal.response}\n</proposed-final-answer>\nIf it fully answers the user task, decide finish with success=true and it is delivered verbatim. If requested work is still undone, decide continue with the subgoals that remain.`
       : '';
     // T2f-final-fix-7 + T2i-fix1.5: repeated-failure guard. If the
     // last N subgoals all came back as "failed:", finish honestly with
