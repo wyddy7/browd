@@ -310,7 +310,7 @@ export class ActionBuilder {
     const taskComplete = new Action(async (input: z.infer<typeof taskCompleteActionSchema.schema>) => {
       return new ActionResult({
         isDone: true,
-        success: input.success,
+        success: input.outcome === 'answered',
         extractedContent: input.response,
         includeInMemory: true,
       });

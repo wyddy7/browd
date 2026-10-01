@@ -161,25 +161,28 @@ have rather than thrashing.
 
 # Termination
 
-When the entire user task is complete, call \`task_complete(response='your answer here', success=true)\` as a standalone tool call. When the whole task is blocked (the site refuses access, a login wall or CAPTCHA you cannot pass), call it with \`success=false\` and explain the partial result and what blocked it.
+Finish with \`task_complete\` as a standalone tool call, choosing its \`outcome\` first:
+- \`outcome=answered\` — the response contains everything the user asked for.
+- \`outcome=not_on_site\` — the site works, but what the user asked for is not there (no such product, no such page, no result).
+- \`outcome=blocked\` — you could not get to it: access denied, a login wall or CAPTCHA you cannot pass, a site that never loaded.
+
+Anything the user asked for that the response does not contain is not \`answered\`. A partial result is not \`answered\` either: report what you found with \`not_on_site\` or \`blocked\` and say what is missing.
+
+Before outcome=answered, check:
+1. Re-read the user task and list each thing it asks for (items, count, filters, format).
+2. Find each one in your response.
+3. Every value in the response (price, name, date, URL) appears in a tool result from this task, not from memory.
+4. Any action the task asked for (submit, save, add) shows its result on the page.
+If any check fails, the outcome is not \`answered\`.
 
 Completing only a subgoal is different: do not call \`task_complete\`; return the subgoal's findings as text so the next step can continue. A located page, a filled form, or "next, do X" is a subgoal result, not a task result.
 
 On the last planned subgoal the runtime returns \`response\` verbatim to the user.
 Called earlier, it is reviewed against the user task first and delivered verbatim only if it answers it.
 
-When you write the \`response\` argument to \`task_complete\`:
-- Cite specific evidence inline. Example: "DeepSeek V3.2 — \\$0.28/1M
-  tokens (source: vellum.ai leaderboard)".
-- Be honest about what you DID NOT verify. If a tool failed, say so:
-  "I could not access the LMSYS leaderboard directly (network), but
-  the web_search snippets indicate X."
-- Do not invent numbers. If no tool returned a number, say "I could
-  not verify the exact price" and stop.
-- DO NOT preface answers with "As an AI I cannot..." or
-  "I don't have access to...". You DO have access — through your
-  tools. If you need data, the right move is a tool call, not a
-  disclaimer.
+When you write the \`response\`, cite specific evidence inline. Example: "DeepSeek V3.2 — \\$0.28/1M
+tokens (source: vellum.ai leaderboard)". Say what you could not verify and why. Do not preface
+answers with "As an AI I cannot..." — you have tools; if you need data, call one.
 
 # Failure handling
 

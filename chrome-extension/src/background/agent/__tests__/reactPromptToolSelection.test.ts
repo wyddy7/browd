@@ -15,3 +15,22 @@ describe('react system prompt — tool selection', () => {
     expect(reactSystemPromptTemplate).not.toMatch(/Opening a tab to\s+read content is a regression/);
   });
 });
+
+// 2026-10-01 robustness eval: failure was defined as «blocked» only, so «the
+// item is not on the site» was reported as success.
+describe('react system prompt — completion outcome', () => {
+  it('names the three outcomes and no longer speaks of a success flag', () => {
+    expect(reactSystemPromptTemplate).toMatch(/outcome=answered/);
+    expect(reactSystemPromptTemplate).toMatch(/outcome=not_on_site/);
+    expect(reactSystemPromptTemplate).toMatch(/outcome=blocked/);
+    expect(reactSystemPromptTemplate).not.toMatch(/success=(true|false)/);
+  });
+
+  it('defines answered as containing everything the user asked for', () => {
+    expect(reactSystemPromptTemplate).toMatch(/Anything the user asked for that the response does not contain/);
+  });
+
+  it('asks for a check of each requirement before answered', () => {
+    expect(reactSystemPromptTemplate).toMatch(/Before outcome=answered/);
+  });
+});

@@ -28,7 +28,12 @@ describe('model-comparison fixtures use the real graph', () => {
       if (scenario.expectedUrl !== scenario.startUrl) {
         messages.unshift(call(scenario.expectedNewTabs ? 'open_tab' : 'go_to_url', { url: scenario.expectedUrl }));
       }
-      messages.push(call('task_complete', { response: answers[index], success: !scenario.expectedFailure }));
+      messages.push(
+        call('task_complete', {
+          outcome: scenario.expectedFailure ? 'blocked' : 'answered',
+          response: answers[index],
+        }),
+      );
       const llm = new ScriptedChatModel(messages, [
         {
           reasoning: 'Read and answer',

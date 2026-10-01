@@ -35,14 +35,47 @@ describe('task_complete — T2w sentinel termination action', () => {
     expect(taskCompleteActionSchema.schema.safeParse({ response: '  \n\t ' }).success).toBe(false);
   });
 
-  it('schema accepts a non-empty response and defaults intent and success', () => {
-    const parse = taskCompleteActionSchema.schema.safeParse({ response: 'the answer is 42' });
+  it('schema accepts a non-empty response with an outcome and defaults intent', () => {
+    const parse = taskCompleteActionSchema.schema.safeParse({ outcome: 'answered', response: 'the answer is 42' });
     expect(parse.success).toBe(true);
     if (parse.success) {
       expect(parse.data.response).toBe('the answer is 42');
       expect(parse.data.intent).toBe('');
-      expect(parse.data.success).toBe(true);
+      expect(parse.data.outcome).toBe('answered');
     }
+  });
+
+  // 2026-10-01 robustness eval: a boolean `success` that defaulted to true and
+  // came after `response` produced success=true with «I couldn't verify…» in 6
+  // of 6 calls. The outcome is now required, has no default, and is decided
+  // before the response is written.
+  it('schema requires an outcome and offers no default', () => {
+    expect(taskCompleteActionSchema.schema.safeParse({ response: 'the answer is 42' }).success).toBe(false);
+    expect(taskCompleteActionSchema.schema.safeParse({ response: 'the answer is 42', outcome: 'done' }).success).toBe(
+      false,
+    );
+  });
+
+  it('schema has no success flag and puts the outcome before the response', () => {
+    const keys = Object.keys((taskCompleteActionSchema.schema as unknown as { shape: Record<string, unknown> }).shape);
+    expect(keys).not.toContain('success');
+    expect(keys.indexOf('outcome')).toBeGreaterThanOrEqual(0);
+    expect(keys.indexOf('outcome')).toBeLessThan(keys.indexOf('response'));
+  });
+
+  it.each([
+    ['answered', true],
+    ['not_on_site', false],
+    ['blocked', false],
+  ] as const)('handler maps outcome %s to success=%s', async (outcome, success) => {
+    const ctx = makeContext();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const builder = new ActionBuilder(ctx, {} as any);
+    const action = findAction(builder, 'task_complete');
+    const result = await action.call({ intent: '', outcome, response: 'report' });
+    expect(result.error).toBeFalsy();
+    expect(result.isDone).toBe(true);
+    expect(result.success).toBe(success);
   });
 
   it('handler returns a successful terminal ActionResult with the response verbatim', async () => {
@@ -50,7 +83,11 @@ describe('task_complete — T2w sentinel termination action', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const builder = new ActionBuilder(ctx, {} as any);
     const action = findAction(builder, 'task_complete');
-    const result = await action.call({ intent: 'finish', response: 'Browd v0.1.13 ships task_complete' });
+    const result = await action.call({
+      intent: 'finish',
+      outcome: 'answered',
+      response: 'Browd v0.1.13 ships task_complete',
+    });
     expect(result.error).toBeFalsy();
     expect(result.isDone).toBe(true);
     expect(result.success).toBe(true);
@@ -64,7 +101,7 @@ describe('task_complete — T2w sentinel termination action', () => {
     const builder = new ActionBuilder(ctx, {} as any);
     const action = findAction(builder, 'task_complete');
     const multiline = 'Line one.\n\nLine two with **markdown** and a [link](https://example.com).';
-    const result = await action.call({ intent: '', response: multiline });
+    const result = await action.call({ intent: '', outcome: 'answered', response: multiline });
     expect(result.extractedContent).toBe(multiline);
   });
 
@@ -75,8 +112,8 @@ describe('task_complete — T2w sentinel termination action', () => {
     const action = findAction(builder, 'task_complete');
     const result = await action.call({
       intent: 'report that the page blocked extraction',
+      outcome: 'blocked',
       response: 'The page blocked access before I could extract the data.',
-      success: false,
     });
     expect(result.isDone).toBe(true);
     expect(result.success).toBe(false);

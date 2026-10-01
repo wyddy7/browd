@@ -163,7 +163,7 @@ function noteRepeatedError(dupGuard: DuplicateGuardState | undefined, name: stri
   return (
     `${rendered}\n\nThis same error has now come back ${count} times in your last ${errors.length} tool calls, ` +
     `so repeating the action will not change the result. Try a clearly different approach; if the site ` +
-    `keeps failing, finish with task_complete(success=false) and say what failed.`
+    `keeps failing, finish with task_complete with outcome=blocked and say what failed.`
   );
 }
 

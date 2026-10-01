@@ -25,7 +25,13 @@ import { createUsageTracker } from './usageTracker';
 import { computeStateFingerprint, isInnerRecursionLimitError } from '../guardrails/unifiedStuckDetector';
 import { TabGoneError } from '@src/background/browser/views';
 import { bridgeStreamEvents, type LiveEvent } from './streamBridge';
-import { readTaskCompletion, TaskToolNode, InvalidTaskToolBatchError, type TaskOutcome } from '../taskOutcome';
+import {
+  readTaskCompletion,
+  reviewedStatus,
+  TaskToolNode,
+  InvalidTaskToolBatchError,
+  type TaskOutcome,
+} from '../taskOutcome';
 
 const logger = createLogger('runReactAgent');
 
@@ -349,14 +355,17 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
       .max(7)
       .nullable()
       .describe('updated remaining subgoals (only when decision=continue, null when finish).'),
+    // Same contract as task_complete: decided before the response, no default.
+    outcome: z
+      .enum(['answered', 'not_on_site', 'blocked'])
+      .nullable()
+      .describe(
+        'only when decision=finish, null when continue. answered = the response contains everything the user asked for; not_on_site = the site works but does not have it; blocked = access denied, login wall, CAPTCHA, or the site never loaded',
+      ),
     response: z
       .string()
       .nullable()
       .describe('the actual final answer, including requested data (only when decision=finish, null when continue)'),
-    success: z
-      .boolean()
-      .nullable()
-      .describe('true if the user task is completed, false if blocked/incomplete, null when continue'),
   });
 
   const planner = llm.withStructuredOutput(planSchema, { name: 'plan' });
@@ -677,7 +686,7 @@ ${todayLine} Write relative dates from the request ("tomorrow", "next week") as 
     const remainingBlock = remaining.length ? remaining.join('\n') : '(none)';
     const proposal = state.proposal;
     const proposalBlock = proposal
-      ? `\n\nThe executor of the last subgoal called task_complete (success=${proposal.status === 'completed'}) although the plan was not finished. Its proposed final answer:\n<proposed-final-answer>\n${proposal.response}\n</proposed-final-answer>\nIf it fully answers the user task, decide finish with success=true and it is delivered verbatim. If requested work is still undone, decide continue with the subgoals that remain.`
+      ? `\n\nThe executor of the last subgoal called task_complete (outcome: ${proposal.status === 'completed' ? 'answered' : 'not answered'}) although the plan was not finished. Its proposed final answer:\n<proposed-final-answer>\n${proposal.response}\n</proposed-final-answer>\nIf it fully answers the user task, decide finish with outcome=answered and it is delivered verbatim. If requested work is still undone, decide continue with the subgoals that remain.`
       : '';
     // T2f-final-fix-7 + T2i-fix1.5: repeated-failure guard. If the
     // last N subgoals all came back as "failed:", finish honestly with
@@ -707,23 +716,24 @@ ${todayLine} Write relative dates from the request ("tomorrow", "next week") as 
     try {
       const result = (await replanner.invoke([
         new SystemMessage(
-          `You are the replanner half of a browser-agent loop. After a nonterminal subgoal, decide whether more work is needed (decision="continue", plan, response=null, success=null), or deliver the final result (decision="finish", response, success). The response must contain the requested data, not a statement that you presented it elsewhere. Set success=true only when the user's task is completed; use success=false for blocked or incomplete work and explain what remains. Replan around failed steps rather than blindly retrying. When the executor proposes a final answer before the plan is finished, judge it against the user task: a progress report, a located page, or a note about a next step is not a final answer.`,
+          `You are the replanner half of a browser-agent loop. After a nonterminal subgoal, decide whether more work is needed (decision="continue", plan, outcome=null, response=null), or deliver the final result (decision="finish", outcome, response). The response must contain the requested data, not a statement that you presented it elsewhere. Choose the outcome first: answered only when the response contains everything the user asked for; not_on_site when the site works but does not have it; blocked when access failed. Anything the user asked for that the response does not contain is not answered; explain what is missing. Replan around failed steps rather than blindly retrying. When the executor proposes a final answer before the plan is finished, judge it against the user task: a progress report, a located page, or a note about a next step is not a final answer.`,
         ),
         new HumanMessage(
           `${todayLine}\n\nUser task:\n${task}\n\nCompleted so far:\n${completedBlock}\n\nRemaining plan:\n${remainingBlock}${proposalBlock}\n\nDecide: continue with new plan, or finish with a response to the user.`,
         ),
       ])) as z.infer<typeof replanSchema>;
-      if (result.decision === 'finish' && result.success === true && proposal?.status === 'completed') {
+      if (result.decision === 'finish' && result.outcome === 'answered' && proposal?.status === 'completed') {
         // Confirmed early completion: deliver the executor's answer verbatim.
         emitPlanChecklist(state.pastSteps.map(([text, summary]) => ({ text, done: stepSucceeded(summary) })));
         return { outcome: proposal };
       }
       if (result.decision === 'finish') {
-        if (!result.response?.trim() || typeof result.success !== 'boolean') {
+        if (!result.response?.trim() || !result.outcome) {
           return failed('The replanner ended without a valid task result.');
         }
         emitPlanChecklist(state.pastSteps.map(([text, summary]) => ({ text, done: stepSucceeded(summary) })));
-        const outcome: TaskOutcome = { status: result.success ? 'completed' : 'failed', response: result.response };
+        const status = reviewedStatus(result.outcome === 'answered' ? 'completed' : 'failed', proposal);
+        const outcome: TaskOutcome = { status, response: result.response };
         return { outcome };
       }
       // T2f-plan-pinned-live: replanner LLM sometimes echoes

@@ -37,6 +37,18 @@ export function readTaskOutcome(messages: BaseMessage[]): TaskOutcome | null {
 }
 
 /**
+ * The replanner reviews an early task_complete; it does not outrank it. When the
+ * executor said the task is not answered, a finish that follows with no new
+ * work in between cannot turn that into a success.
+ */
+export function reviewedStatus(
+  replannerStatus: TaskOutcome['status'],
+  proposal: TaskOutcome | null,
+): TaskOutcome['status'] {
+  return proposal?.status === 'failed' && replannerStatus === 'completed' ? 'failed' : replannerStatus;
+}
+
+/**
  * LangGraph dispatches sibling tool calls concurrently. Completion must be a
  * standalone call: reject a mixed batch before any browser side effect starts.
  */

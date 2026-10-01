@@ -157,14 +157,22 @@ separate `visionMode` toggle:
 - **Authoritative completion.** `task_complete` runs through `Action.call`,
   returns a validated `ActionResult` (`isDone`, `success`, verbatim answer),
   and becomes a LangGraph `returnDirect` tool with a typed result artifact.
+  Its schema has a required `outcome` — `answered` / `not_on_site` /
+  `blocked`, no default, placed before `response` — and only `answered` is
+  a success. The replanner's finish uses the same field and definition
+  (anything the user asked for that the response does not contain is not
+  `answered`). A boolean `success` that defaulted to true and was defined as
+  «false only when blocked» reported «I couldn't verify…» as success on the
+  2026-10-01 robustness eval.
   `TaskOutcome` is the graph's only terminal state. The agent routes directly
   to END when it exists; replanning is only for nonterminal subgoals.
   `task_complete` from the **last** planned subgoal is terminal. From an
   earlier subgoal it is a `proposal`: the replanner sees it and either
-  confirms it (`finish` + `success=true` → the proposal, verbatim) or
+  confirms it (`finish` + `outcome=answered` → the proposal, verbatim) or
   continues the plan. Reason: on the 2026-09-27 Online-Mind2Web run subgoal
   agents called it after subgoal 1 with progress reports and ended 6 tasks
-  early. Never infer completion from model tool-call arguments, text
+  early. A finish right after a not-answered proposal cannot come out as
+  completed (`reviewedStatus` in `taskOutcome.ts`). Never infer completion from model tool-call arguments, text
   prefixes, a nonempty answer, or an exhausted plan. Failed/incomplete results emit TASK_FAIL;
   user cancellation emits TASK_CANCEL. Completion must be a standalone tool
   call: mixed batches are rejected before any tool executes. Offline tests
