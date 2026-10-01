@@ -24,6 +24,14 @@ what it tried. Browser permissions and stored settings are unchanged.
   graded by code. The benchmark's judge can now skip duplicate screenshots.
   Both are development tools and are not part of the extension.
 
+### Changed
+
+- **Current models in the OpenRouter defaults:** `openai/gpt-6-luna`,
+  `anthropic/claude-sonnet-5.5`, `google/gemini-3.8-flash`,
+  `deepseek/deepseek-v4.1-flash` and `qwen/qwen3.8-flash`, each checked to
+  accept images, tools and tool choice. Providers you already set up keep
+  their own model lists.
+
 ### Fixed
 
 - **"Not on this site" is no longer reported as success.** The agent states
@@ -34,7 +42,8 @@ what it tried. Browser permissions and stored settings are unchanged.
 - **Running out of steps ends with the agent's own report.** At the step limit
   the agent gets one last turn to say what it tried and found, instead of the
   user receiving «Recursion limit of 25 reached without hitting a stop
-  condition…».
+  condition…». This also works on models that do not accept a forced tool
+  choice, such as Claude Sonnet 5.5 and Qwen 3.8.
 - **A site that never loads is reported as failed.** Navigation no longer says
   «Navigated» when the tab is on the browser's error page, and the agent no
   longer waits 20 s reading that error page.
