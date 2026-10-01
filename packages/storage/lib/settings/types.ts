@@ -104,7 +104,15 @@ export const llmProviderModelNames = {
   [ProviderTypeEnum.Grok]: ['grok-4', 'grok-4-fast-non-reasoning', 'grok-3', 'grok-3-fast'],
   [ProviderTypeEnum.Ollama]: ['qwen3:14b', 'falcon3:10b', 'qwen2.5-coder:14b', 'mistral-small:24b'],
   [ProviderTypeEnum.AzureOpenAI]: ['gpt-5', 'gpt-5-mini', 'gpt-4.1', 'gpt-4.1-mini', 'gpt-4o'],
-  [ProviderTypeEnum.OpenRouter]: ['google/gemini-2.5-pro', 'google/gemini-2.5-flash', 'openai/gpt-4o-2024-11-20'],
+  // Checked against the live OpenRouter catalog and with a tool-calling request (2026-10-02): image input, tools,
+  // tool_choice. Model ids rot — re-check before changing.
+  [ProviderTypeEnum.OpenRouter]: [
+    'openai/gpt-6-luna',
+    'anthropic/claude-sonnet-5.5',
+    'google/gemini-3.8-flash',
+    'deepseek/deepseek-v4.1-flash',
+    'qwen/qwen3.8-flash',
+  ],
   [ProviderTypeEnum.Groq]: ['llama-3.3-70b-versatile'],
   [ProviderTypeEnum.Cerebras]: ['llama-3.3-70b'],
   [ProviderTypeEnum.Llama]: [
