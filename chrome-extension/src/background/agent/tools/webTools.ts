@@ -18,6 +18,20 @@ import { createLogger } from '@src/background/log';
 
 const logger = createLogger('WebTools');
 
+/**
+ * Every outbound request here gets a deadline that also covers reading the body. Without one a
+ * site that accepts the connection and never answers held web_fetch_markdown for 225 s, until the
+ * task itself was cancelled (2026-10-01, fixture run against a hanging server).
+ */
+export const WEB_REQUEST_TIMEOUT_MS = 20_000;
+const requestSignal = () => AbortSignal.timeout(WEB_REQUEST_TIMEOUT_MS);
+function describeFetchError(err: unknown): string {
+  if (err instanceof Error && err.name === 'TimeoutError') {
+    return `no response within ${WEB_REQUEST_TIMEOUT_MS / 1000} s`;
+  }
+  return err instanceof Error ? err.message : String(err);
+}
+
 export interface WebFetchResult {
   ok: true;
   url: string;
@@ -164,6 +178,7 @@ async function tryJinaReader(url: string, maxChars: number): Promise<WebFetchRes
   try {
     response = await fetch(endpoint, {
       method: 'GET',
+      signal: requestSignal(),
       credentials: 'omit',
       headers: { Accept: 'text/plain' },
     });
@@ -171,7 +186,7 @@ async function tryJinaReader(url: string, maxChars: number): Promise<WebFetchRes
     return {
       ok: false,
       errorType: 'transient',
-      message: `jina-reader network: ${err instanceof Error ? err.message : String(err)}`,
+      message: `jina-reader network: ${describeFetchError(err)}`,
       url,
     };
   }
@@ -191,7 +206,7 @@ async function tryJinaReader(url: string, maxChars: number): Promise<WebFetchRes
     return {
       ok: false,
       errorType: 'transient',
-      message: `jina-reader body: ${err instanceof Error ? err.message : String(err)}`,
+      message: `jina-reader body: ${describeFetchError(err)}`,
       url,
     };
   }
@@ -210,6 +225,7 @@ async function tryLocalExtract(url: string, maxChars: number): Promise<WebFetchR
   try {
     response = await fetch(url, {
       method: 'GET',
+      signal: requestSignal(),
       credentials: 'omit',
       redirect: 'follow',
       headers: { Accept: 'text/html,application/xhtml+xml' },
@@ -218,7 +234,7 @@ async function tryLocalExtract(url: string, maxChars: number): Promise<WebFetchR
     return {
       ok: false,
       errorType: 'transient',
-      message: `local network: ${err instanceof Error ? err.message : String(err)}`,
+      message: `local network: ${describeFetchError(err)}`,
       url,
     };
   }
@@ -240,7 +256,7 @@ async function tryLocalExtract(url: string, maxChars: number): Promise<WebFetchR
     return {
       ok: false,
       errorType: 'transient',
-      message: `read body failed: ${err instanceof Error ? err.message : String(err)}`,
+      message: `read body failed: ${describeFetchError(err)}`,
       url,
     };
   }
@@ -290,6 +306,7 @@ async function tryDuckDuckGo(query: string, topK: number): Promise<WebSearchResu
     // Service worker default UA is the browser's, which DDG accepts.
     const response = await fetch(endpoint, {
       method: 'GET',
+      signal: requestSignal(),
       credentials: 'omit',
       headers: { Accept: 'text/html' },
     });
@@ -303,7 +320,7 @@ async function tryDuckDuckGo(query: string, topK: number): Promise<WebSearchResu
     }
     return { ok: true, engine: 'duckduckgo', results };
   } catch (err) {
-    return { ok: false, errorType: 'transient', message: `DDG: ${err instanceof Error ? err.message : String(err)}` };
+    return { ok: false, errorType: 'transient', message: `DDG: ${describeFetchError(err)}` };
   }
 }
 
@@ -343,6 +360,7 @@ async function tryBing(query: string, topK: number): Promise<WebSearchResult | W
     // Same rationale as DDG — let Bing see the browser's default UA.
     const response = await fetch(endpoint, {
       method: 'GET',
+      signal: requestSignal(),
       credentials: 'omit',
       headers: { Accept: 'text/html' },
     });
@@ -356,7 +374,7 @@ async function tryBing(query: string, topK: number): Promise<WebSearchResult | W
     }
     return { ok: true, engine: 'bing', results };
   } catch (err) {
-    return { ok: false, errorType: 'transient', message: `Bing: ${err instanceof Error ? err.message : String(err)}` };
+    return { ok: false, errorType: 'transient', message: `Bing: ${describeFetchError(err)}` };
   }
 }
 
