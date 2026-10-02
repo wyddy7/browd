@@ -1161,6 +1161,21 @@
   "chat_input_tabFocus_foreground_label": {
     "message": "Afficher l'onglet de l'agent pendant son exécution (mode actuel)"
   },
+  "chat_input_spider_on_label": {
+    "message": "Masquer l'araignée"
+  },
+  "chat_input_spider_off_label": {
+    "message": "Afficher l'araignée"
+  },
+  "notice_spider_title": {
+    "message": "Il y a une araignée dans cette extension."
+  },
+  "notice_spider_body": {
+    "message": "Observez-la."
+  },
+  "notice_ok": {
+    "message": "Compris"
+  },
   "chat_input_tabFocus_background_tip": {
     "message": "L'agent travaille dans un onglet séparé en arrière-plan. Cliquez pour basculer : mettre l'onglet de l'agent au premier plan au démarrage de la tâche."
   },
@@ -1199,6 +1214,93 @@
   },
   "options_general_section_page_lead": {
     "message": "Comment l'agent interagit avec les pages qu'il visite."
+  },
+  "options_spider_section": {
+    "message": "Araignée de l'agent"
+  },
+  "options_spider_section_lead": {
+    "message": "Une petite araignée se déplace là où l'agent clique ou écrit, pour suivre ses mains. Elle est masquée dans les captures d'écran de l'agent."
+  },
+  "options_spider_enabled": {
+    "message": "Afficher l'araignée"
+  },
+  "options_spider_enabled_desc": {
+    "message": "Apparaît dans l'onglet de l'agent pendant une tâche et s'en va en grimpant à la fin."
+  },
+  "options_spider_size": {
+    "message": "Taille"
+  },
+  "options_spider_size_desc": {
+    "message": "Envergure des pattes d'environ 80 à 160 pixels."
+  },
+  "options_spider_size_small": {
+    "message": "Petite"
+  },
+  "options_spider_size_normal": {
+    "message": "Normale"
+  },
+  "options_spider_size_large": {
+    "message": "Grande"
+  },
+  "options_spider_pace": {
+    "message": "Allure"
+  },
+  "options_spider_pace_desc": {
+    "message": "Sa vitesse de marche. Chaque clic attend son arrivée, jusqu'à environ une seconde à l'allure calme."
+  },
+  "options_spider_pace_calm": {
+    "message": "Calme"
+  },
+  "options_spider_pace_normal": {
+    "message": "Normale"
+  },
+  "options_spider_pace_fast": {
+    "message": "Rapide"
+  },
+  "options_spider_marks": {
+    "message": "Marques"
+  },
+  "options_spider_marks_desc": {
+    "message": "Ce qu'elle entoure en chemin. Dessiné par-dessus la page ; le site n'est jamais modifié."
+  },
+  "options_spider_marks_off": {
+    "message": "Aucune"
+  },
+  "options_spider_marks_target": {
+    "message": "L'élément sur lequel elle agit"
+  },
+  "options_spider_marks_feet": {
+    "message": "Tout ce que ses pattes agrippent"
+  },
+  "options_spider_color": {
+    "message": "Couleur"
+  },
+  "options_spider_color_desc": {
+    "message": "Une couleur pour toute l'araignée, ou le dégradé arc-en-ciel de l'original."
+  },
+  "options_spider_color_violet": {
+    "message": "Violet"
+  },
+  "options_spider_color_ink": {
+    "message": "Encre"
+  },
+  "options_spider_color_white": {
+    "message": "Blanc"
+  },
+  "options_spider_color_cyan": {
+    "message": "Cyan"
+  },
+  "options_spider_color_magenta": {
+    "message": "Magenta"
+  },
+  "options_spider_color_rainbow": {
+    "message": "Arc-en-ciel"
+  },
+  "options_spider_tear": {
+    "message": "Arracher des mots"
+  },
+  "options_spider_tear_desc": {
+    "message": "En lisant, elle extrait de la page les mots que cherche l'agent puis les remet en place. Dessiné par-dessus la page ; le site n'est jamais modifié."
   },
   "options_general_section_control": {
     "message": "Contrôles"

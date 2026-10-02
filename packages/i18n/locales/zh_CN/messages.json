@@ -1161,6 +1161,21 @@
   "chat_input_tabFocus_foreground_label": {
     "message": "代理工作时显示其标签页（当前）"
   },
+  "chat_input_spider_on_label": {
+    "message": "隐藏蜘蛛"
+  },
+  "chat_input_spider_off_label": {
+    "message": "显示蜘蛛"
+  },
+  "notice_spider_title": {
+    "message": "这个扩展里有一只蜘蛛。"
+  },
+  "notice_spider_body": {
+    "message": "看着它。"
+  },
+  "notice_ok": {
+    "message": "知道了"
+  },
   "chat_input_tabFocus_background_tip": {
     "message": "代理在后台的独立标签页中运行。点击以切换：任务开始时将代理标签页带到前台。"
   },
@@ -1199,6 +1214,93 @@
   },
   "options_general_section_page_lead": {
     "message": "代理如何与所访问的页面交互。"
+  },
+  "options_spider_section": {
+    "message": "智能体蜘蛛"
+  },
+  "options_spider_section_lead": {
+    "message": "一只小蜘蛛会走到智能体点击或输入的位置，让你看清它的“手”在哪里。智能体自己截图时会隐藏蜘蛛。"
+  },
+  "options_spider_enabled": {
+    "message": "显示蜘蛛"
+  },
+  "options_spider_enabled_desc": {
+    "message": "任务运行时出现在智能体的标签页中，任务结束后沿丝线爬走。"
+  },
+  "options_spider_size": {
+    "message": "大小"
+  },
+  "options_spider_size_desc": {
+    "message": "腿展约 80 到 160 像素。"
+  },
+  "options_spider_size_small": {
+    "message": "小"
+  },
+  "options_spider_size_normal": {
+    "message": "正常"
+  },
+  "options_spider_size_large": {
+    "message": "大"
+  },
+  "options_spider_pace": {
+    "message": "速度"
+  },
+  "options_spider_pace_desc": {
+    "message": "它走得多快。每次点击都会等蜘蛛到达，平缓速度下最多约一秒。"
+  },
+  "options_spider_pace_calm": {
+    "message": "平缓"
+  },
+  "options_spider_pace_normal": {
+    "message": "正常"
+  },
+  "options_spider_pace_fast": {
+    "message": "快速"
+  },
+  "options_spider_marks": {
+    "message": "标记"
+  },
+  "options_spider_marks_desc": {
+    "message": "它沿途描出的轮廓。绘制在页面之上，不会修改网站本身。"
+  },
+  "options_spider_marks_off": {
+    "message": "无"
+  },
+  "options_spider_marks_target": {
+    "message": "正在操作的元素"
+  },
+  "options_spider_marks_feet": {
+    "message": "脚下抓住的所有元素"
+  },
+  "options_spider_color": {
+    "message": "颜色"
+  },
+  "options_spider_color_desc": {
+    "message": "整只蜘蛛使用一种颜色，或原版的彩虹渐变。"
+  },
+  "options_spider_color_violet": {
+    "message": "紫罗兰"
+  },
+  "options_spider_color_ink": {
+    "message": "墨色"
+  },
+  "options_spider_color_white": {
+    "message": "白色"
+  },
+  "options_spider_color_cyan": {
+    "message": "青色"
+  },
+  "options_spider_color_magenta": {
+    "message": "品红"
+  },
+  "options_spider_color_rainbow": {
+    "message": "彩虹"
+  },
+  "options_spider_tear": {
+    "message": "撕下词语"
+  },
+  "options_spider_tear_desc": {
+    "message": "阅读时，它会把智能体正在寻找的词从页面上拉出来，然后放回原处。绘制在页面之上，不会修改网站本身。"
   },
   "options_general_section_control": {
     "message": "控件"

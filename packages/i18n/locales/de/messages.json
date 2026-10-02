@@ -1161,6 +1161,21 @@
   "chat_input_tabFocus_foreground_label": {
     "message": "Agent-Tab beim Arbeiten anzeigen (aktiv)"
   },
+  "chat_input_spider_on_label": {
+    "message": "Spinne ausblenden"
+  },
+  "chat_input_spider_off_label": {
+    "message": "Spinne anzeigen"
+  },
+  "notice_spider_title": {
+    "message": "In dieser Erweiterung gibt es eine Spinne."
+  },
+  "notice_spider_body": {
+    "message": "Beobachten Sie sie."
+  },
+  "notice_ok": {
+    "message": "Verstanden"
+  },
   "chat_input_tabFocus_background_tip": {
     "message": "Der Agent arbeitet in einem separaten Tab im Hintergrund. Zum Umschalten klicken: Agent-Tab wird beim Aufgabenstart in den Vordergrund geholt."
   },
@@ -1199,6 +1214,93 @@
   },
   "options_general_section_page_lead": {
     "message": "Wie der Agent mit besuchten Seiten interagiert."
+  },
+  "options_spider_section": {
+    "message": "Agenten-Spinne"
+  },
+  "options_spider_section_lead": {
+    "message": "Eine kleine Spinne läuft dorthin, wo der Agent klickt oder tippt, damit Sie seinen Händen folgen können. In den eigenen Screenshots des Agenten ist sie ausgeblendet."
+  },
+  "options_spider_enabled": {
+    "message": "Spinne anzeigen"
+  },
+  "options_spider_enabled_desc": {
+    "message": "Erscheint im Tab des Agenten, solange eine Aufgabe läuft, und klettert danach davon."
+  },
+  "options_spider_size": {
+    "message": "Größe"
+  },
+  "options_spider_size_desc": {
+    "message": "Beinspannweite etwa 80 bis 160 Pixel."
+  },
+  "options_spider_size_small": {
+    "message": "Klein"
+  },
+  "options_spider_size_normal": {
+    "message": "Normal"
+  },
+  "options_spider_size_large": {
+    "message": "Groß"
+  },
+  "options_spider_pace": {
+    "message": "Tempo"
+  },
+  "options_spider_pace_desc": {
+    "message": "Wie schnell sie läuft. Jeder Klick wartet, bis die Spinne ankommt, im ruhigen Tempo bis zu etwa einer Sekunde."
+  },
+  "options_spider_pace_calm": {
+    "message": "Ruhig"
+  },
+  "options_spider_pace_normal": {
+    "message": "Normal"
+  },
+  "options_spider_pace_fast": {
+    "message": "Schnell"
+  },
+  "options_spider_marks": {
+    "message": "Markierungen"
+  },
+  "options_spider_marks_desc": {
+    "message": "Was sie unterwegs umrandet. Wird über die Seite gezeichnet; die Website selbst wird nie verändert."
+  },
+  "options_spider_marks_off": {
+    "message": "Keine"
+  },
+  "options_spider_marks_target": {
+    "message": "Das Element, mit dem sie arbeitet"
+  },
+  "options_spider_marks_feet": {
+    "message": "Alles, woran sich ihre Beine festhalten"
+  },
+  "options_spider_color": {
+    "message": "Farbe"
+  },
+  "options_spider_color_desc": {
+    "message": "Eine Farbe für die ganze Spinne oder der Regenbogenverlauf des Originals."
+  },
+  "options_spider_color_violet": {
+    "message": "Violett"
+  },
+  "options_spider_color_ink": {
+    "message": "Tinte"
+  },
+  "options_spider_color_white": {
+    "message": "Weiß"
+  },
+  "options_spider_color_cyan": {
+    "message": "Cyan"
+  },
+  "options_spider_color_magenta": {
+    "message": "Magenta"
+  },
+  "options_spider_color_rainbow": {
+    "message": "Regenbogen"
+  },
+  "options_spider_tear": {
+    "message": "Wörter herausreißen"
+  },
+  "options_spider_tear_desc": {
+    "message": "Beim Lesen zieht sie die Wörter, nach denen der Agent sucht, aus der Seite und setzt sie zurück. Wird über die Seite gezeichnet; die Website selbst bleibt unverändert."
   },
   "options_general_section_control": {
     "message": "Steuerung"

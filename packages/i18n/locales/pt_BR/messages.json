@@ -1161,6 +1161,21 @@
   "chat_input_tabFocus_foreground_label": {
     "message": "Mostrar a aba do agente enquanto trabalha (atual)"
   },
+  "chat_input_spider_on_label": {
+    "message": "Ocultar a aranha"
+  },
+  "chat_input_spider_off_label": {
+    "message": "Mostrar a aranha"
+  },
+  "notice_spider_title": {
+    "message": "Tem uma aranha nesta extensão."
+  },
+  "notice_spider_body": {
+    "message": "Observe-a."
+  },
+  "notice_ok": {
+    "message": "Entendi"
+  },
   "chat_input_tabFocus_background_tip": {
     "message": "O agente trabalha em uma aba separada em segundo plano. Clique para alternar: trazer a aba do agente para o primeiro plano no início da tarefa."
   },
@@ -1199,6 +1214,93 @@
   },
   "options_general_section_page_lead": {
     "message": "Como o agente interage com as páginas que visita."
+  },
+  "options_spider_section": {
+    "message": "Aranha do agente"
+  },
+  "options_spider_section_lead": {
+    "message": "Uma pequena aranha anda até onde o agente clica ou digita, para você acompanhar as mãos dele. Ela fica oculta nas capturas de tela do próprio agente."
+  },
+  "options_spider_enabled": {
+    "message": "Mostrar a aranha"
+  },
+  "options_spider_enabled_desc": {
+    "message": "Aparece na aba do agente enquanto uma tarefa roda e sobe pelo fio quando termina."
+  },
+  "options_spider_size": {
+    "message": "Tamanho"
+  },
+  "options_spider_size_desc": {
+    "message": "Envergadura das patas de cerca de 80 a 160 pixels."
+  },
+  "options_spider_size_small": {
+    "message": "Pequena"
+  },
+  "options_spider_size_normal": {
+    "message": "Normal"
+  },
+  "options_spider_size_large": {
+    "message": "Grande"
+  },
+  "options_spider_pace": {
+    "message": "Ritmo"
+  },
+  "options_spider_pace_desc": {
+    "message": "A velocidade com que ela anda. Cada clique espera a aranha chegar, até cerca de um segundo no ritmo calmo."
+  },
+  "options_spider_pace_calm": {
+    "message": "Calmo"
+  },
+  "options_spider_pace_normal": {
+    "message": "Normal"
+  },
+  "options_spider_pace_fast": {
+    "message": "Rápido"
+  },
+  "options_spider_marks": {
+    "message": "Marcações"
+  },
+  "options_spider_marks_desc": {
+    "message": "O que ela contorna pelo caminho. Desenhado sobre a página; o site nunca é alterado."
+  },
+  "options_spider_marks_off": {
+    "message": "Nenhuma"
+  },
+  "options_spider_marks_target": {
+    "message": "O elemento em que ela age"
+  },
+  "options_spider_marks_feet": {
+    "message": "Tudo o que as patas agarram"
+  },
+  "options_spider_color": {
+    "message": "Cor"
+  },
+  "options_spider_color_desc": {
+    "message": "Uma cor para a aranha inteira ou o degradê arco-íris do original."
+  },
+  "options_spider_color_violet": {
+    "message": "Violeta"
+  },
+  "options_spider_color_ink": {
+    "message": "Tinta"
+  },
+  "options_spider_color_white": {
+    "message": "Branco"
+  },
+  "options_spider_color_cyan": {
+    "message": "Ciano"
+  },
+  "options_spider_color_magenta": {
+    "message": "Magenta"
+  },
+  "options_spider_color_rainbow": {
+    "message": "Arco-íris"
+  },
+  "options_spider_tear": {
+    "message": "Arrancar palavras"
+  },
+  "options_spider_tear_desc": {
+    "message": "Enquanto lê, ela tira da página as palavras que o agente procura e depois as devolve. Desenhado sobre a página; o site nunca é alterado."
   },
   "options_general_section_control": {
     "message": "Controles"

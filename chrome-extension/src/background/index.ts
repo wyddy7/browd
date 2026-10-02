@@ -20,6 +20,8 @@ import type { BaseChatModel } from '@langchain/core/language_models/chat_models'
 import { DEFAULT_AGENT_OPTIONS } from './agent/types';
 import { SpeechToTextService } from './services/speechToText';
 import { injectBuildDomTreeScripts } from './browser/dom/service';
+import { SPIDER_LIVE_KEY, spiderBridge } from './browser/spider';
+import { setPagePresence } from './browser/presence';
 import { HITL_DECISION_MESSAGE } from './agent/hitl/types';
 
 const logger = createLogger('background');
@@ -94,6 +96,7 @@ chrome.debugger.onDetach.addListener(async (source, reason) => {
 // Cleanup when tab is closed
 chrome.tabs.onRemoved.addListener(tabId => {
   browserContext.removeAttachedPage(tabId);
+  spiderBridge.forget(tabId);
 });
 
 // T2f-firewall-live: keep BrowserContext config in sync with
@@ -118,8 +121,35 @@ firewallStore.subscribe(() => {
 
 logger.info('background loaded');
 
+// The spider shows the agent's presence on the page: Page reports its choke points through this seam.
+setPagePresence(spiderBridge);
+// A fresh worker knows of no spider: one left sitting in an open chat panel by the previous worker goes,
+// and pages stop saying hello until a task starts.
+void chrome.runtime.sendMessage({ type: 'browd:spider:panel', op: 'leave' }).catch(() => {});
+void chrome.storage.local.set({ [SPIDER_LIVE_KEY]: false }).catch(() => {});
+
 // Listen for simple messages (e.g., from options page and content scripts)
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type === 'browd:spider:hello') {
+    // Content script of a freshly loaded page: show the spider again if the
+    // agent is still driving this tab. Top frame only, own extension only.
+    const fromOwnTopFrame = sender.id === chrome.runtime.id && sender.frameId === 0;
+    sendResponse(fromOwnTopFrame ? spiderBridge.helloReply(sender.tab?.id) : { active: false });
+    return false;
+  }
+
+  if (message?.type === 'browd:spider:painted') {
+    // A page loaded while the spider is on its way to the chat has painted over the old one.
+    if (sender.id === chrome.runtime.id && sender.frameId === 0) spiderBridge.pagePainted(sender.tab?.id);
+    return false;
+  }
+
+  if (message?.type === 'browd:spider:pose') {
+    if (sender.id === chrome.runtime.id && sender.frameId === 0)
+      spiderBridge.reportPlace(sender.tab?.id, message.place);
+    return false;
+  }
+
   if (message?.type === 'open-side-panel') {
     void (async () => {
       try {
@@ -154,6 +184,7 @@ chrome.runtime.onConnect.addListener(port => {
     }
 
     currentPort = port;
+    spiderBridge.setPanelOpen(true);
 
     port.onMessage.addListener(async message => {
       try {
@@ -185,6 +216,7 @@ chrome.runtime.onConnect.addListener(port => {
             // If executor exists, add follow-up task
             if (currentExecutor) {
               currentExecutor.addFollowUpTask(message.task);
+              spiderBridge.setTask(message.task);
               // T2h: re-seed the chat-history snapshot. The side panel
               // ships the latest chatHistoryStore contents on every
               // submit; runReactAgent rebuilds its MemorySaver per call,
@@ -334,6 +366,7 @@ chrome.runtime.onConnect.addListener(port => {
       // this event is also triggered when the side panel is closed, so we need to cancel the task
       console.log('Side panel disconnected');
       currentPort = null;
+      spiderBridge.setPanelOpen(false);
       currentExecutor?.cancel();
     });
   }
@@ -345,6 +378,7 @@ async function setupExecutor(
   browserContext: BrowserContext,
   priorMessages?: { role: 'user' | 'assistant'; content: string }[],
 ) {
+  spiderBridge.setTask(task);
   const providers = await llmProviderStore.getAllProviders();
   // if no providers, need to display the options page
   if (Object.keys(providers).length === 0) {
@@ -440,6 +474,8 @@ async function subscribeToExecutorEvents(executor: Executor) {
 
   // Subscribe to new events
   executor.subscribeExecutionEvents(async event => {
+    // The spider follows the agent's state from here, and only from here.
+    void spiderBridge.onAgentEvent(event);
     try {
       if (currentPort) {
         currentPort.postMessage(event);

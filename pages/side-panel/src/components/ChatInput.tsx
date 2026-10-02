@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { FaMicrophone, FaEye, FaEyeSlash } from 'react-icons/fa';
+import { SpiderToggle } from './SpiderToggle';
 import { AiOutlineLoading3Quarters } from 'react-icons/ai';
 import { FiPaperclip } from 'react-icons/fi';
 import { t } from '@extension/i18n';
@@ -449,6 +450,7 @@ export default function ChatInput({
   return (
     <form
       ref={composerRef}
+      data-notice-dock="composer"
       onSubmit={handleSubmit}
       className={`browd-input overflow-visible transition-colors ${disabled ? 'cursor-not-allowed opacity-80' : ''}`}
       aria-label={t('chat_input_form')}>
@@ -687,6 +689,7 @@ export default function ChatInput({
                   )}
                 </button>
               )}
+              {!historicalSessionId && <SpiderToggle />}
               {onMicClick && !historicalSessionId && (
                 <button
                   type="button"

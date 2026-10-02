@@ -297,6 +297,40 @@ state message renders as `<page-state-warning>`. Empty elements on purpose:
 a stale selector map would send clicks to the wrong element. The degraded
 state is not cached. Tab-gone aborts still reject as `TabGoneError`.
 
+## Agent Spider (content script)
+
+`pages/content/` hosts the agent spider (`src/spider/`: `engine.ts` commands and
+modes, `rig.ts` body and drawing, `brain.ts` behaviour by the agent's mood,
+`stickers.ts` torn-out words, `motion.ts` glides — every move starts and stops without a kick, `reader.ts`, `overlay.ts`). `Page` talks only to the
+`PagePresence` interface (`browser/presence.ts`); `browser/spider.ts`
+(`SpiderBridge`) implements it and reads agent events from the one subscription in
+`background/index.ts` through `browser/agentMood.ts`. During a burst of navigations it waits in the chat panel: `side-panel/src/spiderPanel.ts` runs the same engine there (alias `@spider`); the move between page and panel is one flight drawn by both, mapped by `browser/portal.ts`. Full contract, checks and
+open questions: `docs/agent-spider.md`. Never break its invariants: the site's DOM
+is never modified (torn words, marks and holes are canvas drawing), the host
+element is never touched after creation (`readClickSignature` hashes `outerHTML`),
+every bridge call is capped and swallows its errors, captures never contain it,
+legs are never drawn longer than their bones and never meet (e2e C12/C23), benchmark runs disable it
+(`spider-settings.enabled = false`). E2E: `bench/spider/e2e.mjs` (overlay, no
+model) and `bench/spider/pipeline.mjs` (real agent on a scripted localhost model, $0).
+
+## In-product notices (side panel)
+
+`pages/side-panel/src/notices/`: a feature intro or "what's new" notice, shown once
+to new and existing users alike — `noticesStore` (`packages/storage`, key
+`browd-notices`) keeps the seen ids; an id missing there is shown the next time
+its trigger fires (`open` = the panel opened, `task-start`). To add one: an entry
+in `registry.ts` with a new id (a changed text needs a new id), its strings in
+every locale, and an `anchor` (`data-notice-anchor` on the control) if it is
+about a control — the notice grows out of that control and folds back into it
+(`springBox.ts`, motion-morph springs; `prefers-reduced-motion` = no motion). It is
+a low bar docked over the composer, its full width, no border: a title line with a
+close button (the only control) and one line of text (owner 👤 03.10: «широким и
+низким, 2 строки … не в углу», «нахуя там хоть какая-то кнопка кроме крестика»).
+First notice: `spider-watch` («There's a spider in this extension. / Watch it.» —
+the owner's wording, verbatim) when the first task starts. Checked by
+`bench/spider/pipeline.mjs` P14 (the task is sent through the panel composer, so
+the panel sees the task's events).
+
 ## MV3 Service Worker Gotchas
 
 These fail at runtime even when build passes. happy-dom in tests
@@ -326,7 +360,7 @@ provides them; the actual SW does not.
 - `chrome-extension/` — manifest, background service worker, agent runtime, browser automation.
 - `pages/side-panel/` — main chat UI.
 - `pages/options/` — settings UI.
-- `pages/content/` — content script.
+- `pages/content/` — content script (top frame only; hosts the agent spider).
 - `packages/storage/` — Chrome storage abstractions and settings models.
 - `packages/i18n/` — source locales and generated i18n helpers.
 - `packages/ui/` — shared UI primitives.

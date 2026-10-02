@@ -1161,6 +1161,21 @@
   "chat_input_tabFocus_foreground_label": {
     "message": "Mostrar la pestaña del agente cuando esté trabajando (actualmente activo)"
   },
+  "chat_input_spider_on_label": {
+    "message": "Ocultar la araña"
+  },
+  "chat_input_spider_off_label": {
+    "message": "Mostrar la araña"
+  },
+  "notice_spider_title": {
+    "message": "En esta extensión hay una araña."
+  },
+  "notice_spider_body": {
+    "message": "Obsérvala."
+  },
+  "notice_ok": {
+    "message": "Entendido"
+  },
   "chat_input_tabFocus_background_tip": {
     "message": "El agente trabaja en una pestaña aparte, en segundo plano. Haz clic para cambiar y traer la pestaña del agente al primer plano al iniciar la tarea."
   },
@@ -1199,6 +1214,93 @@
   },
   "options_general_section_page_lead": {
     "message": "Cómo interactúa el agente con las páginas que visita."
+  },
+  "options_spider_section": {
+    "message": "Araña del agente"
+  },
+  "options_spider_section_lead": {
+    "message": "Una pequeña araña camina hacia donde el agente hace clic o escribe, para que puedas seguir sus manos. Se oculta en las capturas que toma el propio agente."
+  },
+  "options_spider_enabled": {
+    "message": "Mostrar la araña"
+  },
+  "options_spider_enabled_desc": {
+    "message": "Aparece en la pestaña del agente mientras se ejecuta una tarea y se va trepando cuando termina."
+  },
+  "options_spider_size": {
+    "message": "Tamaño"
+  },
+  "options_spider_size_desc": {
+    "message": "Envergadura de patas de unos 80 a 160 píxeles."
+  },
+  "options_spider_size_small": {
+    "message": "Pequeño"
+  },
+  "options_spider_size_normal": {
+    "message": "Normal"
+  },
+  "options_spider_size_large": {
+    "message": "Grande"
+  },
+  "options_spider_pace": {
+    "message": "Ritmo"
+  },
+  "options_spider_pace_desc": {
+    "message": "Qué tan rápido camina. Cada clic espera a que llegue la araña, hasta un segundo en ritmo tranquilo."
+  },
+  "options_spider_pace_calm": {
+    "message": "Tranquilo"
+  },
+  "options_spider_pace_normal": {
+    "message": "Normal"
+  },
+  "options_spider_pace_fast": {
+    "message": "Rápido"
+  },
+  "options_spider_marks": {
+    "message": "Marcas"
+  },
+  "options_spider_marks_desc": {
+    "message": "Lo que remarca a su paso. Se dibuja sobre la página; el sitio nunca se modifica."
+  },
+  "options_spider_marks_off": {
+    "message": "Ninguna"
+  },
+  "options_spider_marks_target": {
+    "message": "El elemento sobre el que actúa"
+  },
+  "options_spider_marks_feet": {
+    "message": "Todo lo que agarran sus patas"
+  },
+  "options_spider_color": {
+    "message": "Color"
+  },
+  "options_spider_color_desc": {
+    "message": "Un color para toda la araña o el degradado arcoíris del original."
+  },
+  "options_spider_color_violet": {
+    "message": "Violeta"
+  },
+  "options_spider_color_ink": {
+    "message": "Tinta"
+  },
+  "options_spider_color_white": {
+    "message": "Blanco"
+  },
+  "options_spider_color_cyan": {
+    "message": "Cian"
+  },
+  "options_spider_color_magenta": {
+    "message": "Magenta"
+  },
+  "options_spider_color_rainbow": {
+    "message": "Arcoíris"
+  },
+  "options_spider_tear": {
+    "message": "Arrancar palabras"
+  },
+  "options_spider_tear_desc": {
+    "message": "Mientras lee, saca de la página las palabras que busca el agente y luego las devuelve. Se dibuja sobre la página; el sitio nunca se modifica."
   },
   "options_general_section_control": {
     "message": "Controles"

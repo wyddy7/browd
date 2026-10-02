@@ -37,6 +37,9 @@ import { TracePanel, type TraceEntry } from './components/TracePanel';
 import { EventType, type AgentEvent, ExecutionState } from './types/event';
 import type { HITLRequest, HITLDecision } from '../../../chrome-extension/src/background/agent/hitl/types';
 import { HITL_REQUEST_MESSAGE } from '../../../chrome-extension/src/background/agent/hitl/types';
+import { panelSpiderTaskEnded, startPanelSpider } from './spiderPanel';
+import { NoticeHost } from './notices/NoticeHost';
+import type { NoticeTrigger } from './notices/registry';
 import './SidePanel.css';
 
 type ModelOption = {
@@ -215,6 +218,12 @@ const SidePanel = () => {
   // tool call in flight, planner/replanner round). Empty between
   // calls — empty for >5s = stuck. Driven by ExecutionState.TASK_LIVE.
   const [liveStatus, setLiveStatus] = useState<string | null>(null);
+  // The agent spider waits here during a burst of navigations (see spiderPanel.ts).
+  useEffect(() => startPanelSpider(), []);
+  // In-product notices (notices/registry.ts): a chance to show one when the panel opens and when a task starts.
+  const [noticeFire, setNoticeFire] = useState<{ trigger: NoticeTrigger; at: number } | null>(null);
+  useEffect(() => setNoticeFire({ trigger: 'open', at: Date.now() }), []);
+
   useEffect(() => {
     if (!lightboxUrl) return;
     const onKey = (e: KeyboardEvent) => {
@@ -603,6 +612,7 @@ const SidePanel = () => {
         case Actors.SYSTEM:
           switch (state) {
             case ExecutionState.TASK_START:
+              setNoticeFire({ trigger: 'task-start', at: Date.now() });
               // Reset historical session flag and trace when a new task starts
               setIsHistoricalSession(false);
               setTraceEntries([]);
@@ -619,6 +629,7 @@ const SidePanel = () => {
               currentPhaseRef.current = 'thinking';
               break;
             case ExecutionState.TASK_OK:
+              panelSpiderTaskEnded();
               setIsFollowUpMode(true);
               setInputEnabled(true);
               setShowStopButton(false);
@@ -648,6 +659,7 @@ const SidePanel = () => {
               setLiveStatus(null);
               break;
             case ExecutionState.TASK_FAIL:
+              panelSpiderTaskEnded();
               setIsFollowUpMode(true);
               setInputEnabled(true);
               setShowStopButton(false);
@@ -672,6 +684,7 @@ const SidePanel = () => {
               setLiveStatus(null);
               break;
             case ExecutionState.TASK_CANCEL:
+              panelSpiderTaskEnded();
               setIsFollowUpMode(false);
               setInputEnabled(true);
               setShowStopButton(false);
@@ -1695,6 +1708,7 @@ const SidePanel = () => {
 
   return (
     <div data-browd-theme={appearanceTheme} data-browd-mode={isDarkMode ? 'dark' : 'light'}>
+      <NoticeHost fire={noticeFire} />
       <div className="browd-shell flex h-screen flex-col overflow-hidden rounded-[var(--browd-radius-md)] border border-[var(--browd-border)] text-[var(--browd-text)]">
         <header className="header relative">
           <div className="header-logo">

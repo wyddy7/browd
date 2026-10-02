@@ -1128,6 +1128,21 @@
   "chat_input_tabFocus_foreground_label": {
     "message": "Агент-вкладка показывается на старте (сейчас)"
   },
+  "chat_input_spider_on_label": {
+    "message": "Скрыть паука"
+  },
+  "chat_input_spider_off_label": {
+    "message": "Показать паука"
+  },
+  "notice_spider_title": {
+    "message": "В этом расширении есть паук."
+  },
+  "notice_spider_body": {
+    "message": "Следите за ним."
+  },
+  "notice_ok": {
+    "message": "Понятно"
+  },
   "chat_input_tabFocus_background_tip": {
     "message": "Агент работает в отдельной вкладке в фоне, твой фокус не сбивается. Клик — переключить: показывать агент-вкладку при старте задачи."
   },
@@ -1211,6 +1226,93 @@
   },
   "options_general_section_page_lead": {
     "message": "Как агент взаимодействует со страницами."
+  },
+  "options_spider_section": {
+    "message": "Паук агента"
+  },
+  "options_spider_section_lead": {
+    "message": "Маленький паук идёт туда, где агент кликает или печатает, — видно, где сейчас его руки. На скриншотах, которые делает сам агент, паука нет."
+  },
+  "options_spider_enabled": {
+    "message": "Показывать паука"
+  },
+  "options_spider_enabled_desc": {
+    "message": "Появляется во вкладке агента, пока идёт задача, и уползает, когда она закончилась."
+  },
+  "options_spider_size": {
+    "message": "Размер"
+  },
+  "options_spider_size_desc": {
+    "message": "Размах лап примерно от 80 до 160 пикселей."
+  },
+  "options_spider_size_small": {
+    "message": "Маленький"
+  },
+  "options_spider_size_normal": {
+    "message": "Обычный"
+  },
+  "options_spider_size_large": {
+    "message": "Большой"
+  },
+  "options_spider_pace": {
+    "message": "Темп"
+  },
+  "options_spider_pace_desc": {
+    "message": "Как быстро он ходит. Каждый клик ждёт, пока паук дойдёт, — в спокойном темпе до секунды."
+  },
+  "options_spider_pace_calm": {
+    "message": "Спокойный"
+  },
+  "options_spider_pace_normal": {
+    "message": "Обычный"
+  },
+  "options_spider_pace_fast": {
+    "message": "Быстрый"
+  },
+  "options_spider_marks": {
+    "message": "Метки"
+  },
+  "options_spider_marks_desc": {
+    "message": "Что он обводит по пути. Рисуется поверх страницы, сам сайт не меняется."
+  },
+  "options_spider_marks_off": {
+    "message": "Без меток"
+  },
+  "options_spider_marks_target": {
+    "message": "Элемент, с которым работает"
+  },
+  "options_spider_marks_feet": {
+    "message": "Всё, за что держатся лапы"
+  },
+  "options_spider_color": {
+    "message": "Цвет"
+  },
+  "options_spider_color_desc": {
+    "message": "Один цвет для всего паука или радужный перелив, как в оригинале."
+  },
+  "options_spider_color_violet": {
+    "message": "Фиолетовый"
+  },
+  "options_spider_color_ink": {
+    "message": "Чернильный"
+  },
+  "options_spider_color_white": {
+    "message": "Белый"
+  },
+  "options_spider_color_cyan": {
+    "message": "Бирюзовый"
+  },
+  "options_spider_color_magenta": {
+    "message": "Пурпурный"
+  },
+  "options_spider_color_rainbow": {
+    "message": "Радуга"
+  },
+  "options_spider_tear": {
+    "message": "Вырывать слова"
+  },
+  "options_spider_tear_desc": {
+    "message": "Пока читает, паук вытаскивает со страницы слова, которые ищет агент, и потом возвращает их на место. Рисуется поверх страницы, сам сайт не меняется."
   },
   "options_general_section_control": {
     "message": "Управление"

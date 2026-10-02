@@ -32,6 +32,7 @@ import { createLogger } from '@src/background/log';
 import { ClickableElementProcessor } from './dom/clickable/service';
 import { isUrlAllowed } from './util';
 import { STATE_BUILD_DEADLINE_MS, withStateDeadline } from './stateDeadline';
+import { pagePresence } from './presence';
 
 const logger = createLogger('Page');
 
@@ -138,6 +139,8 @@ export default class Page {
     // Add anti-detection scripts
     await this._addAntiDetectionScripts();
 
+    pagePresence().attached(this._tabId);
+
     return true;
   }
 
@@ -184,6 +187,7 @@ export default class Page {
   }
 
   async detachPuppeteer(): Promise<void> {
+    pagePresence().detached(this._tabId);
     if (this._browser) {
       await this._browser.disconnect();
       this._browser = null;
@@ -488,7 +492,12 @@ export default class Page {
       try {
         await this.removeHighlight();
         const displayHighlights = this._config.displayHighlights || useVision;
-        const content = await this.getClickableElements(displayHighlights, focusElement, signal);
+        // The DOM build runs on the page's main thread and can stall its rendering
+        // on heavy pages; the presence holds still meanwhile, so the stall shows as a pause.
+        await pagePresence().scanning(this._tabId, true);
+        const content = await this.getClickableElements(displayHighlights, focusElement, signal).finally(() =>
+          pagePresence().scanning(this._tabId, false),
+        );
         if (!content) {
           logger.warning(`Failed to get clickable elements (attempt ${attempt + 1}/2)`);
           if (attempt === 0) {
@@ -558,6 +567,8 @@ export default class Page {
       throw new Error('Puppeteer page is not connected');
     }
 
+    // Nothing of the presence may appear in what the model or the Judge sees.
+    await pagePresence().beforeCapture(this._tabId);
     try {
       // First disable animations/transitions
       await this._puppeteerPage.evaluate(() => {
@@ -600,6 +611,8 @@ export default class Page {
     } catch (error) {
       logger.error('Failed to take screenshot:', error);
       throw error;
+    } finally {
+      pagePresence().afterCapture(this._tabId);
     }
   }
 
@@ -632,6 +645,7 @@ export default class Page {
   async clickAtImageCoord(x: number, y: number): Promise<{ cssX: number; cssY: number; vw: number; vh: number }> {
     if (!this._puppeteerPage) throw new Error('Puppeteer page is not connected');
     const m = await this._coordToCss(x, y);
+    await pagePresence().beforePointer(this._tabId, { x: m.cssX, y: m.cssY });
     await this._puppeteerPage.mouse.click(m.cssX, m.cssY);
     return { cssX: m.cssX, cssY: m.cssY, vw: m.vw, vh: m.vh };
   }
@@ -643,8 +657,14 @@ export default class Page {
   ): Promise<{ cssX: number; cssY: number; vw: number; vh: number }> {
     if (!this._puppeteerPage) throw new Error('Puppeteer page is not connected');
     const m = await this._coordToCss(x, y);
+    await pagePresence().beforePointer(this._tabId, { x: m.cssX, y: m.cssY });
     await this._puppeteerPage.mouse.click(m.cssX, m.cssY);
-    await this._puppeteerPage.keyboard.type(text);
+    await pagePresence().typing(this._tabId, true);
+    try {
+      await this._puppeteerPage.keyboard.type(text);
+    } finally {
+      void pagePresence().typing(this._tabId, false);
+    }
     return { cssX: m.cssX, cssY: m.cssY, vw: m.vw, vh: m.vh };
   }
 
@@ -655,6 +675,7 @@ export default class Page {
   ): Promise<{ cssX: number; cssY: number; vw: number; vh: number }> {
     if (!this._puppeteerPage) throw new Error('Puppeteer page is not connected');
     const m = await this._coordToCss(x, y);
+    pagePresence().scrolled(this._tabId, dy);
     await this._puppeteerPage.mouse.move(m.cssX, m.cssY);
     await this._puppeteerPage.mouse.wheel({ deltaY: dy });
     return { cssX: m.cssX, cssY: m.cssY, vw: m.vw, vh: m.vh };
@@ -675,6 +696,7 @@ export default class Page {
     if (!this._puppeteerPage) throw new Error('Puppeteer page is not connected');
     const a = await this._coordToCss(fromX, fromY);
     const b = await this._coordToCss(toX, toY);
+    await pagePresence().beforePointer(this._tabId, { x: a.cssX, y: a.cssY });
     const page = this._puppeteerPage;
     await page.mouse.move(a.cssX, a.cssY);
     await page.mouse.down();
@@ -738,6 +760,7 @@ export default class Page {
     }
 
     const previousUrl = this._puppeteerPage.url();
+    await pagePresence().beforeNavigate(this._tabId);
     // A failed load can still resolve: Chromium commits its own error page and goto returns.
     const failIfErrorPage = () => {
       if (isBrowserErrorPage(this._puppeteerPage?.url())) {
@@ -845,6 +868,7 @@ export default class Page {
   // the page and scroll that instead. We use behavior:'instant' so verification ~1s
   // later sees the final position rather than mid-animation.
   async scrollToPercent(yPercent: number, elementNode?: DOMElementNode): Promise<void> {
+    pagePresence().scrolled(this._tabId, yPercent >= 50 ? 400 : -400);
     if (!this._puppeteerPage) {
       throw new Error('Puppeteer is not connected');
     }
@@ -901,6 +925,7 @@ export default class Page {
   }
 
   async scrollBy(y: number, elementNode?: DOMElementNode): Promise<void> {
+    pagePresence().scrolled(this._tabId, y);
     if (!this._puppeteerPage) {
       throw new Error('Puppeteer is not connected');
     }
@@ -1407,6 +1432,9 @@ export default class Page {
         logger.debug(`Non-critical error preparing element: ${e}`);
       }
 
+      await this._beforePointer(element);
+      await pagePresence().typing(this._tabId, true);
+
       // Get element properties to determine input method
       const tagName = await element.evaluate(el => el.tagName.toLowerCase());
       const isContentEditable = await element.evaluate(el => {
@@ -1477,6 +1505,27 @@ export default class Page {
       const errorMsg = `Failed to input text into element: ${elementNode}. Error: ${error instanceof Error ? error.message : String(error)}`;
       logger.error(errorMsg);
       throw new Error(errorMsg);
+    } finally {
+      void pagePresence().typing(this._tabId, false);
+    }
+  }
+
+  /**
+   * Tell the presence (the spider) where the real click or keystrokes are
+   * about to land — the element's centre, the point Puppeteer clicks.
+   * Decoration only: bounded and never throws.
+   */
+  private async _beforePointer(element: ElementHandle): Promise<void> {
+    if (!pagePresence().showing(this._tabId)) return;
+    try {
+      const box = await Promise.race([
+        element.boundingBox(),
+        new Promise<null>(resolve => setTimeout(() => resolve(null), 400)),
+      ]);
+      if (!box || box.width <= 0 || box.height <= 0) return;
+      await pagePresence().beforePointer(this._tabId, { x: box.x + box.width / 2, y: box.y + box.height / 2 }, box);
+    } catch (error) {
+      logger.debug('presence beforePointer skipped', error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -1590,6 +1639,7 @@ export default class Page {
 
       // Scroll element into view if needed
       await this._scrollIntoViewIfNeeded(element);
+      await this._beforePointer(element);
 
       try {
         // First attempt: Use Puppeteer's click method with timeout

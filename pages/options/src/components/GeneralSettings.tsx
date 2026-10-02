@@ -13,6 +13,7 @@ import {
 } from '@extension/storage';
 import { ToggleSwitch, ToggleTheme } from '@extension/ui';
 import { t } from '@extension/i18n';
+import { SpiderSettings } from './SpiderSettings';
 
 const settingTitleClass = 'text-[15px] font-medium leading-tight text-[var(--browd-text)]';
 const settingDescriptionClass = 'mt-1 text-[13px] font-normal leading-[1.55] text-[var(--browd-muted)]';
@@ -249,6 +250,21 @@ export const GeneralSettings = ({ onAppearanceThemeChange }: GeneralSettingsProp
             </div>
           </div>
         </div>
+
+        <SpiderSettings
+          classes={{
+            heading: sectionHeadingClass,
+            lead: sectionLeadClass,
+            list: sectionListClass,
+            row: rowClass,
+            rowLeft: rowLeftClass,
+            rowControl: rowControlClass,
+            title: settingTitleClass,
+            description: settingDescriptionClass,
+            select: selectInputClass,
+            badge: betaBadgeClass,
+          }}
+        />
 
         <div>
           <h2 className={sectionHeadingClass}>{t('options_general_section_control')}</h2>

@@ -6,6 +6,32 @@ All notable changes to Browd are documented here. The format is based on
 
 ## [Unreleased]
 
+A spider now shows where the agent is working. Browser permissions are
+unchanged.
+
+### Added
+
+- **Agent spider.** A line-drawn spider walks on the page the agent works in.
+  While the model thinks it reads along and tears out the words the task is
+  about (drawn over the page; the page itself is never changed). Before each
+  click or keystroke it glides to the element, then taps it. It stays on screen
+  across page loads, and a long burst of navigations sends it into the chat
+  panel and back, one leap drawn across the seam between the two. It is hidden
+  for every screenshot the agent takes. On by default: the spider button in the
+  chat input hides it, and Options → Agent spider sets its size, pace, colour
+  and target outline. While it is on, each click or keystroke takes about half
+  a second longer.
+- **In-product notices** in the chat panel, each shown once to new and existing
+  users. The first one announces the spider.
+- `bench/spider/`: end-to-end checks of the spider (28 checks, also across seven
+  screen sizes and zooms) and of the real agent on a scripted local model
+  (14 checks). Development tools, not part of the extension.
+
+### Changed
+
+- The content script runs at document start and messages the extension only
+  while a task runs.
+
 ## [0.1.17] — 2026-10-02
 
 The agent ends tasks honestly on broken, slow and hostile sites. When a site

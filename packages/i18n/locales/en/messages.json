@@ -1149,6 +1149,21 @@
   "chat_input_tabFocus_foreground_label": {
     "message": "Show agent tab when it works (current)"
   },
+  "chat_input_spider_on_label": {
+    "message": "Hide the spider"
+  },
+  "chat_input_spider_off_label": {
+    "message": "Show the spider"
+  },
+  "notice_spider_title": {
+    "message": "There's a spider in this extension."
+  },
+  "notice_spider_body": {
+    "message": "Watch it."
+  },
+  "notice_ok": {
+    "message": "Got it"
+  },
   "chat_input_tabFocus_background_tip": {
     "message": "Agent works in a separate tab in the background. Click to switch: bring the agent tab to the foreground at task start."
   },
@@ -1211,6 +1226,93 @@
   },
   "options_general_section_page_lead": {
     "message": "How the agent interacts with pages it visits."
+  },
+  "options_spider_section": {
+    "message": "Agent spider"
+  },
+  "options_spider_section_lead": {
+    "message": "A small spider walks to whatever the agent clicks or types into, so you can follow its hands. It is hidden from the agent's own screenshots."
+  },
+  "options_spider_enabled": {
+    "message": "Show the spider"
+  },
+  "options_spider_enabled_desc": {
+    "message": "Appears in the agent's tab while a task runs and climbs away when it ends."
+  },
+  "options_spider_size": {
+    "message": "Size"
+  },
+  "options_spider_size_desc": {
+    "message": "Leg span from about 80 to 160 pixels."
+  },
+  "options_spider_size_small": {
+    "message": "Small"
+  },
+  "options_spider_size_normal": {
+    "message": "Normal"
+  },
+  "options_spider_size_large": {
+    "message": "Large"
+  },
+  "options_spider_pace": {
+    "message": "Pace"
+  },
+  "options_spider_pace_desc": {
+    "message": "How fast it walks. Each click waits for the spider to arrive, up to about a second at the calm pace."
+  },
+  "options_spider_pace_calm": {
+    "message": "Calm"
+  },
+  "options_spider_pace_normal": {
+    "message": "Normal"
+  },
+  "options_spider_pace_fast": {
+    "message": "Fast"
+  },
+  "options_spider_marks": {
+    "message": "Marks"
+  },
+  "options_spider_marks_desc": {
+    "message": "What it outlines as it goes. Drawn over the page; the site itself is never changed."
+  },
+  "options_spider_marks_off": {
+    "message": "None"
+  },
+  "options_spider_marks_target": {
+    "message": "The element it acts on"
+  },
+  "options_spider_marks_feet": {
+    "message": "Everything its feet grip"
+  },
+  "options_spider_color": {
+    "message": "Colour"
+  },
+  "options_spider_color_desc": {
+    "message": "One colour for the whole spider, or the rainbow drift of the original."
+  },
+  "options_spider_color_violet": {
+    "message": "Violet"
+  },
+  "options_spider_color_ink": {
+    "message": "Ink"
+  },
+  "options_spider_color_white": {
+    "message": "White"
+  },
+  "options_spider_color_cyan": {
+    "message": "Cyan"
+  },
+  "options_spider_color_magenta": {
+    "message": "Magenta"
+  },
+  "options_spider_color_rainbow": {
+    "message": "Rainbow"
+  },
+  "options_spider_tear": {
+    "message": "Tear words out"
+  },
+  "options_spider_tear_desc": {
+    "message": "While it reads, it pulls the words the agent is looking for out of the page and puts them back. Drawn over the page; the site itself is never changed."
   },
   "options_general_section_control": {
     "message": "Controls"
