@@ -238,6 +238,14 @@ describe('SpiderBridge', () => {
     expect(sent.at(-1)!.cmd.op).toBe('leave');
   });
 
+  it('takes focus words from a Russian task without its verbs and fillers', async () => {
+    const { bridge, sent } = setup();
+    bridge.setTask('найди на хабре самую обсуждаемую статью про агентов и открой её');
+    await bridge.activate(7);
+    const spawn = sent[0].cmd as Extract<SpiderCommand, { op: 'spawn' }>;
+    expect(spawn.focus).toEqual(['хабре', 'обсуждаемую', 'статью', 'агентов']);
+  });
+
   it('switches the focus to the active subgoal when the plan changes', async () => {
     const { bridge, sent } = setup();
     bridge.setTask('summarize the top thread');

@@ -102,7 +102,13 @@ const STOP = new Set(
     'go open click find show get give tell make take use visit look search read summarize summarise compare check ' +
     'identify return report list choose pick select navigate scroll page pages site website post posts item items ' +
     'top thread most best first last one two today now please me my you your their there then than what which who ' +
-    'how when where them they will would can could should also just only more less via using url urls http https www com'
+    'how when where them they will would can could should also just only more less via using url urls http https www com ' +
+    // Russian: verbs of the request, fillers, prepositions.
+    'найди найти найдите открой открыть откройте зайди зайти перейди перейти нажми нажать кликни покажи показать посмотри ' +
+    'посмотреть сделай сделать скажи сказать выбери выбрать проверь проверить сравни сравнить кратко перескажи ' +
+    'самый самая самое самую самые лучший лучшая лучшее лучшую лучшие сегодня сейчас потом затем пожалуйста мне меня ' +
+    'это этот эта эти тот та те там тут что как где когда который которая которые чтобы или для про при без над под ' +
+    'из на по от до за через страницу страница сайт сайте пост посты ссылку ссылка'
   ).split(' '),
 );
 
