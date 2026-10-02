@@ -65,7 +65,8 @@ interface Leg {
   home: number;
   femur: number;
   tibia: number;
-  bend: number;
+  /** Rest direction of the femur, from the heading (per side). */
+  kneeAngle: number;
   /** Document coordinates. */
   foot: V;
   from: V;
@@ -89,18 +90,21 @@ interface Drawn {
   bow: V;
 }
 
-// Leg pairs head to tail at size 1: hip position on the head rim, rest
-// direction from the heading, rest distance as a share of the length, bones,
-// knee side. Front pairs bend toward the head, rear pairs toward the tail:
-// every knee stays inside its own leg's sector, so no two legs cross — the
-// "X" of a spider seen from above. Long legs resting at ~84% of their reach
-// keep the bends open; the curved tibia does the rest.
+// Leg pairs head to tail at size 1: hip position on the head rim, foot rest
+// direction, knee direction, rest distance as a share of the length, bones.
+// Seen from above a spider's femur leaves the body outward and the tibia
+// bends from the knee toward the foot — so each femur keeps its own
+// direction (a fan of knees, never landing on a neighbour's leg) and only
+// follows the foot a little; the tibia reaches the foot.
 const LEG_LAYOUT = [
-  { hipAngle: 0.5, angle: 0.62, home: 0.84, femur: 46, tibia: 52, bend: -1 },
-  { hipAngle: 1.1, angle: 1.24, home: 0.84, femur: 40, tibia: 46, bend: -1 },
-  { hipAngle: 1.9, angle: 1.96, home: 0.84, femur: 38, tibia: 44, bend: 1 },
-  { hipAngle: 2.5, angle: 2.56, home: 0.86, femur: 44, tibia: 54, bend: 1 },
+  { hipAngle: 0.45, angle: 0.42, knee: 0.9, home: 0.82, femur: 44, tibia: 54 },
+  { hipAngle: 1.1, angle: 1.12, knee: 1.42, home: 0.8, femur: 38, tibia: 46 },
+  { hipAngle: 1.9, angle: 2.02, knee: 1.8, home: 0.8, femur: 36, tibia: 44 },
+  { hipAngle: 2.55, angle: 2.72, knee: 2.3, home: 0.84, femur: 42, tibia: 56 },
 ] as const;
+
+/** How far a femur may swing after its foot, radians either way. */
+const FEMUR_FOLLOW = 0.24;
 
 export const HEAD = { rx: 6.2, ry: 5.2, rim: 4.4 };
 export const ABDOMEN = { rx: 9.5, ry: 7.2, gap: 13 };
@@ -178,7 +182,7 @@ export class Rig {
           home: l.home * (l.femur + l.tibia) * s,
           femur: l.femur * s,
           tibia: l.tibia * s,
-          bend: l.bend * side,
+          kneeAngle: l.knee,
           foot: vec(0, 0),
           from: vec(0, 0),
           to: vec(0, 0),
@@ -507,20 +511,31 @@ export class Rig {
   // ---------- drawing ----------
 
   private solveLegs(): void {
-    const bodyDoc = this.toDoc(add(this.body, this.dip));
+    const body = add(this.body, this.dip);
+    const bodyDoc = this.toDoc(body);
     this.drawn = this.legs.map(leg => {
       const hip = this.toView(this.hip(leg, bodyDoc));
       // A lifted foot is nearer the viewer: drawn a little toward the hip.
       const foot0 = this.toView(leg.foot);
       const liftShare = clamp(leg.lift / (60 * this.size), 0, 0.2);
-      const foot = lerp(foot0, hip, liftShare);
-      // Crouching bends the knees more: the same foot, shorter effective bones.
-      const k = 1 - 0.08 * this.crouch;
-      const { knee, tip } = knee2D(hip, foot, leg.femur * k, leg.tibia * k, leg.bend);
-      const mid = lerp(knee, tip, 0.5);
-      const along = sub(tip, knee);
-      const bow = add(mid, mul(rot90(unit(along), leg.bend), Math.hypot(along.x, along.y) * 0.12));
-      return { hip, knee, foot: tip, bow };
+      const footRaw = lerp(foot0, hip, liftShare);
+      // The femur keeps its own direction and follows the foot only a little.
+      const rest = this.heading + leg.side * leg.kneeAngle;
+      const restFoot = this.heading + leg.side * leg.angle;
+      const footDir = Math.atan2(footRaw.y - hip.y, footRaw.x - hip.x);
+      const follow = clamp(angleDiff(restFoot, footDir) * 0.5, -FEMUR_FOLLOW, FEMUR_FOLLOW);
+      // Crouching folds the femur in a little.
+      const femur = leg.femur * (1 - 0.1 * this.crouch);
+      const knee = add(hip, fromAngle(rest + follow, femur));
+      // The tibia reaches the foot, never longer than itself.
+      const foot = clampLen(knee, footRaw, leg.tibia * 1.06);
+      // It arcs outward, away from the body.
+      const mid = lerp(knee, foot, 0.5);
+      const along = sub(foot, knee);
+      let perp = rot90(unit(along), 1);
+      if (dist(add(mid, perp), body) < dist(mid, body)) perp = mul(perp, -1);
+      const bow = add(mid, mul(perp, Math.hypot(along.x, along.y) * 0.1));
+      return { hip, knee, foot, bow };
     });
   }
 
@@ -597,14 +612,14 @@ export class Rig {
 
     const strokeLegs = (extra: number, color: string) => {
       ctx.strokeStyle = color;
-      ctx.lineWidth = (2.2 + extra) * lw;
+      ctx.lineWidth = (1.9 + extra) * lw;
       ctx.beginPath();
       for (const d of this.drawn) {
         ctx.moveTo(d.hip.x, d.hip.y);
         ctx.lineTo(d.knee.x, d.knee.y);
       }
       ctx.stroke();
-      ctx.lineWidth = (1.4 + extra) * lw;
+      ctx.lineWidth = (1.3 + extra) * lw;
       ctx.beginPath();
       for (const d of this.drawn) {
         // The tibia arcs a little further the way the knee bends: a leg, not a zigzag.
@@ -618,7 +633,7 @@ export class Rig {
       }
       ctx.stroke();
     };
-    strokeLegs(2, pal.shade);
+    strokeLegs(1.6, pal.shade);
     strokeLegs(0, pal.line);
     for (const d of this.drawn) {
       box.add(d.knee, 8 * s);
@@ -694,10 +709,11 @@ export class Rig {
       ctx.arc(e.x, e.y, r * s, 0, Math.PI * 2);
     }
     for (const d of this.drawn) {
-      ctx.moveTo(d.knee.x + 2 * s, d.knee.y);
-      ctx.arc(d.knee.x, d.knee.y, 2 * s, 0, Math.PI * 2);
-      ctx.moveTo(d.foot.x + 2.2 * s, d.foot.y);
-      ctx.arc(d.foot.x, d.foot.y, 2.2 * s, 0, Math.PI * 2);
+      // Small joints: a knee is a bend, not a node.
+      ctx.moveTo(d.knee.x + 1.4 * s, d.knee.y);
+      ctx.arc(d.knee.x, d.knee.y, 1.4 * s, 0, Math.PI * 2);
+      ctx.moveTo(d.foot.x + 1.8 * s, d.foot.y);
+      ctx.arc(d.foot.x, d.foot.y, 1.8 * s, 0, Math.PI * 2);
     }
     ctx.fill();
     ctx.fillStyle = pal.line;

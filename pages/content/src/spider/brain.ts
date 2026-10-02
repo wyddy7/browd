@@ -27,7 +27,16 @@ interface Word {
 
 type Plan =
   | { kind: 'pause'; until: number }
-  | { kind: 'travel'; goal: V; then: 'read' | 'look'; block?: Block; lines?: Line[]; words?: Word[] }
+  | {
+      kind: 'travel';
+      goal: V;
+      then: 'read' | 'look';
+      block?: Block;
+      lines?: Line[];
+      words?: Word[];
+      /** One heading for the whole walk, set when it starts: no turning on every burst. */
+      face?: number;
+    }
   | { kind: 'read'; block: Block; lines: Line[]; line: number; x: number; words: Word[] }
   | { kind: 'look'; until: number; base: number };
 
@@ -226,7 +235,15 @@ export class Brain {
     }
     const along = rig.toView(lerp(b.from, b.to, minJerk(tau)));
     // A stiff spring tracks the smooth path.
-    return { target: along, k: 600 * m * m, c: 46 * m, vmax: 1200 * m, face: null, leap: false, hold: false };
+    return {
+      target: along,
+      k: 600 * m * m,
+      c: 46 * m,
+      vmax: 1200 * m,
+      face: this.faceForPlan(now),
+      leap: false,
+      hold: false,
+    };
   }
 
   /** Rest at the anchor (taken where the body is when first asked) on a soft spring. */
@@ -253,10 +270,22 @@ export class Brain {
     return null;
   }
 
+  /**
+   * Where to face. Turning the body while the feet stay planted sweeps the
+   * legs across each other, so the heading changes rarely: along the line
+   * while reading, one direction per walk, a small slow look around.
+   */
   private faceForPlan(now: number): number | null {
     const p = this.plan;
     if (p.kind === 'read') return 0;
-    if (p.kind === 'look') return p.base + Math.sin(now / 260) * 0.35;
+    if (p.kind === 'look') return p.base + Math.sin(now / 420) * 0.15;
+    if (p.kind === 'travel') {
+      if (p.face === undefined) {
+        const g = this.rig.toView(p.goal);
+        p.face = Math.atan2(g.y - this.rig.body.y, g.x - this.rig.body.x);
+      }
+      return p.face;
+    }
     return null;
   }
 

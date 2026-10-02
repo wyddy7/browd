@@ -395,21 +395,75 @@ try {
   await page.bringToFront();
   await sleep(600);
 
-  // C12 — knees never flip: every leg keeps its knee on the same side of its hip–foot line.
-  const sides = Array.from({ length: 8 }, () => new Set());
-  for (const p of allPoses) {
-    p.hips.forEach((h, i) => {
-      const f = p.feet[i];
-      const k = p.knees[i];
-      const cross = (f.x - h.x) * (k.y - h.y) - (f.y - h.y) * (k.x - h.x);
-      if (Math.abs(cross) > 30 && dist(h, f) > 20) sides[i].add(Math.sign(cross));
+  // C12 — knees fan out and keep their order: per side, knee directions (relative to the heading)
+  // stay strictly ordered head to tail, at least 0.2 rad apart — a knee never lands on a neighbour.
+  // C23 — legs never touch: no two legs of a side come within 2 px of each other away from the body.
+  {
+    const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
+    let disorder = 0;
+    let minGap = Infinity;
+    let touches = 0;
+    let closest = Infinity;
+    const touchBy = {};
+    const segDist = (p, a, b) => {
+      const abx = b.x - a.x;
+      const aby = b.y - a.y;
+      const t = Math.max(0, Math.min(1, ((p.x - a.x) * abx + (p.y - a.y) * aby) / (abx * abx + aby * aby || 1)));
+      return Math.hypot(p.x - (a.x + abx * t), p.y - (a.y + aby * t));
+    };
+    // Sample each leg's drawn polyline away from the body (beyond 14 px of the hip).
+    const pointsOf = (p, i) => {
+      const pts = [];
+      for (const [a, b] of [
+        [p.hips[i], p.knees[i]],
+        [p.knees[i], p.feet[i]],
+      ]) {
+        for (let k = 0; k <= 8; k++) {
+          const q = { x: a.x + ((b.x - a.x) * k) / 8, y: a.y + ((b.y - a.y) * k) / 8 };
+          if (dist(q, p.hips[i]) > 14) pts.push(q);
+        }
+      }
+      return pts;
+    };
+    for (const p of allPoses) {
+      if (!p.mode.startsWith('idle') && p.mode !== 'busy') continue;
+      for (const side of [0, 1]) {
+        const idx = [0, 1, 2, 3].map(i => i + side * 4);
+        const ang = idx.map(i => Math.abs(wrap(Math.atan2(p.knees[i].y - p.body.y, p.knees[i].x - p.body.x) - p.heading)));
+        for (let j = 1; j < 4; j++) {
+          if (ang[j] <= ang[j - 1]) disorder++;
+          minGap = Math.min(minGap, ang[j] - ang[j - 1]);
+        }
+        for (let j = 0; j < 3; j++) {
+          const a = idx[j];
+          const b = idx[j + 1];
+          const segsB = [
+            [p.hips[b], p.knees[b]],
+            [p.knees[b], p.feet[b]],
+          ];
+          for (const q of pointsOf(p, a)) {
+            const d = Math.min(...segsB.map(([u, v]) => segDist(q, u, v)));
+            closest = Math.min(closest, d);
+            if (d < 2) {
+              touches++;
+              const key = `${p.mode}|legs${a % 4}-${b % 4}|${p.speed > 40 ? 'moving' : 'still'}`;
+              touchBy[key] = (touchBy[key] ?? 0) + 1;
+            }
+          }
+        }
+      }
+    }
+    checks.record('C12', 'knees fan out in order, never on a neighbour (idle and busy samples)', disorder === 0 && minGap >= 0.15 && allPoses.length > 200, {
+      outOfOrder: disorder,
+      minKneeGapRad: r1(minGap * 10) / 10,
+      samples: allPoses.length,
+    });
+    checks.record('C23', 'legs never touch each other away from the body', touches === 0, {
+      touchingPoints: touches,
+      closestPx: r1(closest),
+      where: Object.entries(touchBy).sort((x, y) => y[1] - x[1]).slice(0, 8),
     });
   }
-  const flipped = sides.filter(s => s.size > 1).length;
-  checks.record('C12', 'knees never flip across a leg (all samples so far)', flipped === 0 && allPoses.length > 200, {
-    legsThatFlipped: flipped,
-    samples: allPoses.length,
-  });
 
   // C19 — moods: waiting = still with a tapping leg; asking = turned to the side panel; done = a full turn.
   await sleep(1600);
