@@ -31,6 +31,9 @@ unchanged.
 
 - The content script runs at document start and messages the extension only
   while a task runs.
+- **DOM highlights are off by default** for new installs: the numbered boxes
+  drawn over the page while the agent reads it. Settings that were saved before
+  keep their value; Options → General turns them back on.
 
 ## [0.1.17] — 2026-10-02
 
