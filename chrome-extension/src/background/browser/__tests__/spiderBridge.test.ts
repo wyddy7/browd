@@ -447,6 +447,73 @@ describe('SpiderBridge', () => {
       vi.restoreAllMocks();
     });
 
+    it('crosses the seam when both sides can be measured: one plan, the panel draws it in its own coordinates', async () => {
+      clock();
+      const pagePlan = {
+        t0: 1000,
+        T: 650,
+        from: { x: 900, y: 500 },
+        v0: { x: 100, y: 0 },
+        to: { x: 1300, y: 600 },
+        bow: 0.04,
+        heading: 0,
+        size: 1,
+      };
+      const panelPlan = { ...pagePlan, from: { x: 50, y: 470 }, to: { x: -200, y: 400 }, v0: { x: -300, y: 0 } };
+      const panelMsgs: SpiderPanelMessage[] = [];
+      const pageCmds: SpiderCommand[] = [];
+      const env = setup(
+        ON,
+        async (_tab, msg) => {
+          pageCmds.push(msg.cmd);
+          if (msg.cmd.op === 'metrics') return ack({ metrics: { width: 1000, height: 800, dpr: 2, outerWidth: 1404 } });
+          if (msg.cmd.op === 'crossOut') return ack({ cross: { plan: { ...pagePlan, to: msg.cmd.to }, clearAt: 0 } });
+          return ack();
+        },
+        async msg => {
+          panelMsgs.push(msg);
+          if (msg.op === 'metrics')
+            return {
+              ok: true,
+              visible: true,
+              metrics: { width: 400, height: 760, dpr: 2, outerWidth: 1404, side: 'right' },
+            };
+          if (msg.op === 'crossOut' && msg.to)
+            return { ok: true, visible: true, cross: { plan: { ...panelPlan, to: msg.to }, clearAt: 0 } };
+          return { ok: true, visible: true };
+        },
+      );
+      env.transport.zoom = async () => 1;
+      env.bridge.setPanelOpen(true);
+      env.bridge.setTask('a.com b.com c.com');
+      await env.bridge.activate(7);
+      await env.bridge.beforeNavigate(7);
+      expect(env.timeline).toEqual(['7:spawn/descend', '7:metrics', 'panel:metrics', '7:crossOut', 'panel:crossIn']);
+      // Page 1000 px wide, 4 px spare = a 2 px panel margin: page x 900 is 102 px left of the panel,
+      // and the panel's bottom is 2 px above the page's.
+      const crossIn = panelMsgs.find(m => m.op === 'crossIn');
+      expect(crossIn?.plan?.from).toEqual({ x: -102, y: 462 });
+      expect(crossIn?.plan?.to.x).toBeCloseTo(96, 6);
+      expect(crossIn?.plan?.to.y).toBeCloseTo(471, 6);
+      expect(crossIn?.plan?.t0).toBe(1000);
+      expect(env.bridge.helloReply(7)).toEqual({ active: false, parked: true });
+      // Back: the panel leaves across the seam, the page joins the same flight, then walks on to the click.
+      await env.bridge.strikeAt(7, { x: 300, y: 300 });
+      expect(env.timeline.slice(5)).toEqual([
+        '7:metrics',
+        'panel:metrics',
+        'panel:crossOut',
+        '7:crossIn',
+        '7:approach',
+        '7:strike',
+      ]);
+      // The panel's x 50 is 52 px right of the page's edge (1000 + the 2 px margin); landing 120 px inside the page.
+      const pageIn = pageCmds.find(c => c.op === 'crossIn');
+      expect(pageIn?.op === 'crossIn' && pageIn.plan.from).toEqual({ x: 1052, y: 508 });
+      expect(pageIn?.op === 'crossIn' && pageIn.plan.to.x).toBeCloseTo(880, 6);
+      vi.restoreAllMocks();
+    });
+
     it('a panel that refuses the spider sends it back onto the page', async () => {
       clock();
       const { bridge, timeline } = parkable(async () => undefined);

@@ -47,6 +47,27 @@ export function startPanelSpider(): () => void {
         return spider.leave();
       case 'state':
         return spider ? spider.state() : none;
+      case 'metrics': {
+        spider ??= new Spider();
+        const ack = spider.metrics();
+        let side: 'left' | 'right' = 'right';
+        try {
+          // chrome.sidePanel.getLayout: Chrome 140+, newer than the bundled typings.
+          const api = chrome.sidePanel as unknown as { getLayout?: () => Promise<{ side?: string }> };
+          side = (await api.getLayout?.())?.side === 'left' ? 'left' : 'right';
+        } catch {
+          // Older browsers: the panel is on the right.
+        }
+        return ack.metrics ? { ...ack, metrics: { ...ack.metrics, side } } : ack;
+      }
+      case 'crossOut':
+        return spider && msg.to && msg.T ? spider.crossOut(msg.to, msg.T, msg.bow ?? 0) : { ok: false, visible: false };
+      case 'crossIn':
+        if (!msg.plan || !msg.look) return { ok: false, visible: false };
+        window.clearTimeout(safety);
+        spider ??= new Spider();
+        if (msg.mood) spider.mood(msg.mood);
+        return spider.crossIn(msg.plan, { ...msg.look, tear: false });
     }
   };
 

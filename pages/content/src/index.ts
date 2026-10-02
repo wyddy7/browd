@@ -63,6 +63,16 @@ if (window.top === window && !window.__browdSpider) {
         return ensure().handoff();
       case 'exit':
         return ensure().exit(cmd.side);
+      case 'metrics':
+        return ensure().metrics();
+      case 'crossOut':
+        return ensure().crossOut(cmd.to, cmd.T, cmd.bow);
+      case 'crossIn': {
+        const sp = ensure();
+        if (cmd.focus) sp.focus(cmd.focus);
+        if (cmd.mood) sp.mood(cmd.mood);
+        return sp.crossIn(cmd.plan, cmd.look);
+      }
       case 'hide':
         return ensure().hide();
       case 'show':

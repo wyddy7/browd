@@ -389,7 +389,7 @@ try {
   checks.record(
     'P2',
     'first page: spider spawned on attach and tapped the link before the navigation',
-    firstEvents.some(e => e.op.startsWith('spawn')) && /arrived=true/.test(linkLine) && /struck=true/.test(linkLine),
+    firstEvents.some(e => e.op.startsWith('spawn') || e.op === 'cross-in') && /arrived=true/.test(linkLine) && /struck=true/.test(linkLine),
     { bridge: linkLine.replace('[Spider] ', ''), pageLogBeforeUnload: firstEvents.map(e => e.op).join(' ') },
   );
 
@@ -440,32 +440,34 @@ try {
     const outOfPage = swLines.find(l => l.text.includes('out of the page'));
     const unparkLine = swLines.find(l => l.text.includes('[Spider] unpark') && !l.text.includes('out of'));
     const handoffs = swLines.filter(l => l.text.includes('[Spider] handoff')).length;
-    const backIn = firstEvents.find(e => e.op === 'spawn-edge-right');
+    const backIn = firstEvents.find(e => e.op === 'spawn-edge-right' || e.op === 'cross-in');
     const actAfter = firstEvents.find(e => e.op === 'approach');
+    const seamPark = swLines.some(l => l.text.includes('park') && l.text.includes('across the seam'));
+    const seamUnpark = swLines.some(l => l.text.includes('unpark') && l.text.includes('across the seam'));
     // Ask the panel from another extension page (a page never receives its own runtime messages).
     const probe = await extensionPage(ctx, extId);
     const panelSt = await probe
       .evaluate(() => chrome.runtime.sendMessage({ type: 'browd:spider:panel', op: 'state' }))
       .catch(() => null);
     await probe.close();
-    const panelIn = panelSt?.events?.find(e => e.op === 'spawn-edge-left');
+    const panelIn = panelSt?.events?.find(e => e.op === 'spawn-edge-left' || e.op === 'cross-in');
+    const panelOut = panelSt?.events?.find(e => e.op === 'cross-out');
     const panelGone = panelSt?.events?.find(e => e.op === 'gone');
+    // Two ways, both one spider: across the seam (one flight drawn by both sides from one plan; the page
+    // spider turns toward the click only once the panel half is out of view), or the fallback where the
+    // leaving one is gone before the other appears.
+    const oneSpider =
+      seamPark && seamUnpark
+        ? panelIn?.op === 'cross-in' && !!panelOut && backIn?.op === 'cross-in' && !!actAfter && actAfter.t - panelOut.t >= 150
+        : !!outOfPage && !!panelIn && outOfPage.t <= panelIn.t + 30 && !!panelGone && !!backIn && panelGone.t <= backIn.t;
     checks.record(
       'P13',
       'burst: two hops stay on the pages, the third parks it in the chat; the next click brings it back; never two at once',
-      handoffs === 2 &&
-        !!parkLine &&
-        !!outOfPage &&
-        !!panelIn &&
-        outOfPage.t <= panelIn.t + 30 &&
-        !!unparkLine &&
-        !!panelGone &&
-        !!backIn &&
-        panelGone.t <= backIn.t &&
-        !!actAfter &&
-        backIn.t <= actAfter.t,
+      handoffs === 2 && !!parkLine && !!unparkLine && !!backIn && !!actAfter && backIn.t <= actAfter.t && oneSpider,
       {
         handoffsBeforePark: handoffs,
+        path: seamPark && seamUnpark ? 'across the seam' : 'out, then in',
+        panelHalfLeftBeforeTurnMs: panelOut && actAfter ? actAfter.t - panelOut.t : null,
         outOfPageToPanelInMs: outOfPage && panelIn ? panelIn.t - outOfPage.t : null,
         panelGoneToPageInMs: panelGone && backIn ? backIn.t - panelGone.t : null,
         park: parkLine?.text.replace('[Spider] ', ''),

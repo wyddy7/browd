@@ -12,6 +12,7 @@
 import type {
   SpiderAck,
   SpiderArrival,
+  SpiderCrossPlan,
   SpiderEvent,
   SpiderLook,
   SpiderMood,
@@ -38,6 +39,8 @@ type Mode =
   | 'depart'
   | 'departed'
   | 'exit'
+  | 'crossOut'
+  | 'crossIn'
   | 'leave';
 
 interface Waiter {
@@ -244,6 +247,87 @@ export class Spider {
       );
       this.exitWaiter = waiter;
     });
+  }
+
+  /** Viewport size and pixel ratio, for the page ↔ chat-panel seam. */
+  metrics(): SpiderAck {
+    return {
+      ...this.ack({ ok: true }),
+      metrics: { width: innerWidth, height: innerHeight, dpr: devicePixelRatio || 1, outerWidth: outerWidth },
+    };
+  }
+
+  /**
+   * Leave across the seam to the chat panel (or back): one glide from where it
+   * is, with its velocity, to `to` beyond the edge — a leap all the way. The
+   * other side draws the same glide from the returned plan, so the two halves
+   * meet at the seam. Removed when the glide ends.
+   */
+  crossOut(to: V, T: number, bow: number): SpiderAck {
+    if (!this.spawned || this.mode === 'departed' || this.mode === 'leave')
+      return this.ack({ ok: false, reason: 'not-spawned' });
+    this.settleWaiter(this.approachWaiter, { ok: true, arrived: false, reason: 'not-spawned' });
+    const now = performance.now();
+    this.brain.interrupt(now);
+    this.rig.handMode = { kind: 'rest' };
+    const from = { ...this.rig.body };
+    const v0 = { ...this.rig.vel };
+    this.flight = glide(this.rig.toDoc(from), v0, this.rig.toDoc(to), now, T, bow);
+    this.setMode('crossOut');
+    // When the last leg leaves the viewport: until then the other side must not change course.
+    const margin = 120 * this.look.size;
+    let clear = now + T;
+    for (let t = now; t <= now + T; t += 8) {
+      const p = this.rig.toView(glideAt(this.flight, t).p);
+      if (p.x > innerWidth + margin || p.x < -margin || p.y > innerHeight + margin || p.y < -margin) {
+        clear = t;
+        break;
+      }
+    }
+    this.log({ op: 'cross-out', body: from });
+    const plan: SpiderCrossPlan = {
+      t0: performance.timeOrigin + now,
+      T,
+      from,
+      v0,
+      to: { ...to },
+      bow,
+      heading: this.rig.heading,
+      size: this.look.size,
+    };
+    return { ...this.ack({ ok: true }), cross: { plan, clearAt: performance.timeOrigin + clear } };
+  }
+
+  /** Arrive across the seam: the flight is already under way — join it where it is now. */
+  crossIn(plan: SpiderCrossPlan, look: SpiderLook): SpiderAck {
+    this.applyLook({ ...look, size: plan.size });
+    const now = performance.now();
+    this.overlay.mount();
+    this.flight = glide(
+      this.rig.toDoc(plan.from),
+      plan.v0,
+      this.rig.toDoc(plan.to),
+      plan.t0 - performance.timeOrigin,
+      plan.T,
+      plan.bow,
+    );
+    const at = glideAt(this.flight, now);
+    this.rig.place(this.rig.toView(at.p), plan.heading, plan.size);
+    this.rig.land();
+    this.rig.vel = { ...at.v };
+    this.rig.scale = 1;
+    this.rig.crouch = 0;
+    this.rig.thread = null;
+    this.target = { ...plan.to };
+    this.faceTo = null;
+    this.leavePending = false;
+    this.stickers.clear();
+    window.clearTimeout(this.departTimer);
+    this.brain.interrupt(now, 600);
+    this.setMode('crossIn');
+    this.log({ op: 'cross-in', body: { ...this.rig.body } });
+    this.start();
+    return this.ack({ ok: true });
   }
 
   /** The tab is about to navigate: stand still where it is (no collapse) and hand over the full place. */
@@ -476,7 +560,7 @@ export class Spider {
       frameMs,
       stickers: this.stickers.snapshot(),
       mood: this.brain.mood ?? undefined,
-      frame: { n: this.frameCount, t: this.lastFrame },
+      frame: { n: this.frameCount, t: this.lastFrame, epoch: performance.timeOrigin + this.lastFrame },
     };
   }
 
@@ -633,7 +717,9 @@ export class Spider {
           hold: false,
         };
       case 'enter':
-      case 'exit': {
+      case 'exit':
+      case 'crossOut':
+      case 'crossIn': {
         // A jump between the page and the chat panel: a leap all the way, legs gathered.
         if (!this.flight) return hold;
         const at = glideAt(this.flight, now);
@@ -736,6 +822,13 @@ export class Spider {
       this.setMode('free');
       this.brain.interrupt(now, 500);
       this.log({ op: 'entered', body: { ...this.rig.body } });
+    } else if (this.mode === 'crossIn' && (!this.flight || glideAt(this.flight, now).done)) {
+      this.setMode('free');
+      this.brain.interrupt(now, 500);
+      this.log({ op: 'entered', body: { ...this.rig.body } });
+    } else if (this.mode === 'crossOut' && (!this.flight || glideAt(this.flight, now).done)) {
+      this.unmount();
+      return;
     } else if (this.mode === 'exit' && (!this.flight || glideAt(this.flight, now).done)) {
       const waiter = this.exitWaiter;
       this.exitWaiter = null;

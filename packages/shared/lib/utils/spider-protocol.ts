@@ -83,6 +83,16 @@ export type SpiderCommand =
   | { op: 'handoff' }
   /** Leap out over a screen edge (toward the chat panel: right), then remove the overlay; resolves when gone. */
   | { op: 'exit'; side: 'left' | 'right' }
+  /** Viewport size and pixel ratio, for the page ↔ chat-panel seam. */
+  | { op: 'metrics' }
+  /**
+   * Leave across the seam: glide from where it is (with its velocity) to `to`,
+   * a point beyond the edge in this document's coordinates; the ack carries the
+   * plan for the other side and when the spider is out of view. Removed at the end.
+   */
+  | { op: 'crossOut'; to: SpiderPoint; T: number; bow: number }
+  /** Arrive across the seam: the same flight, already under way, in this document's coordinates. */
+  | { op: 'crossIn'; plan: SpiderCrossPlan; look: SpiderLook; mood?: SpiderMood; focus?: string[] }
   /** The agent reads the DOM (a main-thread stall may follow): hold still until off. */
   | { op: 'scan'; on: boolean }
   /** What the agent is doing now (sent on change only). */
@@ -133,12 +143,44 @@ export interface SpiderAck {
   /** Mean frame interval over the last second, ms (state only). */
   frameMs?: number;
   /** The last drawn frame: its number and `performance.now()` (state only) — exact timing for motion checks. */
-  frame?: { n: number; t: number };
+  frame?: { n: number; t: number; epoch?: number };
   /** Words torn out of the page right now (state only). */
   stickers?: Array<{ text: string; rect: SpiderRect; phase: string }>;
   mood?: SpiderMood;
   /** For `handoff`: the full place (with legs) to stand on with on the next page. */
   place?: SpiderPlace;
+  /** For `metrics`. */
+  metrics?: SpiderMetrics;
+  /** For `crossOut`: the flight as started here, and when the spider is fully out of view (epoch ms). */
+  cross?: { plan: SpiderCrossPlan; clearAt: number };
+}
+
+export interface SpiderMetrics {
+  width: number;
+  height: number;
+  dpr: number;
+  outerWidth: number;
+  /** The chat panel only: which side of the window it is docked on. */
+  side?: 'left' | 'right';
+}
+
+/**
+ * One flight seen from two documents: the same quintic glide (`motion.ts`),
+ * started at `t0` on the shared clock, each side in its own CSS px. Both draw
+ * it; each viewport shows its half.
+ */
+export interface SpiderCrossPlan {
+  /** Epoch ms (`performance.timeOrigin + now`) when the glide started. */
+  t0: number;
+  T: number;
+  from: SpiderPoint;
+  /** Velocity at the start, px/s. */
+  v0: SpiderPoint;
+  to: SpiderPoint;
+  bow: number;
+  heading: number;
+  /** Spider size in this document (the same physical size on both sides). */
+  size: number;
 }
 
 export interface SpiderHelloReply {
@@ -175,9 +217,15 @@ export interface SpiderPoseReport {
  */
 export interface SpiderPanelMessage {
   type: 'browd:spider:panel';
-  op: 'park' | 'unpark' | 'mood' | 'leave' | 'state';
+  op: 'park' | 'unpark' | 'mood' | 'leave' | 'state' | 'metrics' | 'crossOut' | 'crossIn';
   look?: SpiderLook;
   mood?: SpiderMood;
+  /** crossOut. */
+  to?: SpiderPoint;
+  T?: number;
+  bow?: number;
+  /** crossIn. */
+  plan?: SpiderCrossPlan;
 }
 
 /** Content script → background: this page (told `parked`) has painted, so the old page is off screen. */

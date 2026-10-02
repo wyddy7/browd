@@ -154,6 +154,29 @@ background                                         content script (top frame)
   sends its own spider away 3 s after it sees the task end if the background did
   not. The panel side is `side-panel/src/spiderPanel.ts`: the same `Spider`
   engine (aliased as `@spider`), no tearing there.
+- **Across the seam (03.10).** When both sides answer `metrics` and the tab's
+  zoom is known, the move between page and panel is one flight drawn by both:
+  `crossOut` on the leaving side starts a glide from where the spider is (with
+  its velocity) to the other side's seat, beyond its own edge, and returns the
+  plan (start on the shared clock, `performance.timeOrigin + now`) and when the
+  spider is out of view; the bridge maps the plan into the other document
+  (`background/browser/portal.ts`) and sends `crossIn`, which joins the flight
+  where it is now. Each viewport shows its half; mapped into one frame the two
+  bodies coincide (e2e C27: 0.1 px at the seam over ~400 frames, panel at 125 %).
+  The bridge lets the page navigate, or the page spider turn toward a click,
+  only once the leaving half is out of view. `portal.ts` (pure, unit-tested at
+  80/100/125/150 %, dpr 1–3, panel left/right): DIP as the common frame, the
+  page zoom from `chrome.tabs.getZoom`, the panel's from the two
+  `devicePixelRatio`s, one physical size (`k` = page zoom / panel zoom); the
+  panel is a card with the same margin on every side — half of the window
+  width left over after both viewports (Chrome 03.10, measured on screen:
+  18 / 17 / 17 DIP left / right / bottom of 35), aligned by the bottom (the
+  panel has its own header on top). Between the two viewports is a strip of
+  browser UI (the card margin and the resize handle, ~17 DIP) where nothing can
+  be drawn: the spider passes behind it. Seen live in Chrome with the real side
+  panel: `bench/spider/seam-live.mjs` (frames in `bench-runs/spider-seam/`).
+  Falls back to «out, then in» when either side cannot be measured. Breaks if
+  DevTools are docked at the bottom of the page (the bottoms no longer meet).
 - Settings `spider-settings` (`packages/storage/lib/settings/spider.ts`): on/off,
   size, pace, marks, colour, tear. Options → General → **Agent spider**; the spider
   button in the chat input toggles it, also mid-task.
@@ -188,7 +211,7 @@ node motion.mjs         # frame-by-frame strips: descend, leap, scrolls, read, t
 node studio.mjs [size] [colour]   # 3× close-up stills for a design check
 ```
 
-Tier A (`e2e.mjs`), last runs 27/27, 1 skipped (02.10):
+Tier A (`e2e.mjs`), last runs 28/28, 1 skipped (03.10):
 
 | | Check | Measured |
 | --- | --- | --- |
@@ -219,6 +242,7 @@ Tier A (`e2e.mjs`), last runs 27/27, 1 skipped (02.10):
 | C22 | the agent reads the DOM | eases from 147 px/s to rest, no new move, drift 0.1 px |
 | C23 | legs never touch away from the body (idle and busy samples) | 0 touching points, closest 3.6–5.6 px in three runs (before: ~1300 points, 2.6 % of poses); a failure names the scenario line and writes `touching-poses.json` |
 | C25 | jump out over the right edge and back in from it | leapt (legs gathered), last seen at x 1369 of 1280, element removed; back in first seen at x 1350, landed at 1200 (= width − 80) |
+| C27 | across the seam: page and panel (a tab at 125 %) draw one flight from one plan | at the seam the halves coincide within 0.1 px over ~400 frames (the panel joins a few ms late; its first frames, off its own edge, differ by ~4 px) |
 | C26 | the seat in the chat panel | in the side panel page: `spawn-edge-left entered`, element present, gone after `unpark` (screenshot `panel-parked.png`) |
 
 Tier B (`pipeline.mjs`), last run 12/12 (`--burst`: 13/13) — navigation, typing, a click, a screenshot;
@@ -238,7 +262,7 @@ scripted OpenAI-compatible model on localhost that takes 1.2 s per call:
 | P10 | moods follow the agent | thinking → acting → done; done gesture ≥600 ms before the climb; words torn during the run |
 | P11 | the chat toggle mid-task | gone in ~0.5 s, back in ~10 ms |
 | P12 | the agent's DOM reads reach the spider first | 9 scan windows in the run |
-| P13 | `--burst`: four go_to_url hops — two stay on the pages, the third parks it in the chat; the next click brings it back; never two at once | 2 handoffs, then `park (3 navigations)`; panel landed 3 ms after the page spider was out; page spider back 3 ms after the panel one was gone; panel `spawn-edge-left entered … read … exit-left gone`, page `spawn-edge-right approach` |
+| P13 | `--burst`: four go_to_url hops — two stay on the pages, the third parks it in the chat; the next click brings it back; never two at once (path «across the seam»: the page spider turns to the click only after the panel half left) | 2 handoffs, then `park (3 navigations)`; panel landed 3 ms after the page spider was out; page spider back 3 ms after the panel one was gone; panel `spawn-edge-left entered … read … exit-left gone`, page `spawn-edge-right approach` |
 
 Unit tests: `chrome-extension/src/background/browser/__tests__/spiderBridge.test.ts`
 (29: tab teleports, handoff on navigation with the full place, hello only from the

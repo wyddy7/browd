@@ -37,6 +37,7 @@ import type {
   SpiderAck,
   SpiderArrival,
   SpiderCommand,
+  SpiderCrossPlan,
   SpiderHelloReply,
   SpiderMessage,
   SpiderMood,
@@ -47,6 +48,7 @@ import type {
 } from '@extension/shared';
 import { createLogger } from '@src/background/log';
 import { type AgentEventLike, focusWords, moodOf, planTexts } from './agentMood';
+import { type Portal, portal } from './portal';
 import type { PagePresence } from './presence';
 
 const logger = createLogger('Spider');
@@ -67,6 +69,8 @@ const PLANNED_SITES = 3;
 const QUIET_MS = 8000;
 /** After a link-click navigation the panel waits for the next page's paint, at most this long. */
 const PANEL_ENTRY_FALLBACK_MS = 2500;
+/** The leap across the seam between the page and the chat panel, ms. */
+const CROSS_MS = 650;
 
 /** Where the one spider is: on the current page, in the chat panel, or moving between them. */
 type Seat = 'page' | 'toPanel' | 'panel' | 'toPage';
@@ -84,6 +88,8 @@ export interface SpiderTransport {
   inject(tabId: number): Promise<void>;
   /** The chat panel (side panel page); undefined or a throw when it is not open. */
   panel?(msg: SpiderPanelMessage): Promise<SpiderAck | undefined>;
+  /** The tab's page zoom (1 = 100 %). */
+  zoom?(tabId: number): Promise<number>;
 }
 
 export interface SpiderSettingsSource {
@@ -97,6 +103,7 @@ const chromeTransport: SpiderTransport = {
     await chrome.scripting.executeScript({ target: { tabId, frameIds: [0] }, files: [SPIDER_CONTENT_SCRIPT] });
   },
   panel: msg => chrome.runtime.sendMessage(msg) as Promise<SpiderAck | undefined>,
+  zoom: tabId => chrome.tabs.getZoom(tabId),
 };
 
 const NO_RECEIVER = /Receiving end does not exist|Could not establish connection/i;
@@ -446,7 +453,9 @@ export class SpiderBridge implements PagePresence {
     );
     this.seat = 'toPanel';
     if (how === 'hook') {
-      // Out of the page first, then into the panel: never two on screen.
+      // Across the seam if both sides can be measured: one spider, half on each side.
+      if (await this.crossToPanel(tabId)) return true;
+      // Otherwise out of the page first, then into the panel: never two on screen.
       await this.send(tabId, { op: 'exit', side: 'right' }, 800, true);
       logger.info(`park tab=${tabId} out of the page`);
       await this.enterPanel();
@@ -483,9 +492,100 @@ export class SpiderBridge implements PagePresence {
     this.clearPanelTimer();
     this.navs = [];
     logger.info(`unpark tab=${tabId}`);
+    if (fromPanel && (await this.crossToPage(tabId))) return;
     if (fromPanel) await this.panelSend({ op: 'unpark' }, 800);
     logger.info(`unpark tab=${tabId} out of the panel`);
     await this.landOnPage();
+  }
+
+  /** The seam between this tab's page and the chat panel, measured now; null if either side does not answer. */
+  private async portalFor(
+    tabId: number,
+  ): Promise<{
+    map: Portal;
+    panelW: number;
+    panelH: number;
+    pageW: number;
+    pageH: number;
+    side: 'left' | 'right';
+  } | null> {
+    if (!this.transport.zoom) return null;
+    const [pageAck, panelAck, zoom] = await Promise.all([
+      this.send(tabId, { op: 'metrics' }, 200, true),
+      this.panelSend({ op: 'metrics' }, 200),
+      withCap(this.transport.zoom(tabId), 200).catch(() => null),
+    ]);
+    const pg = pageAck?.metrics;
+    const pn = panelAck?.metrics;
+    if (!pg || !pn || !zoom || !(pg.width > 0) || !(pn.width > 0)) return null;
+    const side = pn.side ?? 'right';
+    return {
+      map: portal({ ...pg, zoom }, pn, side),
+      panelW: pn.width,
+      panelH: pn.height,
+      pageW: pg.width,
+      pageH: pg.height,
+      side,
+    };
+  }
+
+  /**
+   * Page → panel across the seam: the page spider glides to the panel's seat
+   * (beyond its own edge) and the panel draws the same glide in its own
+   * coordinates. Returns once the page half is out of view (the navigation
+   * may go on then), false if the seam could not be measured.
+   */
+  private async crossToPanel(tabId: number): Promise<boolean> {
+    const seam = await this.portalFor(tabId);
+    if (!seam) return false;
+    const seat = { x: seam.side === 'right' ? 96 : seam.panelW - 96, y: Math.round(seam.panelH * 0.62) };
+    const out = await this.send(
+      tabId,
+      { op: 'crossOut', to: seam.map.toPage(seat), T: CROSS_MS, bow: 0.04 },
+      250,
+      true,
+    );
+    if (!out?.cross) return false;
+    const plan = mapPlan(out.cross.plan, seam.map.toPanel, seam.map.k);
+    const ack = await this.panelSend({ op: 'crossIn', plan, look: this.look(), mood: this.mood ?? undefined }, 300);
+    logger.info(`park tab=${tabId} across the seam k=${seam.map.k.toFixed(2)} margin=${seam.map.margin.toFixed(1)}`);
+    await sleepUntil(out.cross.clearAt);
+    if (ack?.ok) {
+      this.seat = 'panel';
+      this.sentMood = this.mood;
+    } else {
+      // The panel did not take it; the page half has left — back onto the page.
+      this.seat = 'toPage';
+      await this.landOnPage();
+    }
+    return true;
+  }
+
+  /** Panel → page across the seam; returns once the panel half is out of view (the page spider may turn then). */
+  private async crossToPage(tabId: number): Promise<boolean> {
+    const seam = await this.portalFor(tabId);
+    if (!seam) return false;
+    const land = {
+      x: seam.side === 'right' ? seam.pageW - 120 : 120,
+      y: Math.min(seam.pageH - 80, Math.max(80, this.place?.y ?? seam.pageH / 2)),
+    };
+    const out = await this.panelSend({ op: 'crossOut', to: seam.map.toPanel(land), T: CROSS_MS, bow: 0.04 }, 250);
+    if (!out?.cross) return false;
+    const plan = mapPlan(out.cross.plan, seam.map.toPage, 1 / seam.map.k);
+    const cmd: SpiderCommand = {
+      op: 'crossIn',
+      plan,
+      look: this.look(),
+      mood: this.mood ?? undefined,
+      focus: this.focus,
+    };
+    await this.send(tabId, cmd, 300, true);
+    logger.info(`unpark tab=${tabId} across the seam`);
+    await sleepUntil(out.cross.clearAt);
+    this.shown = true;
+    this.markSent();
+    this.seat = 'page';
+    return true;
   }
 
   private async landOnPage(): Promise<void> {
@@ -635,6 +735,14 @@ export class SpiderBridge implements PagePresence {
 }
 
 const toRect = (r: SpiderRect): SpiderRect => ({ x: r.x, y: r.y, width: r.width, height: r.height });
+
+/** A crossing plan seen from the other document: points mapped, velocity and size scaled. */
+function mapPlan(p: SpiderCrossPlan, map: (q: SpiderPoint) => SpiderPoint, k: number): SpiderCrossPlan {
+  return { ...p, from: map(p.from), to: map(p.to), v0: { x: p.v0.x * k, y: p.v0.y * k }, size: p.size * k };
+}
+
+const sleepUntil = (epochMs: number): Promise<void> =>
+  new Promise(resolve => setTimeout(resolve, Math.max(0, Math.min(1500, epochMs - Date.now()))));
 
 const isPlace = (p: SpiderPlace): boolean =>
   !!p && Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.heading);

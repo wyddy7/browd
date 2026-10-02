@@ -742,6 +742,78 @@ try {
   );
   await panel.close();
 
+  // C27 — across the seam: the page and the chat panel (here a tab at another zoom) draw one flight from
+  // one plan, each in its own coordinates; mapped into one frame the two bodies coincide over time.
+  {
+    await page.goto(`${base}/article.html`);
+    await sleep(500);
+    const tab5 = await tabIdOf(ext, page.url());
+    const send5 = spider(ext, tab5);
+    await send5({ op: 'spawn', look: LOOK, at: { x: 600, y: 420, heading: 0 }, arrive: 'teleport' });
+    await sleep(900);
+    const seatPage = await extensionPage(ctx, extId, 'side-panel/index.html');
+    const seatTab = await tabIdOf(ext, seatPage.url());
+    await ext.evaluate(id => chrome.tabs.setZoom(id, 1.25), seatTab);
+    await sleep(1200);
+    const pm = (await send5({ op: 'metrics' })).metrics;
+    const sm = (await toPanel({ op: 'metrics' })).metrics;
+    // The same formula as background/browser/portal.ts, with no handle (headless windows have no side panel).
+    const zoomPanel = sm.dpr / (pm.dpr / 1);
+    const k = 1 / zoomPanel;
+    const toSeat = p => ({ x: (p.x - pm.width) * k, y: sm.height - (pm.height - p.y) * k });
+    const toPg = q => ({ x: q.x / k + pm.width, y: pm.height - (sm.height - q.y) / k });
+    const seat = { x: 96, y: Math.round(sm.height * 0.62) };
+    const out = await send5({ op: 'crossOut', to: toPg(seat), T: 1400, bow: 0.04 });
+    const plan = out.cross.plan;
+    const mapped = { ...plan, from: toSeat(plan.from), to: seat, v0: { x: plan.v0.x * k, y: plan.v0.y * k }, size: plan.size * k };
+    await toPanel({ op: 'crossIn', plan: mapped, look: LOOK });
+    const pageSeries = [];
+    const seatSeries = [];
+    const t0 = Date.now();
+    while (Date.now() - t0 < 1500) {
+      const [a, b] = await Promise.all([send5({ op: 'state' }), toPanel({ op: 'state' })]);
+      if (a?.frame?.epoch && a.pose && a.visible) pageSeries.push({ e: a.frame.epoch, p: toSeat(a.pose.body) });
+      if (b?.frame?.epoch && b.pose && b.visible) seatSeries.push({ e: b.frame.epoch, p: b.pose.body });
+    }
+    // Compare where both exist: interpolate the panel's body at each page frame time. What the eye sees
+    // is the seam: there both halves are on screen. Far from it one half is off its viewport (the panel
+    // joins a few ms late, its first frames are off its left edge), so the worst overall is reported only.
+    let worst = 0;
+    let worstAll = 0;
+    let pairs = 0;
+    for (const s of pageSeries) {
+      const i = seatSeries.findIndex(x => x.e >= s.e);
+      if (i <= 0) continue;
+      const a = seatSeries[i - 1];
+      const b = seatSeries[i];
+      if (b.e - a.e > 40) continue;
+      const f = (s.e - a.e) / (b.e - a.e || 1);
+      const q = { x: a.p.x + (b.p.x - a.p.x) * f, y: a.p.y + (b.p.y - a.p.y) * f };
+      const d = dist(q, s.p);
+      worstAll = Math.max(worstAll, d);
+      if (Math.abs(s.p.x) > 160 * k) continue;
+      worst = Math.max(worst, d);
+      pairs++;
+    }
+    const seatEnd = await toPanel({ op: 'state' });
+    const hostGone = await page.evaluate(() => !document.querySelector('browd-spider'));
+    checks.record(
+      'C27',
+      'across the seam: page and panel (another zoom) draw one flight from one plan; at the seam the two halves coincide (≤ 2 px)',
+      pairs >= 10 && worst <= 2 && hostGone && seatEnd.events.some(e => e.op === 'entered'),
+      {
+        k: Math.round(k * 100) / 100,
+        framesAtSeam: pairs,
+        worstAtSeamPx: Math.round(worst * 10) / 10,
+        worstAnywherePx: Math.round(worstAll * 10) / 10,
+        pageElementGone: hostGone,
+        panelLanded: seatEnd.events.some(e => e.op === 'entered'),
+      },
+    );
+    await toPanel({ op: 'leave' });
+    await seatPage.close();
+  }
+
   await page.close();
   await ext.close();
 } finally {
