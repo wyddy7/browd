@@ -1167,6 +1167,15 @@
   "chat_input_spider_off_label": {
     "message": "Afficher l'araignée"
   },
+  "notice_spider_title": {
+    "message": "Voici l'araignée Browd"
+  },
+  "notice_spider_body": {
+    "message": "Elle montre où travaille l'agent : elle lit avec lui et saute sur chaque bouton juste avant le clic."
+  },
+  "notice_ok": {
+    "message": "Compris"
+  },
   "chat_input_tabFocus_background_tip": {
     "message": "L'agent travaille dans un onglet séparé en arrière-plan. Cliquez pour basculer : mettre l'onglet de l'agent au premier plan au démarrage de la tâche."
   },

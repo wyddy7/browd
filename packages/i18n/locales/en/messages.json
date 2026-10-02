@@ -1155,6 +1155,15 @@
   "chat_input_spider_off_label": {
     "message": "Show the spider"
   },
+  "notice_spider_title": {
+    "message": "This is the Browd spider"
+  },
+  "notice_spider_body": {
+    "message": "It shows where the agent is working: it reads along and jumps to each button just before the click."
+  },
+  "notice_ok": {
+    "message": "Got it"
+  },
   "chat_input_tabFocus_background_tip": {
     "message": "Agent works in a separate tab in the background. Click to switch: bring the agent tab to the foreground at task start."
   },

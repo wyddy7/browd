@@ -1167,6 +1167,15 @@
   "chat_input_spider_off_label": {
     "message": "显示蜘蛛"
   },
+  "notice_spider_title": {
+    "message": "这是 Browd 蜘蛛"
+  },
+  "notice_spider_body": {
+    "message": "它显示代理正在哪里工作：跟着阅读，并在每次点击前跳到按钮上。"
+  },
+  "notice_ok": {
+    "message": "知道了"
+  },
   "chat_input_tabFocus_background_tip": {
     "message": "代理在后台的独立标签页中运行。点击以切换：任务开始时将代理标签页带到前台。"
   },

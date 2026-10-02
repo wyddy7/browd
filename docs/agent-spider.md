@@ -179,7 +179,9 @@ background                                         content script (top frame)
   DevTools are docked at the bottom of the page (the bottoms no longer meet).
 - Settings `spider-settings` (`packages/storage/lib/settings/spider.ts`): on/off,
   size, pace, marks, colour, tear. Options → General → **Agent spider**; the spider
-  button in the chat input toggles it, also mid-task.
+  button in the chat input toggles it, also mid-task. On by default; the first task
+  with the spider on shows the `spider-intro` notice (what it is, «Hide the spider»)
+  grown out of that button — see «In-product notices» in `CLAUDE.md`.
 
 ### Invariants (keep them when changing anything here)
 
@@ -264,6 +266,7 @@ scripted OpenAI-compatible model on localhost that takes 1.2 s per call:
 | P10 | moods follow the agent | thinking → acting → done; done gesture ≥600 ms before the climb; words torn during the run |
 | P11 | the chat toggle mid-task | gone in ~0.5 s, back in ~10 ms |
 | P12 | the agent's DOM reads reach the spider first | 9 scan windows in the run |
+| P14 | the spider notice at the first task | first frame 28×28 = the spider button, card 296×142 after a 3–6 % spring overshoot; gone after «Got it», stored as seen; light and dark (`--theme dark`) screenshots in the run folder |
 | P13 | `--burst`: four go_to_url hops — two stay on the pages, the third parks it in the chat; the next click brings it back; never two at once (path «across the seam»: the page spider turns to the click only after the panel half left) | 2 handoffs, then `park (3 navigations)`; panel landed 3 ms after the page spider was out; page spider back 3 ms after the panel one was gone; panel `spawn-edge-left entered … read … exit-left gone`, page `spawn-edge-right approach` |
 
 Unit tests: `chrome-extension/src/background/browser/__tests__/spiderBridge.test.ts`

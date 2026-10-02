@@ -313,6 +313,20 @@ legs are never drawn longer than their bones and never meet (e2e C12/C23), bench
 (`spider-settings.enabled = false`). E2E: `bench/spider/e2e.mjs` (overlay, no
 model) and `bench/spider/pipeline.mjs` (real agent on a scripted localhost model, $0).
 
+## In-product notices (side panel)
+
+`pages/side-panel/src/notices/`: a feature intro or "what's new" card, shown once
+to new and existing users alike — `noticesStore` (`packages/storage`, key
+`browd-notices`) keeps the seen ids; an id missing there is shown the next time
+its trigger fires (`open` = the panel opened, `task-start`). To add one: an entry
+in `registry.ts` with a new id (a changed text needs a new id), its strings in
+every locale, and an `anchor` (`data-notice-anchor` on the control) if it is
+about a control — the card grows out of that control and folds back into it
+(`springBox.ts`, motion-morph springs; `prefers-reduced-motion` = no motion).
+First notice: `spider-intro` at the first task with the spider on. Checked by
+`bench/spider/pipeline.mjs` P14 (the task is sent through the panel composer, so
+the panel sees the task's events).
+
 ## MV3 Service Worker Gotchas
 
 These fail at runtime even when build passes. happy-dom in tests

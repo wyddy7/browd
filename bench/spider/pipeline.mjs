@@ -256,7 +256,7 @@ try {
         agentMode: 'unified',
         visionMode: 'on',
         permissionMode: 'full',
-        appearanceTheme: 'light',
+        appearanceTheme: arg('theme', 'light'),
         interfaceLanguage: 'system',
       },
     },
@@ -283,6 +283,10 @@ try {
       return p;
     };
   });
+  // The chat panel's own errors (a broken component would otherwise fail silently).
+  const panelErrors = [];
+  panel.on('pageerror', e => panelErrors.push(String(e)));
+  panel.on('console', m => m.type() === 'error' && panelErrors.push(m.text()));
   await panel.goto(`chrome-extension://${extId}/side-panel/index.html`);
   await panel.waitForTimeout(2000);
   await panel.evaluate(() => {
@@ -297,10 +301,44 @@ try {
     document.addEventListener('input', e => window.__inputs.push({ t: Date.now(), id: e.target.id }), true);
   });
   const t0 = Date.now();
-  await panel.evaluate(
-    ({ task, tabId }) => window.__port.postMessage({ type: 'new_task', task, taskId: crypto.randomUUID(), tabId, priorMessages: [] }),
-    { task: TASK, tabId },
-  );
+  // Sent the way a user sends it: typed into the panel's composer (the panel then owns the port and sees
+  // the task's events — the spider notice needs that). The task goes to the active tab: the article page.
+  await page.bringToFront();
+  await panel.locator('textarea').first().fill(TASK);
+  await panel.locator('textarea').first().press('Enter');
+
+  // P14 — the spider notice: at the task start the card grows out of the spider button (sampled per frame),
+  // and answering it stores it as seen, so it never comes back.
+  const noticeRun = (async () => {
+    const track = await panel.evaluate(
+      () =>
+        new Promise(resolve => {
+          const frames = [];
+          const t0 = performance.now();
+          const tick = () => {
+            const el = document.querySelector('[data-testid="notice"]');
+            if (el) {
+              const r = el.getBoundingClientRect();
+              frames.push({ t: Math.round(performance.now() - t0), x: r.left, y: r.top, w: r.width, h: r.height });
+            }
+            if (performance.now() - t0 < 4000 && frames.length < 70) requestAnimationFrame(tick);
+            else {
+              const b = document.querySelector('[data-notice-anchor="spider-toggle"]')?.getBoundingClientRect();
+              resolve({ frames, button: b && { x: b.left, y: b.top, w: b.width, h: b.height } });
+            }
+          };
+          requestAnimationFrame(tick);
+        }),
+    );
+    if (track.frames.length) fs.writeFileSync(path.join(OUT, 'notice.png'), await panel.screenshot());
+    await panel.locator('[data-testid="notice-primary"]').click().catch(() => {});
+    await sleep(700);
+    const after = await panel.evaluate(async () => ({
+      gone: !document.querySelector('[data-testid="notice"]'),
+      seen: (await chrome.storage.local.get('browd-notices'))['browd-notices']?.seen ?? [],
+    }));
+    return { ...track, after };
+  })();
 
   let toggle = null;
   atGate.then(async () => {
@@ -478,6 +516,36 @@ try {
     );
   }
 
+  {
+    const n = await noticeRun;
+    const f = n.frames;
+    const first = f[0];
+    const last = f.at(-1);
+    const maxW = Math.max(0, ...f.map(x => x.w));
+    checks.record(
+      'P14',
+      'spider notice: grows out of the spider button into a card at the task start (spring overshoot), folds away when answered and is stored as seen',
+      !!first &&
+        !!n.button &&
+        Math.abs(first.w - n.button.w) < 12 &&
+        Math.abs(first.h - n.button.h) < 12 &&
+        last.w > 200 &&
+        last.h > 60 &&
+        maxW > last.w * 1.01 &&
+        n.after.gone &&
+        n.after.seen.includes('spider-intro'),
+      {
+        button: n.button && `${Math.round(n.button.w)}×${Math.round(n.button.h)}`,
+        firstFrame: first && `${Math.round(first.w)}×${Math.round(first.h)}`,
+        card: last && `${Math.round(last.w)}×${Math.round(last.h)}`,
+        overshootPct: last && Math.round((maxW / last.w - 1) * 1000) / 10,
+        frames: f.length,
+        goneAfterAnswer: n.after.gone,
+        seen: n.after.seen,
+      },
+    );
+  }
+
   // P4 — typing: tapped the field centre, keys arrived inside typing-on/off.
   const fieldTap = secondEvents.find(e => e.op === 'strike');
   const tOn = secondEvents.find(e => e.op === 'typing-on');
@@ -580,6 +648,7 @@ try {
     lines: strikeLines.map(l => l.text.replace('[Spider] ', '')),
   });
 
+  fs.writeFileSync(path.join(OUT, 'panel-errors.json'), JSON.stringify(panelErrors, null, 2));
   fs.writeFileSync(path.join(OUT, 'events.json'), JSON.stringify({ panel: evLog, spider: Object.fromEntries(spiderByUrl) }, null, 2));
 } finally {
   await ctx.close();

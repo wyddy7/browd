@@ -15,6 +15,7 @@ export const SpiderToggle = () => {
     <button
       type="button"
       data-testid="spider-toggle"
+      data-notice-anchor="spider-toggle"
       aria-pressed={on}
       aria-label={label}
       title={label}

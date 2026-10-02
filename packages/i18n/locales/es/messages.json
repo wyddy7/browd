@@ -1167,6 +1167,15 @@
   "chat_input_spider_off_label": {
     "message": "Mostrar la araña"
   },
+  "notice_spider_title": {
+    "message": "Esta es la araña de Browd"
+  },
+  "notice_spider_body": {
+    "message": "Muestra dónde trabaja el agente: lee con él y salta a cada botón justo antes del clic."
+  },
+  "notice_ok": {
+    "message": "Entendido"
+  },
   "chat_input_tabFocus_background_tip": {
     "message": "El agente trabaja en una pestaña aparte, en segundo plano. Haz clic para cambiar y traer la pestaña del agente al primer plano al iniciar la tarea."
   },

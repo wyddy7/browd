@@ -1167,6 +1167,15 @@
   "chat_input_spider_off_label": {
     "message": "Spinne anzeigen"
   },
+  "notice_spider_title": {
+    "message": "Das ist die Browd-Spinne"
+  },
+  "notice_spider_body": {
+    "message": "Sie zeigt, wo der Agent gerade arbeitet: Sie liest mit und springt vor jedem Klick zur Schaltfläche."
+  },
+  "notice_ok": {
+    "message": "Verstanden"
+  },
   "chat_input_tabFocus_background_tip": {
     "message": "Der Agent arbeitet in einem separaten Tab im Hintergrund. Zum Umschalten klicken: Agent-Tab wird beim Aufgabenstart in den Vordergrund geholt."
   },

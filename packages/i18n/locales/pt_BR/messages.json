@@ -1167,6 +1167,15 @@
   "chat_input_spider_off_label": {
     "message": "Mostrar a aranha"
   },
+  "notice_spider_title": {
+    "message": "Esta é a aranha do Browd"
+  },
+  "notice_spider_body": {
+    "message": "Ela mostra onde o agente está trabalhando: lê junto e pula para cada botão logo antes do clique."
+  },
+  "notice_ok": {
+    "message": "Entendi"
+  },
   "chat_input_tabFocus_background_tip": {
     "message": "O agente trabalha em uma aba separada em segundo plano. Clique para alternar: trazer a aba do agente para o primeiro plano no início da tarefa."
   },
