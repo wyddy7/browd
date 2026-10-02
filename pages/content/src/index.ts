@@ -40,8 +40,12 @@ if (window.top === window && !window.__browdSpider) {
 
   const run = async (cmd: SpiderCommand): Promise<SpiderAck> => {
     switch (cmd.op) {
-      case 'spawn':
-        return ensure().spawn(cmd.look, cmd.at, cmd.arrive);
+      case 'spawn': {
+        const sp = ensure();
+        if (cmd.focus) sp.focus(cmd.focus);
+        if (cmd.mood) sp.mood(cmd.mood);
+        return sp.spawn(cmd.look, cmd.at, cmd.arrive);
+      }
       case 'tune':
         return ensure().tune(cmd.look);
       case 'approach':
@@ -60,6 +64,10 @@ if (window.top === window && !window.__browdSpider) {
         return ensure().show();
       case 'leave':
         return ensure().leave();
+      case 'mood':
+        return ensure().mood(cmd.mood);
+      case 'focus':
+        return ensure().focus(cmd.words);
       case 'state':
         return ensure().state();
     }
@@ -75,7 +83,11 @@ if (window.top === window && !window.__browdSpider) {
   chrome.runtime
     .sendMessage(hello)
     .then((reply: SpiderHelloReply | undefined) => {
-      if (reply?.active && reply.look) ensure().spawn(reply.look, reply.at, reply.arrive);
+      if (!reply?.active || !reply.look) return;
+      const sp = ensure();
+      if (reply.focus) sp.focus(reply.focus);
+      if (reply.mood) sp.mood(reply.mood);
+      sp.spawn(reply.look, reply.at, reply.arrive);
     })
     .catch(() => {
       // No background listener (extension reloading) — stay silent.

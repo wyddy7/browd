@@ -9,7 +9,17 @@
  */
 import type { SpiderLook } from '@extension/storage';
 
-export type { SpiderLook, SpiderMarks, SpiderPace } from '@extension/storage';
+export type { SpiderColor, SpiderLook, SpiderMarks, SpiderPace } from '@extension/storage';
+
+/**
+ * What the agent is doing, as the spider shows it:
+ * - `thinking`: a model call is running — it reads the page, steered by the focus words;
+ * - `acting`: an interaction tool runs — alert, the approach/strike commands follow;
+ * - `waiting`: a page is loading (navigation tools) — still, one leg tapping;
+ * - `asking`: the agent waits for the user (HITL) — turns to the side panel, front legs up;
+ * - `done` / `failed`: the task ended — a short gesture before it climbs away.
+ */
+export type SpiderMood = 'thinking' | 'acting' | 'waiting' | 'asking' | 'done' | 'failed';
 
 export interface SpiderPoint {
   x: number;
@@ -38,7 +48,15 @@ export interface SpiderPlace {
 }
 
 export type SpiderCommand =
-  | { op: 'spawn'; look: SpiderLook; at?: SpiderPlace; arrive?: SpiderArrival }
+  | {
+      op: 'spawn';
+      look: SpiderLook;
+      at?: SpiderPlace;
+      arrive?: SpiderArrival;
+      /** What the agent is doing and looking for at the moment of entry. */
+      mood?: SpiderMood;
+      focus?: string[];
+    }
   | { op: 'tune'; look: SpiderLook }
   /** Walk until the hands reach `point`; resolves on arrival or after `capMs`. */
   | { op: 'approach'; point: SpiderPoint; rect?: SpiderRect; capMs: number }
@@ -53,6 +71,10 @@ export type SpiderCommand =
   | { op: 'leave' }
   /** Collapse into a point before a navigation or a tab switch; resolves when gone. */
   | { op: 'depart' }
+  /** What the agent is doing now (sent on change only). */
+  | { op: 'mood'; mood: SpiderMood }
+  /** Words of the task and the current subgoal: what the spider looks for while it reads. */
+  | { op: 'focus'; words: string[] }
   /** Read-only pose snapshot, used by tests and debugging. */
   | { op: 'state' };
 
@@ -96,6 +118,9 @@ export interface SpiderAck {
   events?: SpiderEvent[];
   /** Mean frame interval over the last second, ms (state only). */
   frameMs?: number;
+  /** Words torn out of the page right now (state only). */
+  stickers?: Array<{ text: string; rect: SpiderRect; phase: string }>;
+  mood?: SpiderMood;
 }
 
 export interface SpiderHelloReply {
@@ -103,6 +128,8 @@ export interface SpiderHelloReply {
   look?: SpiderLook;
   at?: SpiderPlace;
   arrive?: SpiderArrival;
+  mood?: SpiderMood;
+  focus?: string[];
 }
 
 /** Background → content script. */

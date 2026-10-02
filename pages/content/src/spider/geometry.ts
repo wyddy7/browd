@@ -98,3 +98,23 @@ export const easeOutBack = (t: number): number => {
   const c3 = c1 + 1;
   return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
 };
+
+export const rotate = (a: V, t: number): V => ({
+  x: a.x * Math.cos(t) - a.y * Math.sin(t),
+  y: a.x * Math.sin(t) + a.y * Math.cos(t),
+});
+
+/**
+ * Two-bone leg in the page plane, the way a spider reads from above: the
+ * knee bends to a fixed side of the hip→foot line (`bend` = +1 or -1), so it
+ * can never flip. A foot out of reach straightens the leg toward it.
+ */
+export function knee2D(hip: V, foot: V, femur: number, tibia: number, bend: number): { knee: V; tip: V } {
+  const span = foot.x - hip.x || foot.y - hip.y ? { x: foot.x - hip.x, y: foot.y - hip.y } : { x: 1, y: 0 };
+  const raw = Math.hypot(span.x, span.y) || 1e-6;
+  const dir = { x: span.x / raw, y: span.y / raw };
+  const d = clamp(raw, Math.abs(femur - tibia) + 1e-3, femur + tibia - 1e-3);
+  const a = Math.acos(clamp((femur * femur + d * d - tibia * tibia) / (2 * femur * d), -1, 1));
+  const knee = add(hip, mul(rotate(dir, bend * a), femur));
+  return { knee, tip: add(hip, mul(dir, d)) };
+}

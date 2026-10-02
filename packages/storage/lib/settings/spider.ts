@@ -18,11 +18,17 @@ export type SpiderPace = 'calm' | 'normal' | 'fast';
  */
 export type SpiderMarks = 'off' | 'target' | 'feet';
 
+/** One colour for the whole spider, or the slow hue drift of the reference video. */
+export type SpiderColor = 'violet' | 'ink' | 'white' | 'cyan' | 'magenta' | 'rainbow';
+
 export interface SpiderLook {
-  /** Overall scale, 1 = default size (about 110 px leg span). */
+  /** Overall scale, 1 = default size (about 200 px leg span). */
   size: number;
   pace: SpiderPace;
   marks: SpiderMarks;
+  color: SpiderColor;
+  /** Tear the words the agent is looking for out of the page (drawn over it; the DOM is untouched). */
+  tear: boolean;
 }
 
 export interface SpiderSettings extends SpiderLook {
@@ -34,10 +40,13 @@ export const DEFAULT_SPIDER_SETTINGS: SpiderSettings = {
   size: 1,
   pace: 'normal',
   marks: 'target',
+  color: 'violet',
+  tear: true,
 };
 
 const PACES: SpiderPace[] = ['calm', 'normal', 'fast'];
 const MARKS: SpiderMarks[] = ['off', 'target', 'feet'];
+const COLORS: SpiderColor[] = ['violet', 'ink', 'white', 'cyan', 'magenta', 'rainbow'];
 
 export function normalizeSpiderSettings(raw: Partial<SpiderSettings> | null | undefined): SpiderSettings {
   const s = { ...DEFAULT_SPIDER_SETTINGS, ...(raw ?? {}) };
@@ -46,6 +55,8 @@ export function normalizeSpiderSettings(raw: Partial<SpiderSettings> | null | un
     size: Number.isFinite(s.size) ? Math.min(1.8, Math.max(0.6, s.size)) : DEFAULT_SPIDER_SETTINGS.size,
     pace: PACES.includes(s.pace) ? s.pace : DEFAULT_SPIDER_SETTINGS.pace,
     marks: MARKS.includes(s.marks) ? s.marks : DEFAULT_SPIDER_SETTINGS.marks,
+    color: COLORS.includes(s.color) ? s.color : DEFAULT_SPIDER_SETTINGS.color,
+    tear: s.tear !== false,
   };
 }
 

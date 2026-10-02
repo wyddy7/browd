@@ -13,7 +13,7 @@ const arg = (name, fallback) => {
   const i = process.argv.indexOf(`--${name}`);
   return i > 0 ? process.argv[i + 1] : fallback;
 };
-const LOOK = { size: Number(arg('size', '1')), pace: arg('pace', 'normal'), marks: arg('marks', 'target') };
+const LOOK = { size: Number(arg('size', '1')), pace: arg('pace', 'normal'), marks: arg('marks', 'target'), color: arg('color', 'violet'), tear: arg('tear', 'on') !== 'off' };
 const OUT = path.join(ROOT, 'bench-runs', 'spider-demo', stamp());
 fs.mkdirSync(OUT, { recursive: true });
 

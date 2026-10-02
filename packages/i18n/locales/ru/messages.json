@@ -1128,6 +1128,12 @@
   "chat_input_tabFocus_foreground_label": {
     "message": "Агент-вкладка показывается на старте (сейчас)"
   },
+  "chat_input_spider_on_label": {
+    "message": "Скрыть паука"
+  },
+  "chat_input_spider_off_label": {
+    "message": "Показать паука"
+  },
   "chat_input_tabFocus_background_tip": {
     "message": "Агент работает в отдельной вкладке в фоне, твой фокус не сбивается. Клик — переключить: показывать агент-вкладку при старте задачи."
   },
@@ -1268,6 +1274,36 @@
   },
   "options_spider_marks_feet": {
     "message": "Всё, за что держатся лапы"
+  },
+  "options_spider_color": {
+    "message": "Цвет"
+  },
+  "options_spider_color_desc": {
+    "message": "Один цвет для всего паука или радужный перелив, как в оригинале."
+  },
+  "options_spider_color_violet": {
+    "message": "Фиолетовый"
+  },
+  "options_spider_color_ink": {
+    "message": "Чернильный"
+  },
+  "options_spider_color_white": {
+    "message": "Белый"
+  },
+  "options_spider_color_cyan": {
+    "message": "Бирюзовый"
+  },
+  "options_spider_color_magenta": {
+    "message": "Пурпурный"
+  },
+  "options_spider_color_rainbow": {
+    "message": "Радуга"
+  },
+  "options_spider_tear": {
+    "message": "Вырывать слова"
+  },
+  "options_spider_tear_desc": {
+    "message": "Пока читает, паук вытаскивает со страницы слова, которые ищет агент, и потом возвращает их на место. Рисуется поверх страницы, сам сайт не меняется."
   },
   "options_general_section_control": {
     "message": "Управление"

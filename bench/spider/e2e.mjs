@@ -14,9 +14,9 @@ const HEADED = process.argv.includes('--headed');
 const OUT = path.join(ROOT, 'bench-runs', 'spider-e2e', stamp());
 fs.mkdirSync(OUT, { recursive: true });
 
-const LOOK = { size: 1, pace: 'normal', marks: 'target' };
-// Longest leg at size 1 (femur 33 + tibia 37).
-const MAX_LEG = 70;
+const LOOK = { size: 1, pace: 'normal', marks: 'target', color: 'violet', tear: true };
+// Longest leg at size 1 (femur 44 + tibia 54).
+const MAX_LEG = 98;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 const r1 = x => Math.round(x * 10) / 10;
 const rectOf = (page, sel) =>
@@ -137,26 +137,63 @@ try {
   }));
   const readEvents = st.events.filter(e => e.op === 'read');
   const readPoints = new Set(readEvents.map(e => `${Math.round(e.point.x / 20)}:${Math.round(e.point.y / 20)}`));
-  const readSamples = reading.out.filter(o => o.pose.mode === 'idle:read').filter((_, i) => i % 6 === 0);
-  let onText = 0;
-  for (const o of readSamples) {
-    const h = o.pose.hands[0];
-    if (await page.evaluate(([x, y]) => window.__onText(x, y), [h.x, h.y])) onText++;
-  }
+  // Stop-and-go, the way a spider moves: frozen part of the time, short fast bursts in between.
+  const idleSamples = reading.out.filter(o => o.pose.mode.startsWith('idle'));
+  const stillShare = idleSamples.filter(o => o.pose.speed < 10).length / Math.max(1, idleSamples.length);
+  const burstPeak = Math.max(0, ...idleSamples.map(o => o.pose.speed));
   checks.record(
     'C4',
-    '9 s between actions: reads ≥2 different blocks with the hands on the text; page DOM unchanged',
-    readPoints.size >= 2 && readSamples.length > 5 && onText / readSamples.length >= 0.7 && quiet.mutations === 0 && quiet.outerHTMLUnchanged,
+    '9 s between actions: reads ≥2 blocks in bursts and freezes; page DOM unchanged',
+    readPoints.size >= 2 && stillShare >= 0.3 && stillShare <= 0.9 && burstPeak > 150 && quiet.mutations === 0 && quiet.outerHTMLUnchanged,
     {
       blocksRead: readPoints.size,
-      handsOnTextShare: readSamples.length ? Math.round((onText / readSamples.length) * 100) / 100 : null,
+      stillShare: Math.round(stillShare * 100) / 100,
+      burstPeakPxS: Math.round(burstPeak),
       mutations: quiet.mutations,
       outerHTMLUnchanged: quiet.outerHTMLUnchanged,
     },
   );
+
+  // C4b — focus words: it tears the words the agent looks for out of the page (overlay only).
+  await send({ op: 'focus', words: ['spider', 'press', 'isbn'] });
+  await send({ op: 'mood', mood: 'thinking' });
+  let torn = null;
+  const tearSamples = [];
+  for (let i = 0; i < 60 && !torn; i++) {
+    await sleep(200);
+    const st = await send({ op: 'state' });
+    tearSamples.push(st);
+    if (st.stickers?.length) torn = st;
+  }
+  const tearEvents = (torn ?? tearSamples.at(-1)).events.filter(e => e.op === 'tear');
+  const afterTear = await page.evaluate(() => ({
+    mutations: window.__mut,
+    outerHTMLUnchanged: window.__hash(document.documentElement.outerHTML) === window.__h0,
+  }));
+  checks.record(
+    'C4b',
+    'focus words: tears one out (hole + sticker on the canvas), the page DOM stays untouched',
+    !!torn && /spider|press|isbn/i.test(torn.stickers[0].text) && afterTear.mutations === 0 && afterTear.outerHTMLUnchanged,
+    { firstTornAfterMs: torn ? tearSamples.length * 200 : null, word: torn?.stickers[0].text, tears: tearEvents.length, mutations: afterTear.mutations },
+  );
+
+  // C4c — a new action takes every word back at once.
+  await sleep(300);
+  const before4c = (await send({ op: 'state' })).stickers.length;
+  await send({ op: 'approach', point: { x: 640, y: 400 }, capMs: 900 });
+  const back4c = (await send({ op: 'state' })).stickers.map(x => x.phase);
+  await sleep(900);
+  const left4c = (await send({ op: 'state' })).stickers.length;
+  checks.record(
+    'C4c',
+    'an action sends every torn word home right away; gone within ~1 s',
+    before4c >= 1 && back4c.every(ph => ph === 'back') && left4c === 0,
+    { liveBefore: before4c, phasesRightAfter: back4c, liveAfter900ms: left4c },
+  );
+  await send({ op: 'focus', words: [] });
   checks.record(
     'C5',
-    'frame budget while reading a long page (block sampling included)',
+    'frame budget while reading a long page (block sampling and tearing included)',
     st.frameMs > 0 && st.frameMs < 20 && quiet.longTasks.length === 0,
     { frameMs: r1(st.frameMs), longTasks: quiet.longTasks },
   );
@@ -187,7 +224,7 @@ try {
   const early = flight.out.filter(o => o.t - t0 < 90).map(o => along(o.pose.body));
   const pullBack = -Math.min(0, ...early);
   const overshoot = Math.max(...flight.out.map(o => along(o.pose.body))) - total;
-  // Leg spread at the fastest moment of the flight: gathered (~35 px) vs standing (~60 px).
+  // Leg spread at the fastest moment of the flight: gathered (~50 px) vs standing (~88 px).
   const peak = flight.out.reduce((a, o) => (o.pose.speed > a.pose.speed ? o : a), flight.out[0]);
   const midSpread = peak.pose.speed > 600 ? Math.max(...peak.pose.feet.map(f => dist(f, peak.pose.body))) : null;
   const frames = flight.out.filter((o, i) => i === 0 || dist(o.pose.body, flight.out[i - 1].pose.body) > 0);
@@ -195,7 +232,7 @@ try {
   checks.record(
     'C7',
     'motion: anticipation (pull back), leap with gathered legs, one small overshoot, no jumps',
-    pullBack >= 2 && pullBack <= 10 && overshoot >= 1 && overshoot <= 14 && midSpread !== null && midSpread < 48 && maxStep <= 80,
+    pullBack >= 2 && pullBack <= 10 && overshoot >= 1 && overshoot <= 14 && midSpread !== null && midSpread < 62 && maxStep <= 80,
     {
       pullBackPx: r1(pullBack),
       overshootPx: r1(overshoot),
@@ -320,6 +357,30 @@ try {
     samples: allPoses.length,
   });
 
+  // C19 — moods: waiting = still with a tapping leg; asking = turned to the side panel; done = a full turn.
+  await sleep(1600);
+  await send({ op: 'mood', mood: 'waiting' });
+  const waitS = await sample(send, null, 1200);
+  // Measured after the body has had 400 ms to stop.
+  const waitStill = Math.max(...waitS.out.filter(o => o.t - waitS.out[0].t > 400).map(o => o.pose.speed));
+  const frontFeet = waitS.out.map(o => [o.pose.feet[0], o.pose.feet[4]]);
+  const tapTravel = Math.max(...frontFeet.map(f => Math.max(dist(f[0], frontFeet[0][0]), dist(f[1], frontFeet[0][1]))));
+  await send({ op: 'mood', mood: 'asking' });
+  await sleep(1000);
+  const ask = (await send({ op: 'state' })).pose;
+  const askHeading = Math.atan2(Math.sin(ask.heading), Math.cos(ask.heading));
+  const h0 = ask.heading;
+  await send({ op: 'mood', mood: 'done' });
+  await sleep(900);
+  const turned = (await send({ op: 'state' })).pose.heading - h0;
+  checks.record(
+    'C19',
+    'moods: waiting holds still with a tapping front leg; asking faces the side panel; done turns a full circle',
+    waitStill < 30 && tapTravel > 4 && Math.abs(askHeading) < 0.25 && ask.mode === 'idle:asking' && turned > 5.5,
+    { waitingMaxSpeed: Math.round(waitStill), frontFootTapPx: r1(tapTravel), askingHeading: r1(askHeading), doneTurnRad: r1(turned) },
+  );
+  await send({ op: 'mood', mood: 'thinking' });
+
   // C13 — depart: tuck and collapse into a point; the next action brings it back.
   const d0 = Date.now();
   const dAck = await send({ op: 'depart' });
@@ -339,7 +400,8 @@ try {
   const place = { x: 420, y: 380, heading: 0.7 };
   const tp = await sample(send, () => send({ op: 'spawn', look: LOOK, at: place, arrive: 'teleport' }), 650);
   const scales = tp.out.map(o => o.pose.scale);
-  const tpEnd = tp.out.at(-1).pose;
+  // The pose right after the arrival finished (it looks around ~0.7 s before moving on).
+  const tpEnd = (tp.out.find(o => o.events.some(e => e.op === 'arrived-teleport' && e.t >= tp.out[0].t)) ?? tp.out.at(-1)).pose;
   const tpEvents = tp.out.at(-1).events;
   const sinceSpawn = tpEvents.slice(tpEvents.findLastIndex(e => e.op === 'spawn-teleport'));
   checks.record(
@@ -350,9 +412,15 @@ try {
     { minScale: Math.min(...scales), peakScale: Math.max(...scales), endScale: tpEnd.scale, bodyOffPx: r1(dist(tpEnd.body, place)), heading: tpEnd.heading },
   );
 
-  // C15 — screenshots: hidden spider leaves no pixel; the check itself can see it.
+  // C15 — screenshots: hidden spider and torn words leave no pixel; the check itself can see them.
   await send({ op: 'approach', point: { x: 700, y: 360 }, capMs: 900 });
   await sleep(1300);
+  await send({ op: 'focus', words: ['spider', 'press', 'isbn'] });
+  let liveAtShot = 0;
+  for (let i = 0; i < 50 && !liveAtShot; i++) {
+    await sleep(200);
+    liveAtShot = (await send({ op: 'state' })).stickers.length;
+  }
   const shotVisible = await page.screenshot();
   await send({ op: 'hide' });
   const shotHidden = await page.screenshot();
@@ -366,8 +434,8 @@ try {
   checks.record(
     'C15',
     'hide before a screenshot: zero spider pixels (the same check sees it when visible)',
-    dHidden.pixels === 0 && dVisible.pixels > 200,
-    { pixelsWhenVisible: dVisible.pixels, pixelsWhenHidden: dHidden.pixels },
+    dHidden.pixels === 0 && dVisible.pixels > 200 && liveAtShot >= 1,
+    { tornWordsOnScreen: liveAtShot, pixelsWhenVisible: dVisible.pixels, pixelsWhenHidden: dHidden.pixels },
   );
 
   // C16 — leave: climbs away and removes its element.

@@ -12,7 +12,7 @@ import { EXT, ROOT, serveFixtures, sleep, stamp } from './lib.mjs';
 
 const OUT = path.join(ROOT, 'bench-runs', 'spider-motion', stamp());
 fs.mkdirSync(OUT, { recursive: true });
-const LOOK = { size: 1, pace: 'normal', marks: 'target' };
+const LOOK = { size: 1, pace: 'normal', marks: 'target', color: 'violet', tear: true };
 
 const { server, base } = await serveFixtures();
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'browd-motion-'));

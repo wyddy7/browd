@@ -21,6 +21,7 @@ import { DEFAULT_AGENT_OPTIONS } from './agent/types';
 import { SpeechToTextService } from './services/speechToText';
 import { injectBuildDomTreeScripts } from './browser/dom/service';
 import { spiderBridge } from './browser/spider';
+import { setPagePresence } from './browser/presence';
 import { HITL_DECISION_MESSAGE } from './agent/hitl/types';
 
 const logger = createLogger('background');
@@ -120,6 +121,9 @@ firewallStore.subscribe(() => {
 
 logger.info('background loaded');
 
+// The spider shows the agent's presence on the page: Page reports its choke points through this seam.
+setPagePresence(spiderBridge);
+
 // Listen for simple messages (e.g., from options page and content scripts)
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === 'browd:spider:hello') {
@@ -201,6 +205,7 @@ chrome.runtime.onConnect.addListener(port => {
             // If executor exists, add follow-up task
             if (currentExecutor) {
               currentExecutor.addFollowUpTask(message.task);
+              spiderBridge.setTask(message.task);
               // T2h: re-seed the chat-history snapshot. The side panel
               // ships the latest chatHistoryStore contents on every
               // submit; runReactAgent rebuilds its MemorySaver per call,
@@ -361,6 +366,7 @@ async function setupExecutor(
   browserContext: BrowserContext,
   priorMessages?: { role: 'user' | 'assistant'; content: string }[],
 ) {
+  spiderBridge.setTask(task);
   const providers = await llmProviderStore.getAllProviders();
   // if no providers, need to display the options page
   if (Object.keys(providers).length === 0) {
@@ -456,6 +462,8 @@ async function subscribeToExecutorEvents(executor: Executor) {
 
   // Subscribe to new events
   executor.subscribeExecutionEvents(async event => {
+    // The spider follows the agent's state from here, and only from here.
+    void spiderBridge.onAgentEvent(event);
     try {
       if (currentPort) {
         currentPort.postMessage(event);

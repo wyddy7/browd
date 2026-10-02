@@ -18,7 +18,7 @@ const arg = (name, fallback) => {
   return i > 0 ? process.argv[i + 1] : fallback;
 };
 // Look of the spider for this run: --marks off|target|feet --size 0.8..1.35 --pace calm|normal|fast
-const LOOK = { size: Number(arg('size', '1')), pace: arg('pace', 'normal'), marks: arg('marks', 'target') };
+const LOOK = { size: Number(arg('size', '1')), pace: arg('pace', 'normal'), marks: arg('marks', 'target'), color: arg('color', 'violet'), tear: arg('tear', 'on') !== 'off' };
 const OUT = path.join(ROOT, 'bench-runs', 'spider-pipeline', stamp());
 fs.mkdirSync(OUT, { recursive: true });
 const MODEL = 'mock-gpt-4o-spider'; // "gpt-4o" in the name → vision on → screenshot() tool present

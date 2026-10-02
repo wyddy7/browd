@@ -1149,6 +1149,12 @@
   "chat_input_tabFocus_foreground_label": {
     "message": "Show agent tab when it works (current)"
   },
+  "chat_input_spider_on_label": {
+    "message": "Hide the spider"
+  },
+  "chat_input_spider_off_label": {
+    "message": "Show the spider"
+  },
   "chat_input_tabFocus_background_tip": {
     "message": "Agent works in a separate tab in the background. Click to switch: bring the agent tab to the foreground at task start."
   },
@@ -1268,6 +1274,36 @@
   },
   "options_spider_marks_feet": {
     "message": "Everything its feet grip"
+  },
+  "options_spider_color": {
+    "message": "Colour"
+  },
+  "options_spider_color_desc": {
+    "message": "One colour for the whole spider, or the rainbow drift of the original."
+  },
+  "options_spider_color_violet": {
+    "message": "Violet"
+  },
+  "options_spider_color_ink": {
+    "message": "Ink"
+  },
+  "options_spider_color_white": {
+    "message": "White"
+  },
+  "options_spider_color_cyan": {
+    "message": "Cyan"
+  },
+  "options_spider_color_magenta": {
+    "message": "Magenta"
+  },
+  "options_spider_color_rainbow": {
+    "message": "Rainbow"
+  },
+  "options_spider_tear": {
+    "message": "Tear words out"
+  },
+  "options_spider_tear_desc": {
+    "message": "While it reads, it pulls the words the agent is looking for out of the page and puts them back. Drawn over the page; the site itself is never changed."
   },
   "options_general_section_control": {
     "message": "Controls"

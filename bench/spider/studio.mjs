@@ -12,7 +12,7 @@ import os from 'node:os';
 
 const OUT = path.join(ROOT, 'bench-runs', 'spider-studio', stamp());
 fs.mkdirSync(OUT, { recursive: true });
-const LOOK = { size: Number(process.argv[2] ?? 1), pace: 'normal', marks: 'target' };
+const LOOK = { size: Number(process.argv[2] ?? 1), pace: 'normal', marks: 'target', color: process.argv[3] ?? 'violet', tear: true };
 
 const { server, base } = await serveFixtures();
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'browd-studio-'));
@@ -43,7 +43,7 @@ try {
       const st = await send({ op: 'state' });
       const c = around ?? st.pose.body;
       const file = path.join(OUT, `${fixture.replace('.html', '')}-${name}.png`);
-      await page.screenshot({ path: file, clip: { x: Math.max(0, c.x - 110), y: Math.max(0, c.y - 90), width: 220, height: 180 } });
+      await page.screenshot({ path: file, clip: { x: Math.max(0, c.x - 160), y: Math.max(0, c.y - 130), width: 320, height: 260 } });
       shots.push(file);
       return st;
     };

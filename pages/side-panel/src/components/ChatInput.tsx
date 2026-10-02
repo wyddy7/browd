@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { FaMicrophone, FaEye, FaEyeSlash } from 'react-icons/fa';
+import { SpiderToggle } from './SpiderToggle';
 import { AiOutlineLoading3Quarters } from 'react-icons/ai';
 import { FiPaperclip } from 'react-icons/fi';
 import { t } from '@extension/i18n';
@@ -687,6 +688,7 @@ export default function ChatInput({
                   )}
                 </button>
               )}
+              {!historicalSessionId && <SpiderToggle />}
               {onMicClick && !historicalSessionId && (
                 <button
                   type="button"

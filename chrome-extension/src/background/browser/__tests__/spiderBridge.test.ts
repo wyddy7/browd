@@ -14,14 +14,14 @@ vi.mock('@src/background/log', () => ({
   createLogger: () => ({ warning: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() }),
 }));
 vi.mock('@extension/storage', () => ({
-  DEFAULT_SPIDER_SETTINGS: { enabled: true, size: 1, pace: 'normal', marks: 'target' },
+  DEFAULT_SPIDER_SETTINGS: { enabled: true, size: 1, pace: 'normal', marks: 'target', color: 'violet', tear: true },
   normalizeSpiderSettings: (s: SpiderSettings) => s,
   spiderSettingsStore: { getSettings: vi.fn(), subscribe: vi.fn() },
 }));
 
 import { SpiderBridge, type SpiderTransport, type SpiderSettingsSource } from '../spider';
 
-const ON: SpiderSettings = { enabled: true, size: 1, pace: 'normal', marks: 'target' };
+const ON: SpiderSettings = { enabled: true, size: 1, pace: 'normal', marks: 'target', color: 'violet', tear: true };
 const ack = (extra: Partial<SpiderAck> = {}): SpiderAck => ({
   ok: true,
   visible: true,
@@ -102,9 +102,10 @@ describe('SpiderBridge', () => {
     bridge.reportPlace(8, { x: 300, y: 200, heading: 0.4 });
     expect(bridge.helloReply(8)).toEqual({
       active: true,
-      look: { size: 1, pace: 'normal', marks: 'target' },
+      look: { size: 1, pace: 'normal', marks: 'target', color: 'violet', tear: true },
       at: { x: 300, y: 200, heading: 0.4 },
       arrive: 'teleport',
+      focus: [],
     });
     expect(bridge.helloReply(undefined)).toEqual({ active: false });
   });
@@ -137,8 +138,8 @@ describe('SpiderBridge', () => {
     const { bridge, transport } = setup({ ...ON, enabled: false });
     await bridge.activate(7);
     await bridge.strikeAt(7, { x: 1, y: 1 });
-    await bridge.hide(7);
-    bridge.scroll(7, 100);
+    await bridge.beforeCapture(7);
+    bridge.scrolled(7, 100);
     await bridge.depart(7);
     await bridge.deactivate(7);
     expect(transport.send).not.toHaveBeenCalled();
@@ -158,7 +159,7 @@ describe('SpiderBridge', () => {
     });
     await expect(bridge.activate(7)).resolves.toBeUndefined();
     await expect(bridge.strikeAt(7, { x: 1, y: 1 })).resolves.toBeNull();
-    await expect(bridge.hide(7)).resolves.toBeUndefined();
+    await expect(bridge.beforeCapture(7)).resolves.toBeUndefined();
     await expect(bridge.depart(7)).resolves.toBeUndefined();
   });
 
@@ -166,7 +167,7 @@ describe('SpiderBridge', () => {
     const { bridge } = setup(ON, () => new Promise(() => {}));
     await bridge.activate(7); // spawn cap 400 ms
     const t0 = Date.now();
-    await bridge.hide(7); // cap 300 ms
+    await bridge.beforeCapture(7); // cap 300 ms
     expect(Date.now() - t0).toBeLessThan(450);
   });
 
@@ -206,6 +207,60 @@ describe('SpiderBridge', () => {
     await change({ ...ON, size: 1.35, enabled: false });
     expect(ops()).toEqual(['7:spawn/descend', '7:tune', '7:leave']);
     expect(bridge.isOn(7)).toBe(false);
+  });
+
+  it('turned on mid-task, comes to the tab the agent is already in', async () => {
+    const { bridge, ops, change } = setup({ ...ON, enabled: false });
+    await bridge.activate(7);
+    expect(ops()).toEqual([]);
+    await change(ON);
+    expect(ops()).toEqual(['7:spawn/descend']);
+  });
+
+  it('follows the agent: focus words from the task, moods sent once per change, ending mood before the climb', async () => {
+    const { bridge, sent } = setup();
+    bridge.setTask('go to news.ycombinator.com, find the post about AI agents with the most comments today');
+    await bridge.activate(7);
+    const spawn = sent[0].cmd as Extract<SpiderCommand, { op: 'spawn' }>;
+    expect(spawn.focus).toEqual(['AI'.toLowerCase(), 'agent', 'comment']);
+    const live = (d: object) => ({ state: 'task.live', data: { details: JSON.stringify(d) } });
+    await bridge.onAgentEvent(live({ kind: 'llm_streaming', tokensSoFar: 20 }));
+    await bridge.onAgentEvent(live({ kind: 'llm_streaming', tokensSoFar: 40 }));
+    await bridge.onAgentEvent(live({ kind: 'tool_start', name: 'go_to_url' }));
+    await bridge.onAgentEvent(live({ kind: 'tool_start', name: 'click_element' }));
+    await bridge.onAgentEvent({ state: 'task.hitl.ask', data: { details: '' } });
+    await bridge.onAgentEvent({ state: 'task.ok', data: { details: 'done' } });
+    await bridge.deactivate(7);
+    const moods = sent.filter(m => m.cmd.op === 'mood').map(m => (m.cmd as { mood: string }).mood);
+    expect(moods).toEqual(['thinking', 'waiting', 'acting', 'asking', 'done']);
+    expect(sent.at(-1)!.cmd.op).toBe('leave');
+  });
+
+  it('switches the focus to the active subgoal when the plan changes', async () => {
+    const { bridge, sent } = setup();
+    bridge.setTask('summarize the top thread');
+    await bridge.activate(7);
+    const plan = {
+      type: 'plan',
+      items: [
+        { text: 'Open Hacker News', done: true },
+        { text: 'Compare comment counts of OpenShell posts', done: false, inProgress: true },
+      ],
+    };
+    await bridge.onAgentEvent({ state: 'step.ok', data: { details: JSON.stringify(plan) } });
+    const focus = sent.filter(m => m.cmd.op === 'focus').at(-1)!.cmd as { words: string[] };
+    expect(focus.words).toEqual(['comment', 'count', 'openshell']);
+  });
+
+  it('carries a place only from a spider standing on the page, not from one on its thread', async () => {
+    const descending = ack();
+    descending.pose!.mode = 'descend';
+    descending.pose!.body = { x: 600, y: -80 };
+    const { bridge, sent } = setup(ON, async () => descending);
+    await bridge.activate(7);
+    await bridge.activate(8);
+    const spawn = sent.at(-1)!.cmd as Extract<SpiderCommand, { op: 'spawn' }>;
+    expect(spawn.at).toBeUndefined();
   });
 
   it('scales the approach cap with the pace', async () => {

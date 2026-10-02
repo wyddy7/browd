@@ -1161,6 +1161,12 @@
   "chat_input_tabFocus_foreground_label": {
     "message": "Agent-Tab beim Arbeiten anzeigen (aktiv)"
   },
+  "chat_input_spider_on_label": {
+    "message": "Spinne ausblenden"
+  },
+  "chat_input_spider_off_label": {
+    "message": "Spinne anzeigen"
+  },
   "chat_input_tabFocus_background_tip": {
     "message": "Der Agent arbeitet in einem separaten Tab im Hintergrund. Zum Umschalten klicken: Agent-Tab wird beim Aufgabenstart in den Vordergrund geholt."
   },
@@ -1256,6 +1262,36 @@
   },
   "options_spider_marks_feet": {
     "message": "Alles, woran sich ihre Beine festhalten"
+  },
+  "options_spider_color": {
+    "message": "Farbe"
+  },
+  "options_spider_color_desc": {
+    "message": "Eine Farbe für die ganze Spinne oder der Regenbogenverlauf des Originals."
+  },
+  "options_spider_color_violet": {
+    "message": "Violett"
+  },
+  "options_spider_color_ink": {
+    "message": "Tinte"
+  },
+  "options_spider_color_white": {
+    "message": "Weiß"
+  },
+  "options_spider_color_cyan": {
+    "message": "Cyan"
+  },
+  "options_spider_color_magenta": {
+    "message": "Magenta"
+  },
+  "options_spider_color_rainbow": {
+    "message": "Regenbogen"
+  },
+  "options_spider_tear": {
+    "message": "Wörter herausreißen"
+  },
+  "options_spider_tear_desc": {
+    "message": "Beim Lesen zieht sie die Wörter, nach denen der Agent sucht, aus der Seite und setzt sie zurück. Wird über die Seite gezeichnet; die Website selbst bleibt unverändert."
   },
   "options_general_section_control": {
     "message": "Steuerung"
