@@ -20,6 +20,7 @@ import type { BaseChatModel } from '@langchain/core/language_models/chat_models'
 import { DEFAULT_AGENT_OPTIONS } from './agent/types';
 import { SpeechToTextService } from './services/speechToText';
 import { injectBuildDomTreeScripts } from './browser/dom/service';
+import { spiderBridge } from './browser/spider';
 import { HITL_DECISION_MESSAGE } from './agent/hitl/types';
 
 const logger = createLogger('background');
@@ -94,6 +95,7 @@ chrome.debugger.onDetach.addListener(async (source, reason) => {
 // Cleanup when tab is closed
 chrome.tabs.onRemoved.addListener(tabId => {
   browserContext.removeAttachedPage(tabId);
+  spiderBridge.forget(tabId);
 });
 
 // T2f-firewall-live: keep BrowserContext config in sync with
@@ -120,6 +122,14 @@ logger.info('background loaded');
 
 // Listen for simple messages (e.g., from options page and content scripts)
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type === 'browd:spider:hello') {
+    // Content script of a freshly loaded page: show the spider again if the
+    // agent is still driving this tab. Top frame only, own extension only.
+    const fromOwnTopFrame = sender.id === chrome.runtime.id && sender.frameId === 0;
+    sendResponse(fromOwnTopFrame ? spiderBridge.helloReply(sender.tab?.id) : { active: false });
+    return false;
+  }
+
   if (message?.type === 'open-side-panel') {
     void (async () => {
       try {

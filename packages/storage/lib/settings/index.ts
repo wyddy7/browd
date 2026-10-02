@@ -8,3 +8,4 @@ export * from './speechToText';
 export * from './judge';
 export * from './agentTabFocus';
 export * from './runtimeJudge';
+export * from './spider';

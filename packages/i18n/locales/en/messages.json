@@ -1212,6 +1212,63 @@
   "options_general_section_page_lead": {
     "message": "How the agent interacts with pages it visits."
   },
+  "options_spider_section": {
+    "message": "Agent spider"
+  },
+  "options_spider_section_lead": {
+    "message": "A small spider walks to whatever the agent clicks or types into, so you can follow its hands. It is hidden from the agent's own screenshots."
+  },
+  "options_spider_enabled": {
+    "message": "Show the spider"
+  },
+  "options_spider_enabled_desc": {
+    "message": "Appears in the agent's tab while a task runs and climbs away when it ends."
+  },
+  "options_spider_size": {
+    "message": "Size"
+  },
+  "options_spider_size_desc": {
+    "message": "Leg span from about 80 to 160 pixels."
+  },
+  "options_spider_size_small": {
+    "message": "Small"
+  },
+  "options_spider_size_normal": {
+    "message": "Normal"
+  },
+  "options_spider_size_large": {
+    "message": "Large"
+  },
+  "options_spider_pace": {
+    "message": "Pace"
+  },
+  "options_spider_pace_desc": {
+    "message": "How fast it walks. Each click waits for the spider to arrive, up to about a second at the calm pace."
+  },
+  "options_spider_pace_calm": {
+    "message": "Calm"
+  },
+  "options_spider_pace_normal": {
+    "message": "Normal"
+  },
+  "options_spider_pace_fast": {
+    "message": "Fast"
+  },
+  "options_spider_marks": {
+    "message": "Marks"
+  },
+  "options_spider_marks_desc": {
+    "message": "What it outlines as it goes. Drawn over the page; the site itself is never changed."
+  },
+  "options_spider_marks_off": {
+    "message": "None"
+  },
+  "options_spider_marks_target": {
+    "message": "The element it acts on"
+  },
+  "options_spider_marks_feet": {
+    "message": "Everything its feet grip"
+  },
   "options_general_section_control": {
     "message": "Controls"
   },

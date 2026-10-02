@@ -1200,6 +1200,63 @@
   "options_general_section_page_lead": {
     "message": "Comment l'agent interagit avec les pages qu'il visite."
   },
+  "options_spider_section": {
+    "message": "Araignée de l'agent"
+  },
+  "options_spider_section_lead": {
+    "message": "Une petite araignée se déplace là où l'agent clique ou écrit, pour suivre ses mains. Elle est masquée dans les captures d'écran de l'agent."
+  },
+  "options_spider_enabled": {
+    "message": "Afficher l'araignée"
+  },
+  "options_spider_enabled_desc": {
+    "message": "Apparaît dans l'onglet de l'agent pendant une tâche et s'en va en grimpant à la fin."
+  },
+  "options_spider_size": {
+    "message": "Taille"
+  },
+  "options_spider_size_desc": {
+    "message": "Envergure des pattes d'environ 80 à 160 pixels."
+  },
+  "options_spider_size_small": {
+    "message": "Petite"
+  },
+  "options_spider_size_normal": {
+    "message": "Normale"
+  },
+  "options_spider_size_large": {
+    "message": "Grande"
+  },
+  "options_spider_pace": {
+    "message": "Allure"
+  },
+  "options_spider_pace_desc": {
+    "message": "Sa vitesse de marche. Chaque clic attend son arrivée, jusqu'à environ une seconde à l'allure calme."
+  },
+  "options_spider_pace_calm": {
+    "message": "Calme"
+  },
+  "options_spider_pace_normal": {
+    "message": "Normale"
+  },
+  "options_spider_pace_fast": {
+    "message": "Rapide"
+  },
+  "options_spider_marks": {
+    "message": "Marques"
+  },
+  "options_spider_marks_desc": {
+    "message": "Ce qu'elle entoure en chemin. Dessiné par-dessus la page ; le site n'est jamais modifié."
+  },
+  "options_spider_marks_off": {
+    "message": "Aucune"
+  },
+  "options_spider_marks_target": {
+    "message": "L'élément sur lequel elle agit"
+  },
+  "options_spider_marks_feet": {
+    "message": "Tout ce que ses pattes agrippent"
+  },
   "options_general_section_control": {
     "message": "Contrôles"
   },

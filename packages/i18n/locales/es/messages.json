@@ -1200,6 +1200,63 @@
   "options_general_section_page_lead": {
     "message": "Cómo interactúa el agente con las páginas que visita."
   },
+  "options_spider_section": {
+    "message": "Araña del agente"
+  },
+  "options_spider_section_lead": {
+    "message": "Una pequeña araña camina hacia donde el agente hace clic o escribe, para que puedas seguir sus manos. Se oculta en las capturas que toma el propio agente."
+  },
+  "options_spider_enabled": {
+    "message": "Mostrar la araña"
+  },
+  "options_spider_enabled_desc": {
+    "message": "Aparece en la pestaña del agente mientras se ejecuta una tarea y se va trepando cuando termina."
+  },
+  "options_spider_size": {
+    "message": "Tamaño"
+  },
+  "options_spider_size_desc": {
+    "message": "Envergadura de patas de unos 80 a 160 píxeles."
+  },
+  "options_spider_size_small": {
+    "message": "Pequeño"
+  },
+  "options_spider_size_normal": {
+    "message": "Normal"
+  },
+  "options_spider_size_large": {
+    "message": "Grande"
+  },
+  "options_spider_pace": {
+    "message": "Ritmo"
+  },
+  "options_spider_pace_desc": {
+    "message": "Qué tan rápido camina. Cada clic espera a que llegue la araña, hasta un segundo en ritmo tranquilo."
+  },
+  "options_spider_pace_calm": {
+    "message": "Tranquilo"
+  },
+  "options_spider_pace_normal": {
+    "message": "Normal"
+  },
+  "options_spider_pace_fast": {
+    "message": "Rápido"
+  },
+  "options_spider_marks": {
+    "message": "Marcas"
+  },
+  "options_spider_marks_desc": {
+    "message": "Lo que remarca a su paso. Se dibuja sobre la página; el sitio nunca se modifica."
+  },
+  "options_spider_marks_off": {
+    "message": "Ninguna"
+  },
+  "options_spider_marks_target": {
+    "message": "El elemento sobre el que actúa"
+  },
+  "options_spider_marks_feet": {
+    "message": "Todo lo que agarran sus patas"
+  },
   "options_general_section_control": {
     "message": "Controles"
   },

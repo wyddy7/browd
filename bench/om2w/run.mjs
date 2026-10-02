@@ -79,6 +79,8 @@ function storageConfig(key, model) {
         navigator: { provider: 'openrouter', modelName: model },
       },
     },
+    // The spider would sit in every trajectory screenshot the WebJudge grades.
+    'spider-settings': { enabled: false, size: 1, pace: 'normal', marks: 'target' },
     // Keep Google out: repeated automated searches from one IP trip its captcha wall.
     'firewall-settings': { allowList: [], denyList: ['google.com'], enabled: true },
     // Shipped defaults (packages/storage/lib/settings/generalSettings.ts) except maxSteps.

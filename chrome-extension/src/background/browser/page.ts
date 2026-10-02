@@ -32,6 +32,7 @@ import { createLogger } from '@src/background/log';
 import { ClickableElementProcessor } from './dom/clickable/service';
 import { isUrlAllowed } from './util';
 import { STATE_BUILD_DEADLINE_MS, withStateDeadline } from './stateDeadline';
+import { spiderBridge } from './spider';
 
 const logger = createLogger('Page');
 
@@ -138,6 +139,8 @@ export default class Page {
     // Add anti-detection scripts
     await this._addAntiDetectionScripts();
 
+    void spiderBridge.activate(this._tabId);
+
     return true;
   }
 
@@ -184,6 +187,7 @@ export default class Page {
   }
 
   async detachPuppeteer(): Promise<void> {
+    void spiderBridge.deactivate(this._tabId);
     if (this._browser) {
       await this._browser.disconnect();
       this._browser = null;
@@ -558,6 +562,8 @@ export default class Page {
       throw new Error('Puppeteer page is not connected');
     }
 
+    // The spider must never appear in what the model or the Judge sees.
+    await spiderBridge.hide(this._tabId);
     try {
       // First disable animations/transitions
       await this._puppeteerPage.evaluate(() => {
@@ -600,6 +606,8 @@ export default class Page {
     } catch (error) {
       logger.error('Failed to take screenshot:', error);
       throw error;
+    } finally {
+      void spiderBridge.show(this._tabId);
     }
   }
 
@@ -632,6 +640,7 @@ export default class Page {
   async clickAtImageCoord(x: number, y: number): Promise<{ cssX: number; cssY: number; vw: number; vh: number }> {
     if (!this._puppeteerPage) throw new Error('Puppeteer page is not connected');
     const m = await this._coordToCss(x, y);
+    await spiderBridge.strikeAt(this._tabId, { x: m.cssX, y: m.cssY });
     await this._puppeteerPage.mouse.click(m.cssX, m.cssY);
     return { cssX: m.cssX, cssY: m.cssY, vw: m.vw, vh: m.vh };
   }
@@ -643,8 +652,14 @@ export default class Page {
   ): Promise<{ cssX: number; cssY: number; vw: number; vh: number }> {
     if (!this._puppeteerPage) throw new Error('Puppeteer page is not connected');
     const m = await this._coordToCss(x, y);
+    await spiderBridge.strikeAt(this._tabId, { x: m.cssX, y: m.cssY });
     await this._puppeteerPage.mouse.click(m.cssX, m.cssY);
-    await this._puppeteerPage.keyboard.type(text);
+    await spiderBridge.typing(this._tabId, true);
+    try {
+      await this._puppeteerPage.keyboard.type(text);
+    } finally {
+      void spiderBridge.typing(this._tabId, false);
+    }
     return { cssX: m.cssX, cssY: m.cssY, vw: m.vw, vh: m.vh };
   }
 
@@ -655,6 +670,7 @@ export default class Page {
   ): Promise<{ cssX: number; cssY: number; vw: number; vh: number }> {
     if (!this._puppeteerPage) throw new Error('Puppeteer page is not connected');
     const m = await this._coordToCss(x, y);
+    spiderBridge.scroll(this._tabId, dy);
     await this._puppeteerPage.mouse.move(m.cssX, m.cssY);
     await this._puppeteerPage.mouse.wheel({ deltaY: dy });
     return { cssX: m.cssX, cssY: m.cssY, vw: m.vw, vh: m.vh };
@@ -675,6 +691,7 @@ export default class Page {
     if (!this._puppeteerPage) throw new Error('Puppeteer page is not connected');
     const a = await this._coordToCss(fromX, fromY);
     const b = await this._coordToCss(toX, toY);
+    await spiderBridge.strikeAt(this._tabId, { x: a.cssX, y: a.cssY });
     const page = this._puppeteerPage;
     await page.mouse.move(a.cssX, a.cssY);
     await page.mouse.down();
@@ -845,6 +862,7 @@ export default class Page {
   // the page and scroll that instead. We use behavior:'instant' so verification ~1s
   // later sees the final position rather than mid-animation.
   async scrollToPercent(yPercent: number, elementNode?: DOMElementNode): Promise<void> {
+    spiderBridge.scroll(this._tabId, yPercent >= 50 ? 400 : -400);
     if (!this._puppeteerPage) {
       throw new Error('Puppeteer is not connected');
     }
@@ -901,6 +919,7 @@ export default class Page {
   }
 
   async scrollBy(y: number, elementNode?: DOMElementNode): Promise<void> {
+    spiderBridge.scroll(this._tabId, y);
     if (!this._puppeteerPage) {
       throw new Error('Puppeteer is not connected');
     }
@@ -1407,6 +1426,9 @@ export default class Page {
         logger.debug(`Non-critical error preparing element: ${e}`);
       }
 
+      await this._spiderStrike(element);
+      await spiderBridge.typing(this._tabId, true);
+
       // Get element properties to determine input method
       const tagName = await element.evaluate(el => el.tagName.toLowerCase());
       const isContentEditable = await element.evaluate(el => {
@@ -1477,6 +1499,27 @@ export default class Page {
       const errorMsg = `Failed to input text into element: ${elementNode}. Error: ${error instanceof Error ? error.message : String(error)}`;
       logger.error(errorMsg);
       throw new Error(errorMsg);
+    } finally {
+      void spiderBridge.typing(this._tabId, false);
+    }
+  }
+
+  /**
+   * Walk the spider to the element and tap its centre — the point
+   * Puppeteer clicks — before the real click or keystrokes. Decoration
+   * only: bounded by the bridge's caps and never throws.
+   */
+  private async _spiderStrike(element: ElementHandle): Promise<void> {
+    if (!spiderBridge.isOn(this._tabId)) return;
+    try {
+      const box = await Promise.race([
+        element.boundingBox(),
+        new Promise<null>(resolve => setTimeout(() => resolve(null), 400)),
+      ]);
+      if (!box || box.width <= 0 || box.height <= 0) return;
+      await spiderBridge.strikeAt(this._tabId, { x: box.x + box.width / 2, y: box.y + box.height / 2 }, box);
+    } catch (error) {
+      logger.debug('spider strike skipped', error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -1590,6 +1633,7 @@ export default class Page {
 
       // Scroll element into view if needed
       await this._scrollIntoViewIfNeeded(element);
+      await this._spiderStrike(element);
 
       try {
         // First attempt: Use Puppeteer's click method with timeout
