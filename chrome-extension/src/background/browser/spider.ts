@@ -90,7 +90,12 @@ export interface SpiderTransport {
   panel?(msg: SpiderPanelMessage): Promise<SpiderAck | undefined>;
   /** The tab's page zoom (1 = 100 %). */
   zoom?(tabId: number): Promise<number>;
+  /** A task is running: pages loading now say hello (otherwise they stay silent and the worker sleeps). */
+  live?(on: boolean): Promise<void>;
 }
+
+/** Storage key the content script reads before saying hello. */
+export const SPIDER_LIVE_KEY = 'spider-live';
 
 export interface SpiderSettingsSource {
   getSettings(): Promise<SpiderSettings>;
@@ -104,6 +109,7 @@ const chromeTransport: SpiderTransport = {
   },
   panel: msg => chrome.runtime.sendMessage(msg) as Promise<SpiderAck | undefined>,
   zoom: tabId => chrome.tabs.getZoom(tabId),
+  live: on => chrome.storage.local.set({ [SPIDER_LIVE_KEY]: on }),
 };
 
 const NO_RECEIVER = /Receiving end does not exist|Could not establish connection/i;
@@ -263,6 +269,7 @@ export class SpiderBridge implements PagePresence {
   /** Agent attached to this tab: the spider comes here. */
   async activate(tabId: number): Promise<void> {
     await this.load();
+    if (this.active.size === 0) void this.transport.live?.(true).catch(() => {});
     this.active.add(tabId);
     if (!this.settings.enabled) {
       // Hidden: still track the agent's tab, so turning the spider on mid-task brings it here.
@@ -499,9 +506,7 @@ export class SpiderBridge implements PagePresence {
   }
 
   /** The seam between this tab's page and the chat panel, measured now; null if either side does not answer. */
-  private async portalFor(
-    tabId: number,
-  ): Promise<{
+  private async portalFor(tabId: number): Promise<{
     map: Portal;
     panelW: number;
     panelH: number;
@@ -663,6 +668,7 @@ export class SpiderBridge implements PagePresence {
   }
 
   private resetTask(): void {
+    void this.transport.live?.(false).catch(() => {});
     this.shown = false;
     this.place = null;
     this.handoffTab = null;

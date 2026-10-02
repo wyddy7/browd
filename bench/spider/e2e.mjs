@@ -81,6 +81,8 @@ try {
   await page.bringToFront();
   const tabId = await tabIdOf(ext, page.url());
   const send = spider(ext, tabId);
+  // SPIDER_ZOOM=1.5: the fixture origin's page zoom (per origin, so every fixture page gets it).
+  if (Number(process.env.SPIDER_ZOOM) > 0) await ext.evaluate(([id, z]) => chrome.tabs.setZoom(id, z), [tabId, Number(process.env.SPIDER_ZOOM)]);
 
   // C1 — a page the agent does not drive gets nothing.
   await sleep(1200);

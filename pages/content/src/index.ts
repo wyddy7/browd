@@ -96,9 +96,15 @@ if (window.top === window && !window.__browdSpider) {
     return true;
   });
 
-  const hello: SpiderHello = { type: 'browd:spider:hello' };
-  chrome.runtime
-    .sendMessage(hello)
+  // Only while a task runs (a flag the background keeps in storage): reading storage does not wake
+  // the extension's worker, a message would — on every page load of every tab.
+  const sayHello = () => {
+    const hello: SpiderHello = { type: 'browd:spider:hello' };
+    return chrome.runtime.sendMessage(hello);
+  };
+  chrome.storage.local
+    .get('spider-live')
+    .then(v => (v['spider-live'] ? sayHello() : undefined), sayHello)
     .then((reply: SpiderHelloReply | undefined) => {
       if (reply?.parked) {
         // The spider waits in the chat: it may move there once this page has replaced the old one on screen.

@@ -20,7 +20,7 @@ import type { BaseChatModel } from '@langchain/core/language_models/chat_models'
 import { DEFAULT_AGENT_OPTIONS } from './agent/types';
 import { SpeechToTextService } from './services/speechToText';
 import { injectBuildDomTreeScripts } from './browser/dom/service';
-import { spiderBridge } from './browser/spider';
+import { SPIDER_LIVE_KEY, spiderBridge } from './browser/spider';
 import { setPagePresence } from './browser/presence';
 import { HITL_DECISION_MESSAGE } from './agent/hitl/types';
 
@@ -123,8 +123,10 @@ logger.info('background loaded');
 
 // The spider shows the agent's presence on the page: Page reports its choke points through this seam.
 setPagePresence(spiderBridge);
-// A fresh worker knows of no spider: one left sitting in an open chat panel by the previous worker goes.
+// A fresh worker knows of no spider: one left sitting in an open chat panel by the previous worker goes,
+// and pages stop saying hello until a task starts.
 void chrome.runtime.sendMessage({ type: 'browd:spider:panel', op: 'leave' }).catch(() => {});
+void chrome.storage.local.set({ [SPIDER_LIVE_KEY]: false }).catch(() => {});
 
 // Listen for simple messages (e.g., from options page and content scripts)
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {

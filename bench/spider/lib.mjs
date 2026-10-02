@@ -38,13 +38,20 @@ export function serveFixtures(dir = path.join(HERE, 'fixtures'), extra = () => f
 
 let debugPort = 9500 + Math.floor(Math.random() * 400);
 
+// SPIDER_VIEWPORT=1440x900 and SPIDER_DPR=2 run the checks as another device (bench/spider/devices.mjs).
+const envViewport = /^(\d+)x(\d+)$/.exec(process.env.SPIDER_VIEWPORT ?? '');
+const DEVICE_VIEWPORT = envViewport ? { width: Number(envViewport[1]), height: Number(envViewport[2]) } : null;
+const DEVICE_DPR = Number(process.env.SPIDER_DPR ?? 0) || undefined;
+
 export async function launch({ headless = true, video = null, reducedMotion = 'no-preference', viewport, swLog = false } = {}) {
   if (!fs.existsSync(path.join(EXT, 'manifest.json'))) throw new Error(`no build at ${EXT} — run pnpm build first`);
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'browd-spider-'));
+  viewport ??= DEVICE_VIEWPORT ?? { width: 1280, height: 800 };
   const ctx = await chromium.launchPersistentContext(profile, {
     headless,
     channel: 'chromium',
-    viewport: viewport ?? { width: 1280, height: 800 },
+    viewport,
+    ...(DEVICE_DPR ? { deviceScaleFactor: DEVICE_DPR } : {}),
     reducedMotion,
     ...(video ? { recordVideo: { dir: video, size: viewport ?? { width: 1280, height: 800 } } } : {}),
     args: [

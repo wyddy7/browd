@@ -209,9 +209,11 @@ node pipeline.mjs       # tier B: the real agent on a scripted localhost model (
 node demo.mjs           # choreographed preview video of every move
 node motion.mjs         # frame-by-frame strips: descend, leap, scrolls, read, tear, asking, depart, teleport
 node studio.mjs [size] [colour]   # 3× close-up stills for a design check
+node devices.mjs        # tier A as 7 devices: 1280×800 @1x/@2x, 1440×900 @2x, 1366×768, 1920×1080 (+ page zoom 150 %), 2560×1440 @2x
+node seam-live.mjs /tmp/seam   # headed, the real side panel: the seam crossing captured with screencapture
 ```
 
-Tier A (`e2e.mjs`), last runs 28/28, 1 skipped (03.10):
+Tier A (`e2e.mjs`), last runs 28/28, 1 skipped (03.10) — on every device of `devices.mjs` too:
 
 | | Check | Measured |
 | --- | --- | --- |
@@ -329,4 +331,6 @@ dislike spiders):
   the next one loads, and the spider is absent for that time (nothing to draw on).
 - The handoff carries the pose, not the motion: a spider caught mid-walk stands
   still on the next page and starts its next move from rest.
-- The hello is one runtime message per top-frame page load, also with no task.
+- Pages say hello only while a task runs: the bridge keeps `spider-live` in
+  `chrome.storage.local` (reading it does not wake the worker; a message would, on
+  every page load of every tab). A crashed worker resets it on start.
