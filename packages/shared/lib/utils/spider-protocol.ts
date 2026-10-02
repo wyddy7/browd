@@ -23,8 +23,22 @@ export interface SpiderRect {
   height: number;
 }
 
+/**
+ * How the spider enters a page: `descend` on a thread (first appearance in a
+ * task) or `teleport` — it reappears at the exact viewport spot it left on
+ * the previous page or tab, so it reads as the same spider moving on.
+ */
+export type SpiderArrival = 'descend' | 'teleport';
+
+/** Where the spider was and which way it faced, carried across pages. */
+export interface SpiderPlace {
+  x: number;
+  y: number;
+  heading: number;
+}
+
 export type SpiderCommand =
-  | { op: 'spawn'; look: SpiderLook; at?: SpiderPoint }
+  | { op: 'spawn'; look: SpiderLook; at?: SpiderPlace; arrive?: SpiderArrival }
   | { op: 'tune'; look: SpiderLook }
   /** Walk until the hands reach `point`; resolves on arrival or after `capMs`. */
   | { op: 'approach'; point: SpiderPoint; rect?: SpiderRect; capMs: number }
@@ -37,12 +51,24 @@ export type SpiderCommand =
   | { op: 'show' }
   /** Climb out of view on a thread, then remove the overlay. */
   | { op: 'leave' }
+  /** Collapse into a point before a navigation or a tab switch; resolves when gone. */
+  | { op: 'depart' }
   /** Read-only pose snapshot, used by tests and debugging. */
   | { op: 'state' };
 
 export interface SpiderPose {
   body: SpiderPoint;
   heading: number;
+  mode: string;
+  /** Overall drawing scale: 0 while teleported out, overshoots past 1 on arrival. */
+  scale: number;
+  /** Abdomen angle minus heading, radians — the follow-through on turns. */
+  abdomenLag: number;
+  /** Drawn hips and knees, one per leg (feet are in `feet`). */
+  hips: SpiderPoint[];
+  knees: SpiderPoint[];
+  /** Longest drawn leg as a share of its bone length (never above 1). */
+  maxStretch: number;
   /** Tips of the two hands (pedipalps). */
   hands: [SpiderPoint, SpiderPoint];
   /** Planted or swinging tips of the eight legs. */
@@ -75,7 +101,8 @@ export interface SpiderAck {
 export interface SpiderHelloReply {
   active: boolean;
   look?: SpiderLook;
-  at?: SpiderPoint;
+  at?: SpiderPlace;
+  arrive?: SpiderArrival;
 }
 
 /** Background → content script. */
@@ -87,4 +114,10 @@ export interface SpiderMessage {
 /** Content script → background, sent once per page load from the top frame. */
 export interface SpiderHello {
   type: 'browd:spider:hello';
+}
+
+/** Content script → background as the page unloads: where the spider was. */
+export interface SpiderPoseReport {
+  type: 'browd:spider:pose';
+  place: SpiderPlace;
 }

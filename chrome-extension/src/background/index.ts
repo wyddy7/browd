@@ -130,6 +130,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false;
   }
 
+  if (message?.type === 'browd:spider:pose') {
+    if (sender.id === chrome.runtime.id && sender.frameId === 0)
+      spiderBridge.reportPlace(sender.tab?.id, message.place);
+    return false;
+  }
+
   if (message?.type === 'open-side-panel') {
     void (async () => {
       try {

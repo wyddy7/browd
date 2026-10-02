@@ -755,6 +755,8 @@ export default class Page {
     }
 
     const previousUrl = this._puppeteerPage.url();
+    // The spider collapses before the page goes and reappears on the next one.
+    await spiderBridge.depart(this._tabId);
     // A failed load can still resolve: Chromium commits its own error page and goto returns.
     const failIfErrorPage = () => {
       if (isBrowserErrorPage(this._puppeteerPage?.url())) {

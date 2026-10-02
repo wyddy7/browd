@@ -12,6 +12,7 @@ export const fromAngle = (angle: number, length = 1): V => ({
   y: Math.sin(angle) * length,
 });
 export const clamp = (x: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, x));
+export const rot90 = (a: V, sign: number): V => ({ x: -a.y * sign, y: a.x * sign });
 
 /** Shortest signed difference b - a, in (-PI, PI]. */
 export function angleDiff(a: number, b: number): number {
@@ -26,20 +27,35 @@ export function unit(a: V, fallback: V = { x: 1, y: 0 }): V {
   return l < 1e-6 ? fallback : { x: a.x / l, y: a.y / l };
 }
 
+/** `p` pulled toward `origin` so it is at most `max` away. */
+export function clampLen(origin: V, p: V, max: number): V {
+  const d = dist(origin, p);
+  return d <= max ? p : add(origin, mul(sub(p, origin), max / d));
+}
+
 /**
- * Two-bone inverse kinematics in 2D. Returns the knee for a hip at `hip`,
- * a tip at `tip`, bone lengths `a` (hip→knee) and `b` (knee→tip). Of the
- * two mirror solutions, the one farther from `away` is chosen, so knees
- * bend outward from the body. A tip out of reach straightens the leg.
+ * A leg in a vertical plane: the hip sits `hipZ` above the page, the foot
+ * `footZ` above it (0 when planted), the knee always bends up. Returns how
+ * far along the ground the knee is from the hip and how high it is. The
+ * ground distance is clamped to what the bones can reach, so a leg can
+ * never be drawn longer than it is.
  */
-export function solveKnee(hip: V, tip: V, a: number, b: number, away: V): V {
-  const d = clamp(dist(hip, tip), Math.abs(a - b) + 1e-3, a + b - 1e-3);
-  const base = Math.atan2(tip.y - hip.y, tip.x - hip.x);
-  const cosA = clamp((a * a + d * d - b * b) / (2 * a * d), -1, 1);
-  const bend = Math.acos(cosA);
-  const k1 = add(hip, fromAngle(base + bend, a));
-  const k2 = add(hip, fromAngle(base - bend, a));
-  return dist(k1, away) >= dist(k2, away) ? k1 : k2;
+export function kneeInPlane(
+  ground: number,
+  hipZ: number,
+  footZ: number,
+  femur: number,
+  tibia: number,
+): { along: number; height: number; reach: number } {
+  const dz = footZ - hipZ;
+  const maxD = femur + tibia - 1e-3;
+  const reach = Math.sqrt(Math.max(0, maxD * maxD - dz * dz));
+  const d = Math.min(ground, reach);
+  const D = clamp(Math.hypot(d, dz), Math.abs(femur - tibia) + 1e-3, maxD);
+  const base = Math.atan2(dz, d);
+  const bend = Math.acos(clamp((femur * femur + D * D - tibia * tibia) / (2 * femur * D), -1, 1));
+  const a = base + bend; // the upper solution: knee above the hip–foot line
+  return { along: Math.cos(a) * femur, height: hipZ + Math.sin(a) * femur, reach };
 }
 
 /** Nearest point on the border of a rect to `p`. */
@@ -59,7 +75,7 @@ export function nearestOnRectEdge(p: V, r: { x: number; y: number; width: number
   return { x: p.x, y: r.y + r.height };
 }
 
-/** Critically-ish damped spring step (semi-implicit Euler) for a 2D point. */
+/** Damped spring step (semi-implicit Euler) for a 2D point, with a speed cap. */
 export function springStep(pos: V, vel: V, target: V, k: number, c: number, dt: number, vmax: number): void {
   const ax = k * (target.x - pos.x) - c * vel.x;
   const ay = k * (target.y - pos.y) - c * vel.y;
@@ -73,3 +89,12 @@ export function springStep(pos: V, vel: V, target: V, k: number, c: number, dt: 
   pos.x += vel.x * dt;
   pos.y += vel.y * dt;
 }
+
+export const easeInOut = (t: number): number => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
+export const easeIn = (t: number): number => t * t * t;
+/** Overshoots to about 1.1 before settling at 1. */
+export const easeOutBack = (t: number): number => {
+  const c1 = 1.70158;
+  const c3 = c1 + 1;
+  return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+};

@@ -2,7 +2,13 @@
  * Background side of the agent spider ("the handles"): commands for the
  * spider the content script draws in the agent's tab. `Page` calls these
  * around real actions — walk to the element and tap it, then click; drum
- * while typing; clear the canvas before a screenshot.
+ * while typing; clear the canvas before a screenshot; collapse before a
+ * navigation.
+ *
+ * There is one spider per task. It lives in the *current* tab — the last
+ * one the agent attached to or acted in. When the agent moves to another
+ * tab or page, the spider collapses where it was and reappears at the same
+ * spot there (a teleport), instead of a second spider descending again.
  *
  * Every call is bounded and swallows its own errors: the spider is
  * decoration, and a missing content script, a chrome:// page or a closed
@@ -19,6 +25,7 @@ import type {
   SpiderCommand,
   SpiderHelloReply,
   SpiderMessage,
+  SpiderPlace,
   SpiderPoint,
   SpiderRect,
 } from '@extension/shared';
@@ -65,33 +72,54 @@ export class SpiderBridge {
   private settings: SpiderSettings = DEFAULT_SPIDER_SETTINGS;
   private loading: Promise<void> | null = null;
   private readonly active = new Set<number>();
-  private readonly lastPos = new Map<number, SpiderPoint>();
   private readonly lastInject = new Map<number, number>();
+  /** Tab the spider lives in now. */
+  private current: number | null = null;
+  /** Where it was last seen, carried across pages and tabs. */
+  private place: SpiderPlace | null = null;
+  /** Already shown in this task: further entrances are teleports, not descents. */
+  private shown = false;
 
   constructor(
     private readonly transport: SpiderTransport = chromeTransport,
     private readonly source: SpiderSettingsSource = spiderSettingsStore,
   ) {}
 
-  /** Agent attached to this tab: show the spider. */
+  /** Agent attached to this tab: the spider comes here. */
   async activate(tabId: number): Promise<void> {
     await this.load();
     if (!this.settings.enabled) return;
     this.active.add(tabId);
-    await this.send(tabId, { op: 'spawn', look: this.look(), at: this.lastPos.get(tabId) }, 400);
+    if (this.current === tabId) {
+      await this.send(tabId, this.spawnCmd(), 400);
+      this.shown = true;
+      return;
+    }
+    await this.moveTo(tabId);
   }
 
-  /** Agent detached (task over): the spider climbs away. */
+  /** Agent detached: from the current tab the spider climbs away; the task is over when no tab is left. */
   async deactivate(tabId: number): Promise<void> {
     if (!this.active.delete(tabId)) return;
-    await this.send(tabId, { op: 'leave' }, 300);
+    if (this.current === tabId) {
+      this.current = null;
+      await this.send(tabId, { op: 'leave' }, 300);
+    }
+    if (this.active.size === 0) {
+      this.shown = false;
+      this.place = null;
+    }
   }
 
   /** Tab closed. */
   forget(tabId: number): void {
     this.active.delete(tabId);
-    this.lastPos.delete(tabId);
     this.lastInject.delete(tabId);
+    if (this.current === tabId) this.current = null;
+    if (this.active.size === 0) {
+      this.shown = false;
+      this.place = null;
+    }
   }
 
   isOn(tabId: number): boolean {
@@ -100,13 +128,28 @@ export class SpiderBridge {
 
   /** Answer to the content script's hello after a page load in this tab. */
   helloReply(tabId: number | undefined): SpiderHelloReply {
-    if (tabId === undefined || !this.isOn(tabId)) return { active: false };
-    return { active: true, look: this.look(), at: this.lastPos.get(tabId) };
+    if (tabId === undefined || !this.isOn(tabId) || this.current !== tabId) return { active: false };
+    const reply: SpiderHelloReply = {
+      active: true,
+      look: this.look(),
+      at: this.place ?? undefined,
+      arrive: this.shown ? 'teleport' : 'descend',
+    };
+    this.shown = true;
+    return reply;
+  }
+
+  /** The page in this tab is unloading; remember where the spider was. */
+  reportPlace(tabId: number | undefined, place: SpiderPlace): void {
+    if (tabId === undefined || tabId !== this.current || !isPlace(place)) return;
+    this.place = place;
+    logger.info(`unload tab=${tabId} at=${Math.round(place.x)},${Math.round(place.y)}`);
   }
 
   /** Walk to `point` and tap it; resolves at the moment of contact or after the cap. */
   async strikeAt(tabId: number, point: SpiderPoint, rect?: SpiderRect): Promise<SpiderAck | null> {
     if (!this.isOn(tabId)) return null;
+    await this.moveTo(tabId);
     const capMs = Math.round(APPROACH_CAP_MS * PACE_FACTOR[this.settings.pace]);
     const t0 = Date.now();
     const approach = await this.send(tabId, { op: 'approach', point, rect: rect && toRect(rect), capMs }, capMs + 250);
@@ -121,22 +164,31 @@ export class SpiderBridge {
 
   async typing(tabId: number, on: boolean): Promise<void> {
     if (!this.isOn(tabId)) return;
+    if (on) await this.moveTo(tabId);
     await this.send(tabId, { op: 'typing', on }, 200);
   }
 
   scroll(tabId: number, dy: number): void {
-    if (!this.isOn(tabId)) return;
+    if (!this.isOn(tabId) || this.current !== tabId) return;
     void this.send(tabId, { op: 'scroll', dy }, 200);
+  }
+
+  /** The agent navigates this tab: collapse first, so the next page reads as the spider arriving. */
+  async depart(tabId: number): Promise<void> {
+    if (!this.isOn(tabId) || this.current !== tabId) return;
+    await this.send(tabId, { op: 'depart' }, 350);
+    const at = this.place ? `${Math.round(this.place.x)},${Math.round(this.place.y)}` : '-';
+    logger.info(`depart tab=${tabId} at=${at}`);
   }
 
   /** Clear the spider off the canvas before a screenshot of the page. */
   async hide(tabId: number): Promise<void> {
-    if (!this.isOn(tabId)) return;
+    if (!this.isOn(tabId) || this.current !== tabId) return;
     await this.send(tabId, { op: 'hide' }, 300);
   }
 
   async show(tabId: number): Promise<void> {
-    if (!this.isOn(tabId)) return;
+    if (!this.isOn(tabId) || this.current !== tabId) return;
     await this.send(tabId, { op: 'show' }, 200);
   }
 
@@ -144,17 +196,48 @@ export class SpiderBridge {
     const deadline = Date.now() + capMs;
     try {
       let ack = await this.sendOnce(tabId, cmd, capMs);
-      if (ack?.reason === 'not-spawned' && cmd.op !== 'spawn' && cmd.op !== 'leave' && this.active.has(tabId)) {
+      if (
+        ack?.reason === 'not-spawned' &&
+        cmd.op !== 'spawn' &&
+        cmd.op !== 'leave' &&
+        cmd.op !== 'depart' &&
+        this.current === tabId
+      ) {
         // A page that loaded after the hello raced, or a fresh injection.
-        await this.sendOnce(tabId, { op: 'spawn', look: this.look(), at: this.lastPos.get(tabId) }, 200);
+        await this.sendOnce(tabId, this.spawnCmd(), 200);
+        this.shown = true;
         ack = await this.sendOnce(tabId, cmd, Math.max(50, deadline - Date.now()));
       }
-      if (ack?.pose && ack.visible) this.lastPos.set(tabId, ack.pose.body);
+      if (ack?.pose && ack.visible && tabId === this.current) {
+        this.place = { x: ack.pose.body.x, y: ack.pose.body.y, heading: ack.pose.heading };
+      }
       return ack;
     } catch (error) {
       logger.debug(`spider ${cmd.op} on tab ${tabId} skipped`, error instanceof Error ? error.message : String(error));
       return null;
     }
+  }
+
+  /** The spider goes to `tabId`: it collapses in the tab it was in and reappears here. */
+  private async moveTo(tabId: number): Promise<void> {
+    if (this.current === tabId) return;
+    const prev = this.current;
+    this.current = tabId;
+    if (prev !== null && this.active.has(prev)) {
+      await this.send(prev, { op: 'depart' }, 350);
+    }
+    logger.info(`move tab=${prev ?? '-'}→${tabId} arrive=${this.shown ? 'teleport' : 'descend'}`);
+    await this.send(tabId, this.spawnCmd(), 400);
+    this.shown = true;
+  }
+
+  private spawnCmd(): SpiderCommand {
+    return {
+      op: 'spawn',
+      look: this.look(),
+      at: this.place ?? undefined,
+      arrive: this.shown ? 'teleport' : 'descend',
+    };
   }
 
   private async sendOnce(tabId: number, cmd: SpiderCommand, capMs: number): Promise<SpiderAck | null> {
@@ -163,7 +246,7 @@ export class SpiderBridge {
       return (await withCap(this.transport.send(tabId, msg), capMs)) ?? null;
     } catch (error) {
       const text = error instanceof Error ? error.message : String(error);
-      if (!NO_RECEIVER.test(text) || cmd.op === 'leave' || cmd.op === 'show') throw error;
+      if (!NO_RECEIVER.test(text) || cmd.op === 'leave' || cmd.op === 'show' || cmd.op === 'depart') throw error;
       // Tab was open before the extension loaded: no content script yet.
       const last = this.lastInject.get(tabId) ?? 0;
       if (Date.now() - last < 3000) throw error;
@@ -194,14 +277,17 @@ export class SpiderBridge {
     const next = normalizeSpiderSettings(await this.source.getSettings());
     const wasOn = this.settings.enabled;
     this.settings = next;
-    for (const tabId of this.active) {
-      if (wasOn && !next.enabled) void this.send(tabId, { op: 'leave' }, 300);
-      else if (!wasOn && next.enabled) void this.send(tabId, { op: 'spawn', look: this.look() }, 300);
-      else if (next.enabled) void this.send(tabId, { op: 'tune', look: this.look() }, 300);
-    }
+    const tabId = this.current;
+    if (tabId === null) return;
+    if (wasOn && !next.enabled) void this.send(tabId, { op: 'leave' }, 300);
+    else if (!wasOn && next.enabled) void this.send(tabId, this.spawnCmd(), 300);
+    else if (next.enabled) void this.send(tabId, { op: 'tune', look: this.look() }, 300);
   }
 }
 
 const toRect = (r: SpiderRect): SpiderRect => ({ x: r.x, y: r.y, width: r.width, height: r.height });
+
+const isPlace = (p: SpiderPlace): boolean =>
+  !!p && Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.heading);
 
 export const spiderBridge = new SpiderBridge();

@@ -15,6 +15,8 @@ const OUT = path.join(ROOT, 'bench-runs', 'spider-e2e', stamp());
 fs.mkdirSync(OUT, { recursive: true });
 
 const LOOK = { size: 1, pace: 'normal', marks: 'target' };
+// Longest leg at size 1 (femur 33 + tibia 37).
+const MAX_LEG = 70;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 const r1 = x => Math.round(x * 10) / 10;
 const rectOf = (page, sel) =>
@@ -25,8 +27,28 @@ const rectOf = (page, sel) =>
 const centre = r => ({ x: r.x + r.width / 2, y: r.y + r.height / 2 });
 
 const checks = new Checks();
+const allPoses = [];
 const { server, base } = await serveFixtures();
 const { ctx, extId } = await launch({ headless: !HEADED, video: path.join(OUT, 'video') });
+
+/** Poll the pose as fast as the round trip allows while `work` runs (or for `ms`). */
+async function sample(send, work, ms = 0) {
+  const out = [];
+  let on = true;
+  const loop = (async () => {
+    while (on) {
+      const s = await send({ op: 'state' });
+      out.push({ t: Date.now(), pose: s.pose, events: s.events });
+    }
+  })();
+  const result = typeof work === 'function' ? await work() : await sleep(ms);
+  if (ms && typeof work === 'function') await sleep(ms);
+  on = false;
+  await loop;
+  allPoses.push(...out.map(o => o.pose));
+  return { out, result };
+}
+const legLengths = pose => pose.hips.map((h, i) => dist(h, pose.feet[i]));
 
 try {
   const ext = await extensionPage(ctx, extId);
@@ -47,15 +69,15 @@ try {
     { hostElement: hostAtRest, contentScript: st0?.ok === true },
   );
 
-  // C2 — spawn: descends on a thread and lands where asked.
-  await send({ op: 'spawn', look: LOOK, at: { x: 900, y: 300 } });
+  // C2 — first entrance: descends on a thread and lands where asked.
+  await send({ op: 'spawn', look: LOOK, at: { x: 900, y: 300, heading: 0 }, arrive: 'descend' });
   await sleep(1800);
   let st = await send({ op: 'state' });
   const spawnEv = st.events.find(e => e.op === 'spawn');
   const landed = st.events.find(e => e.op === 'landed');
   checks.record(
     'C2',
-    'spawn: descends on a thread and lands at the requested point',
+    'first entrance: descends on a thread and lands at the requested point',
     !!landed && dist(landed.body, { x: 900, y: 300 }) < 8 && landed.t - spawnEv.t < 1500,
     { landedAfterMs: landed ? landed.t - spawnEv.t : null, landedAt: landed?.body },
   );
@@ -77,7 +99,7 @@ try {
     iso,
   );
 
-  // C4/C5 — idle wandering: alive, zero DOM mutations, no long tasks, 60 fps.
+  // C4/C5 — between actions it reads: walks into text blocks, hands on the lines; the page DOM never changes.
   await page.evaluate(() => {
     const hash = s => {
       let h = 0;
@@ -97,71 +119,90 @@ try {
     new PerformanceObserver(l => window.__long.push(...l.getEntries().map(e => Math.round(e.duration)))).observe({
       type: 'longtask',
     });
+    // Is a point on a text line? (caret position under it, then that text node's line boxes)
+    window.__onText = (x, y) => {
+      const r = document.caretRangeFromPoint(x, y);
+      if (!r || r.startContainer.nodeType !== 3) return false;
+      const range = document.createRange();
+      range.selectNodeContents(r.startContainer);
+      return Array.from(range.getClientRects()).some(b => x >= b.left - 6 && x <= b.right + 6 && y >= b.top - 6 && y <= b.bottom + 6);
+    };
   });
-  const bodyA = st.pose.body;
-  const trail = [];
-  for (let i = 0; i < 12; i++) {
-    await sleep(500);
-    trail.push((await send({ op: 'state' })).pose.body);
-  }
+  const reading = await sample(send, null, 9000);
   st = await send({ op: 'state' });
   const quiet = await page.evaluate(() => ({
     mutations: window.__mut,
     outerHTMLUnchanged: window.__hash(document.documentElement.outerHTML) === window.__h0,
     longTasks: window.__long,
   }));
-  const wandered = Math.max(...trail.map(p => dist(p, bodyA)));
+  const readEvents = st.events.filter(e => e.op === 'read');
+  const readPoints = new Set(readEvents.map(e => `${Math.round(e.point.x / 20)}:${Math.round(e.point.y / 20)}`));
+  const readSamples = reading.out.filter(o => o.pose.mode === 'idle:read').filter((_, i) => i % 6 === 0);
+  let onText = 0;
+  for (const o of readSamples) {
+    const h = o.pose.hands[0];
+    if (await page.evaluate(([x, y]) => window.__onText(x, y), [h.x, h.y])) onText++;
+  }
   checks.record(
     'C4',
-    'idle wandering for 6 s: it moves, the page DOM does not change',
-    wandered > 20 && quiet.mutations === 0 && quiet.outerHTMLUnchanged,
-    { wanderedPx: r1(wandered), mutations: quiet.mutations, outerHTMLUnchanged: quiet.outerHTMLUnchanged },
+    '9 s between actions: reads ≥2 different blocks with the hands on the text; page DOM unchanged',
+    readPoints.size >= 2 && readSamples.length > 5 && onText / readSamples.length >= 0.7 && quiet.mutations === 0 && quiet.outerHTMLUnchanged,
+    {
+      blocksRead: readPoints.size,
+      handsOnTextShare: readSamples.length ? Math.round((onText / readSamples.length) * 100) / 100 : null,
+      mutations: quiet.mutations,
+      outerHTMLUnchanged: quiet.outerHTMLUnchanged,
+    },
   );
   checks.record(
     'C5',
-    'frame budget while wandering on a long page',
+    'frame budget while reading a long page (block sampling included)',
     st.frameMs > 0 && st.frameMs < 20 && quiet.longTasks.length === 0,
     { frameMs: r1(st.frameMs), longTasks: quiet.longTasks },
   );
 
-  // C6/C7 — approach the Subscribe button: under the cap, hands on the point, no jumps.
+  // C6/C7 — a long approach: crouch and pull back, leap with legs gathered, land with one small overshoot.
+  await send({ op: 'approach', point: { x: 1050, y: 560 }, capMs: 900 });
+  await sleep(900);
   const btn = await rectOf(page, '#subscribe');
   const pt = centre(btn);
-  const startBody = (await send({ op: 'state' })).pose.body;
-  const samples = [];
-  let polling = true;
-  const poller = (async () => {
-    while (polling) {
-      const s = await send({ op: 'state' });
-      samples.push({ t: Date.now(), body: s.pose.body });
-    }
-  })();
+  const start = (await send({ op: 'state' })).pose.body;
   const t0 = Date.now();
-  const ack = await send({ op: 'approach', point: pt, rect: btn, capMs: 900 });
-  const flightMs = Date.now() - t0;
-  await sleep(300);
-  polling = false;
-  await poller;
+  const flight = await sample(send, () => send({ op: 'approach', point: pt, rect: btn, capMs: 900 }), 600);
+  const ack = flight.result;
+  const arrive = flight.out.find(o => o.events.some(e => e.op === 'arrive' && e.t >= t0));
+  const flightMs = arrive ? arrive.events.filter(e => e.op === 'arrive').at(-1).t - t0 : null;
   st = await send({ op: 'state' });
   const handErr = Math.max(...st.pose.hands.map(h => dist(h, pt)));
   checks.record(
     'C6',
     'approach: arrives at the button under the cap, both hands on the click point',
     ack.arrived === true && flightMs < 900 && handErr < 8,
-    { startDistPx: r1(dist(startBody, pt)), flightMs, arrived: ack.arrived, handErrPx: r1(handErr) },
+    { startDistPx: r1(dist(start, pt)), flightMs, arrived: ack.arrived, handErrPx: r1(handErr) },
   );
-  // Polling is faster than frames, so compare distinct positions: each one is a frame.
-  const frames = samples.filter((s, i) => i === 0 || dist(s.body, samples[i - 1].body) > 0);
-  const steps = frames.slice(1).map((s, i) => dist(s.body, frames[i].body));
-  const sorted = [...steps].sort((a, b) => a - b);
-  const median = sorted[Math.floor(sorted.length / 2)] ?? 0;
-  const maxStep = Math.max(0, ...steps);
-  // 2400 px/s at 60 fps is 40 px per frame; a dropped frame may double it once.
+  const dir = { x: (pt.x - start.x) / dist(start, pt), y: (pt.y - start.y) / dist(start, pt) };
+  const goal = { x: pt.x - dir.x * 22, y: pt.y - dir.y * 22 };
+  const along = p => (p.x - start.x) * dir.x + (p.y - start.y) * dir.y;
+  const total = along(goal);
+  const early = flight.out.filter(o => o.t - t0 < 90).map(o => along(o.pose.body));
+  const pullBack = -Math.min(0, ...early);
+  const overshoot = Math.max(...flight.out.map(o => along(o.pose.body))) - total;
+  // Leg spread at the fastest moment of the flight: gathered (~35 px) vs standing (~60 px).
+  const peak = flight.out.reduce((a, o) => (o.pose.speed > a.pose.speed ? o : a), flight.out[0]);
+  const midSpread = peak.pose.speed > 600 ? Math.max(...peak.pose.feet.map(f => dist(f, peak.pose.body))) : null;
+  const frames = flight.out.filter((o, i) => i === 0 || dist(o.pose.body, flight.out[i - 1].pose.body) > 0);
+  const maxStep = Math.max(0, ...frames.slice(1).map((o, i) => dist(o.pose.body, frames[i].pose.body)));
   checks.record(
     'C7',
-    'no jumps on the way: every frame-to-frame body step stays under the speed cap',
-    frames.length > 10 && maxStep <= 2 * 40,
-    { frames: frames.length, maxStepPx: r1(maxStep), medianStepPx: r1(median) },
+    'motion: anticipation (pull back), leap with gathered legs, one small overshoot, no jumps',
+    pullBack >= 2 && pullBack <= 10 && overshoot >= 1 && overshoot <= 14 && midSpread !== null && midSpread < 48 && maxStep <= 80,
+    {
+      pullBackPx: r1(pullBack),
+      overshootPx: r1(overshoot),
+      legSpreadAtPeakSpeedPx: midSpread && r1(midSpread),
+      peakSpeed: peak.pose.speed,
+      maxFrameStepPx: r1(maxStep),
+    },
   );
 
   // C8 — strike, then a real click at the same point reaches the button.
@@ -174,15 +215,10 @@ try {
   const strikeEv = st.events.filter(e => e.op === 'strike').at(-1);
   checks.record(
     'C8',
-    'strike lands on the point, then a real click passes through the overlay',
+    'strike (wind-up, jab) lands on the point, then a real click passes through the overlay',
     sAck.ok && topEl === 'subscribe' && lastClick?.id === 'subscribe' && counter.startsWith('1 ') && strikeEv &&
       dist(strikeEv.point, pt) < 1 && strikeEv.t <= lastClick.t,
-    {
-      elementFromPoint: topEl,
-      clickTarget: lastClick?.id,
-      counter,
-      strikeBeforeClickMs: strikeEv ? lastClick.t - strikeEv.t : null,
-    },
+    { elementFromPoint: topEl, clickTarget: lastClick?.id, counter, strikeBeforeClickMs: strikeEv ? lastClick.t - strikeEv.t : null },
   );
 
   // C9 — typing: walk to the field, tap, drum while the keys go in.
@@ -202,34 +238,54 @@ try {
   await send({ op: 'typing', on: false });
   const value = await page.evaluate(() => document.getElementById('email').value);
   const drum = Math.max(...handsDuring.map(h => dist(h, handsDuring[0])));
-  checks.record(
-    'C9',
-    'typing: text reaches the field while the hands drum on it',
-    value === 'spider@example.com' && drum > 1,
-    { value, handTravelPx: r1(drum) },
-  );
+  checks.record('C9', 'typing: text reaches the field while the hands drum on it', value === 'spider@example.com' && drum > 1, {
+    value,
+    handTravelPx: r1(drum),
+  });
 
-  // C10 — scrolling: feet are planted in the page, ride it, then re-step.
+  // C10 — the owner's case: the agent's instant scroll_to_bottom. A cut: carried a little, feet re-grip, no stretched legs.
   await page.evaluate(() => document.activeElement?.blur());
+  // Busy on a target (as during an action), so "returns" has a meaning.
   await send({ op: 'approach', point: { x: 640, y: 420 }, capMs: 900 });
-  await sleep(500);
-  await page.evaluate(() => window.scrollBy(0, 420));
-  await sleep(60);
-  const justAfter = await send({ op: 'state' });
-  await sleep(1200);
-  const settled = await send({ op: 'state' });
-  const reach = p => Math.max(...p.feet.map(f => dist(f, p.body)));
+  await sleep(150);
+  const before = (await send({ op: 'state' })).pose.body;
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  const right = await send({ op: 'state' });
+  const after = await sample(send, null, 1100);
+  const cutPoses = [right.pose, ...after.out.map(o => o.pose)];
+  const worstStretch = Math.max(...cutPoses.map(p => p.maxStretch));
+  const worstLeg = Math.max(...cutPoses.map(p => Math.max(...legLengths(p))));
+  const vh = await page.evaluate(() => innerHeight);
+  const inView = cutPoses.every(p => p.body.y > 0 && p.body.y < vh);
+  const back = dist(after.out.at(-1).pose.body, before);
   checks.record(
     'C10',
-    'scroll: feet ride the page (stretched right after), then step back under the body',
-    reach(justAfter.pose) > 90 && reach(settled.pose) < 75,
-    { maxFootDistAfter60msPx: r1(reach(justAfter.pose)), maxFootDistAfter1300msPx: r1(reach(settled.pose)) },
+    'scroll to the bottom: no leg ever longer than its bones, body stays on screen and returns',
+    worstStretch <= 1 && worstLeg <= MAX_LEG + 1 && inView && back < 12,
+    { worstStretch, longestDrawnLegPx: r1(worstLeg), bodyStayedOnScreen: inView, returnedWithinPx: r1(back), samples: cutPoses.length },
+  );
+
+  // C10b — a small wheel scroll is walked, not cut.
+  const cutsBefore = (await send({ op: 'state' })).events.filter(e => e.op === 'scroll-cut').length;
+  const wheel = await sample(send, async () => {
+    for (let i = 0; i < 14; i++) {
+      await page.mouse.wheel(0, -18);
+      await sleep(30);
+    }
+  }, 800);
+  const cutsAfter = (await send({ op: 'state' })).events.filter(e => e.op === 'scroll-cut').length;
+  const worstWheel = wheel.out.reduce((a, o) => (o.pose.maxStretch > a.pose.maxStretch ? o : a), wheel.out[0]);
+  const wheelStretch = worstWheel.pose.maxStretch;
+  checks.record(
+    'C10b',
+    'small wheel scroll: walked (feet ride the page and step), no cut, no overstretch',
+    cutsAfter === cutsBefore && wheelStretch <= 1,
+    { cuts: cutsAfter - cutsBefore, worstStretch: wheelStretch, worstAtMode: worstWheel.pose.mode, worstAtSpeed: worstWheel.pose.speed },
   );
   await page.evaluate(() => window.scrollTo(0, 0));
-  await sleep(800);
+  await sleep(900);
 
-  // C11 — background tab: no animation frames, the approach must not wait.
-  // Headless keeps every tab visible, so this runs only with --headed.
+  // C11 — background tab: no animation frames, the approach must not wait. Headless keeps tabs visible.
   await ext.bringToFront();
   await sleep(400);
   const visibility = await page.evaluate(() => document.visibilityState);
@@ -237,21 +293,66 @@ try {
     const t1 = Date.now();
     const hAck = await send({ op: 'approach', point: { x: 300, y: 300 }, capMs: 900 });
     const hiddenMs = Date.now() - t1;
-    checks.record(
-      'C11',
-      'background tab: approach resolves at once (no waiting on frames)',
-      hiddenMs < 300 && hAck.arrived === false,
-      { visibility, ms: hiddenMs, reason: hAck.reason },
-    );
+    checks.record('C11', 'background tab: approach resolves at once (no waiting on frames)', hiddenMs < 300 && hAck.arrived === false, {
+      visibility,
+      ms: hiddenMs,
+      reason: hAck.reason,
+    });
   } else {
     checks.skip('C11', 'background tab: approach resolves at once', 'headless keeps background tabs visible; run with --headed');
   }
   await page.bringToFront();
-  await sleep(800);
+  await sleep(600);
 
-  // C12 — screenshots: hidden spider leaves no pixel; the check itself can see it.
+  // C12 — knees never flip: every leg keeps its knee on the same side of its hip–foot line.
+  const sides = Array.from({ length: 8 }, () => new Set());
+  for (const p of allPoses) {
+    p.hips.forEach((h, i) => {
+      const f = p.feet[i];
+      const k = p.knees[i];
+      const cross = (f.x - h.x) * (k.y - h.y) - (f.y - h.y) * (k.x - h.x);
+      if (Math.abs(cross) > 30 && dist(h, f) > 20) sides[i].add(Math.sign(cross));
+    });
+  }
+  const flipped = sides.filter(s => s.size > 1).length;
+  checks.record('C12', 'knees never flip across a leg (all samples so far)', flipped === 0 && allPoses.length > 200, {
+    legsThatFlipped: flipped,
+    samples: allPoses.length,
+  });
+
+  // C13 — depart: tuck and collapse into a point; the next action brings it back.
+  const d0 = Date.now();
+  const dAck = await send({ op: 'depart' });
+  const departMs = Date.now() - d0;
+  const gone = await send({ op: 'state' });
+  const back2 = await send({ op: 'approach', point: { x: 500, y: 300 }, capMs: 1200 });
+  checks.record(
+    'C13',
+    'depart: collapses in ~0.2 s, invisible after; the next action pops it back and it arrives',
+    departMs >= 150 && departMs <= 400 && dAck.visible === false && gone.pose.scale === 0 && back2.arrived === true,
+    { departMs, scaleAfter: gone.pose.scale, comesBackAndArrives: back2.arrived },
+  );
+
+  // C14 — teleport arrival on a "new page": same spot and heading, ring closes, pops with an overshoot, no descent.
+  await send({ op: 'leave' });
+  await sleep(1600);
+  const place = { x: 420, y: 380, heading: 0.7 };
+  const tp = await sample(send, () => send({ op: 'spawn', look: LOOK, at: place, arrive: 'teleport' }), 650);
+  const scales = tp.out.map(o => o.pose.scale);
+  const tpEnd = tp.out.at(-1).pose;
+  const tpEvents = tp.out.at(-1).events;
+  const sinceSpawn = tpEvents.slice(tpEvents.findLastIndex(e => e.op === 'spawn-teleport'));
+  checks.record(
+    'C14',
+    'teleport arrival: exact spot and heading, from 0 to an overshoot and back to 1, no thread descent',
+    Math.min(...scales) === 0 && Math.max(...scales) >= 1.03 && Math.max(...scales) <= 1.15 && tpEnd.scale === 1 &&
+      dist(tpEnd.body, place) < 2 && Math.abs(tpEnd.heading - place.heading) < 0.1 && !sinceSpawn.some(e => e.op === 'landed'),
+    { minScale: Math.min(...scales), peakScale: Math.max(...scales), endScale: tpEnd.scale, bodyOffPx: r1(dist(tpEnd.body, place)), heading: tpEnd.heading },
+  );
+
+  // C15 — screenshots: hidden spider leaves no pixel; the check itself can see it.
   await send({ op: 'approach', point: { x: 700, y: 360 }, capMs: 900 });
-  await sleep(1300); // let the target outline fade
+  await sleep(1300);
   const shotVisible = await page.screenshot();
   await send({ op: 'hide' });
   const shotHidden = await page.screenshot();
@@ -263,20 +364,20 @@ try {
   const dVisible = await pixelDiff(ext, shotGone, shotVisible);
   const dHidden = await pixelDiff(ext, shotGone, shotHidden);
   checks.record(
-    'C12',
+    'C15',
     'hide before a screenshot: zero spider pixels (the same check sees it when visible)',
     dHidden.pixels === 0 && dVisible.pixels > 200,
-    { pixelsWhenVisible: dVisible.pixels, pixelsWhenHidden: dHidden.pixels, visibleBox: dVisible.box },
+    { pixelsWhenVisible: dVisible.pixels, pixelsWhenHidden: dHidden.pixels },
   );
 
-  // C13 — leave: climbs away and removes its element.
+  // C16 — leave: climbs away and removes its element.
   st = await send({ op: 'state' });
-  checks.record('C13', 'leave: climbs out of view and removes the host element', !goneHost && st.events.at(-1)?.op === 'gone', {
+  checks.record('C16', 'leave: climbs out of view and removes the host element', !goneHost && st.events.at(-1)?.op === 'gone', {
     hostElement: goneHost,
     lastEvent: st.events.at(-1)?.op,
   });
 
-  // C14 — navigation: the next page has a fresh content script and no overlay of its own.
+  // C17 — navigation: the next page has a fresh content script and no overlay of its own.
   await page.click('#next');
   await page.waitForURL(/second\.html/);
   await sleep(800);
@@ -285,7 +386,7 @@ try {
   const host2 = await page.evaluate(() => !!document.querySelector('browd-spider'));
   const appr = await spider(ext, tab2)({ op: 'approach', point: { x: 100, y: 100 }, capMs: 300 });
   checks.record(
-    'C14',
+    'C17',
     'after navigation: fresh content script, nothing drawn until told, commands report not-spawned',
     st2?.ok && !host2 && appr.reason === 'not-spawned',
     { contentScript: st2?.ok, hostElement: host2, approachReason: appr.reason },
@@ -297,7 +398,7 @@ try {
   await ctx.close();
 }
 
-// C15 — prefers-reduced-motion: no flight, no thread; jumps straight to the target.
+// C18 — prefers-reduced-motion: no flight, no thread, no reading walk; jumps straight to the target.
 {
   const { ctx: rctx, extId: rid } = await launch({ headless: !HEADED, reducedMotion: 'reduce' });
   try {
@@ -306,18 +407,18 @@ try {
     await page.goto(`${base}/article.html`);
     await page.bringToFront();
     const send = spider(ext, await tabIdOf(ext, page.url()));
-    await send({ op: 'spawn', look: LOOK, at: { x: 600, y: 300 } });
+    await send({ op: 'spawn', look: LOOK, at: { x: 600, y: 300, heading: 0 }, arrive: 'descend' });
     const t0 = Date.now();
     const a = await send({ op: 'approach', point: { x: 300, y: 500 }, capMs: 900 });
     const ms = Date.now() - t0;
-    await sleep(1500);
+    await sleep(2500);
     const st = await send({ op: 'state' });
-    const descended = st.events.some(e => e.op === 'landed');
+    const animated = st.events.some(e => e.op === 'landed' || e.op === 'read');
     checks.record(
-      'C15',
-      'reduced motion: no descent animation, approach jumps without waiting, no wandering',
-      a.reason === 'reduced-motion' && ms < 200 && !descended && st.pose.speed === 0,
-      { reason: a.reason, ms, descentAnimated: descended, speed: st.pose.speed },
+      'C18',
+      'reduced motion: no descent, no reading walk, approach jumps without waiting',
+      a.reason === 'reduced-motion' && ms < 200 && !animated && st.pose.speed === 0,
+      { reason: a.reason, ms, animatedMoves: animated, speed: st.pose.speed },
     );
   } finally {
     await rctx.close();
@@ -328,13 +429,11 @@ server.close();
 
 // Video → mp4 + contact sheet for a quick look.
 const vids = fs.existsSync(path.join(OUT, 'video')) ? fs.readdirSync(path.join(OUT, 'video')) : [];
-const webm = vids
-  .map(f => path.join(OUT, 'video', f))
-  .sort((a, b) => fs.statSync(b).size - fs.statSync(a).size)[0];
+const webm = vids.map(f => path.join(OUT, 'video', f)).sort((a, b) => fs.statSync(b).size - fs.statSync(a).size)[0];
 if (webm) {
   try {
     execFileSync('ffmpeg', ['-v', 'error', '-y', '-i', webm, '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '20', path.join(OUT, 'e2e.mp4')]);
-    execFileSync('ffmpeg', ['-v', 'error', '-y', '-i', path.join(OUT, 'e2e.mp4'), '-vf', 'fps=1,scale=480:-1,tile=5x4', '-frames:v', '1', path.join(OUT, 'e2e-sheet.png')]);
+    execFileSync('ffmpeg', ['-v', 'error', '-y', '-i', path.join(OUT, 'e2e.mp4'), '-vf', 'fps=1,scale=480:-1,tile=6x5', '-frames:v', '1', path.join(OUT, 'e2e-sheet.png')]);
   } catch (e) {
     console.log(`ffmpeg skipped: ${e.message.split('\n')[0]}`);
   }

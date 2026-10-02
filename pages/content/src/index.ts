@@ -4,7 +4,14 @@
  * the agent is not driving: the background answers the hello with
  * `active: false` and no element is ever added.
  */
-import type { SpiderAck, SpiderCommand, SpiderHello, SpiderHelloReply, SpiderMessage } from '@extension/shared';
+import type {
+  SpiderAck,
+  SpiderCommand,
+  SpiderHello,
+  SpiderHelloReply,
+  SpiderMessage,
+  SpiderPoseReport,
+} from '@extension/shared';
 import { Spider } from './spider/engine';
 
 declare global {
@@ -13,17 +20,28 @@ declare global {
   }
 }
 
-// The manifest injects into every frame; the background may also inject
+// Top frame only (manifest `all_frames: false`); the background may also inject
 // this file into a tab that was open before the extension loaded.
 if (window.top === window && !window.__browdSpider) {
   window.__browdSpider = true;
   let spider: Spider | null = null;
-  const ensure = () => (spider ??= new Spider());
+  const ensure = () => {
+    if (!spider) {
+      spider = new Spider();
+      // The page is unloading: tell the background where the spider was, so
+      // it reappears at the same spot on the next page.
+      spider.onUnload = place => {
+        const report: SpiderPoseReport = { type: 'browd:spider:pose', place };
+        chrome.runtime.sendMessage(report).catch(() => {});
+      };
+    }
+    return spider;
+  };
 
   const run = async (cmd: SpiderCommand): Promise<SpiderAck> => {
     switch (cmd.op) {
       case 'spawn':
-        return ensure().spawn(cmd.look, cmd.at);
+        return ensure().spawn(cmd.look, cmd.at, cmd.arrive);
       case 'tune':
         return ensure().tune(cmd.look);
       case 'approach':
@@ -33,7 +51,9 @@ if (window.top === window && !window.__browdSpider) {
       case 'typing':
         return ensure().typing(cmd.on);
       case 'scroll':
-        return ensure().scroll(cmd.dy);
+        return ensure().scroll();
+      case 'depart':
+        return ensure().depart();
       case 'hide':
         return ensure().hide();
       case 'show':
@@ -55,7 +75,7 @@ if (window.top === window && !window.__browdSpider) {
   chrome.runtime
     .sendMessage(hello)
     .then((reply: SpiderHelloReply | undefined) => {
-      if (reply?.active && reply.look) ensure().spawn(reply.look, reply.at);
+      if (reply?.active && reply.look) ensure().spawn(reply.look, reply.at, reply.arrive);
     })
     .catch(() => {
       // No background listener (extension reloading) — stay silent.

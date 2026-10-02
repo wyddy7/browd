@@ -1,12 +1,13 @@
 /**
  * SpiderBridge — the background "handles" of the agent spider. The spider
- * is decoration, so the contract under test is mostly about what must
- * never happen: a failing or missing content script must not throw into
- * an agent action or hold it past the caps, and a disabled spider must
- * not send anything at all.
+ * is decoration, so most of the contract is about what must never happen:
+ * a failing or missing content script must not throw into an agent action
+ * or hold it past the caps, a disabled spider sends nothing, and there is
+ * only ever one spider — in the current tab — that teleports when the agent
+ * moves to another tab or page.
  */
 import { describe, it, expect, vi } from 'vitest';
-import type { SpiderAck, SpiderMessage } from '@extension/shared';
+import type { SpiderAck, SpiderCommand, SpiderMessage } from '@extension/shared';
 import type { SpiderSettings } from '@extension/storage';
 
 vi.mock('@src/background/log', () => ({
@@ -26,25 +27,31 @@ const ack = (extra: Partial<SpiderAck> = {}): SpiderAck => ({
   visible: true,
   pose: {
     body: { x: 10, y: 20 },
-    heading: 0,
+    heading: 1.5,
+    mode: 'idle:pause',
+    scale: 1,
+    abdomenLag: 0,
     hands: [
       { x: 0, y: 0 },
       { x: 0, y: 0 },
     ],
     feet: [],
+    hips: [],
+    knees: [],
+    maxStretch: 0.8,
     speed: 0,
   },
   ...extra,
 });
 
 function setup(settings: SpiderSettings = ON, send?: SpiderTransport['send']) {
-  const sent: SpiderMessage[] = [];
+  const sent: Array<{ tabId: number; cmd: SpiderCommand }> = [];
   let listener: (() => void) | null = null;
   let current = settings;
   const transport: SpiderTransport = {
-    send: vi.fn(async (_tabId, msg) => {
-      sent.push(msg);
-      return send ? send(_tabId, msg) : ack();
+    send: vi.fn(async (tabId: number, msg: SpiderMessage) => {
+      sent.push({ tabId, cmd: msg.cmd });
+      return send ? send(tabId, msg) : ack();
     }),
     inject: vi.fn(async () => {}),
   };
@@ -61,17 +68,69 @@ function setup(settings: SpiderSettings = ON, send?: SpiderTransport['send']) {
     listener?.();
     await new Promise(r => setTimeout(r, 0));
   };
-  return { bridge, transport, sent, ops: () => sent.map(m => m.cmd.op), change };
+  const ops = () => sent.map(({ tabId, cmd }) => `${tabId}:${cmd.op}${cmd.op === 'spawn' ? `/${cmd.arrive}` : ''}`);
+  return { bridge, transport, sent, ops, change };
 }
 
 describe('SpiderBridge', () => {
-  it('spawns on activate, walks and strikes on strikeAt, leaves on deactivate', async () => {
+  it('descends on the first attach, walks and strikes, climbs away at the end', async () => {
     const { bridge, ops } = setup();
     await bridge.activate(7);
     await bridge.strikeAt(7, { x: 100, y: 50 }, { x: 90, y: 40, width: 20, height: 20 });
     await bridge.deactivate(7);
-    expect(ops()).toEqual(['spawn', 'approach', 'strike', 'leave']);
+    expect(ops()).toEqual(['7:spawn/descend', '7:approach', '7:strike', '7:leave']);
     expect(bridge.isOn(7)).toBe(false);
+  });
+
+  it('moves the one spider to another tab: depart there, teleport here, at the last place', async () => {
+    const { bridge, ops, sent } = setup();
+    await bridge.activate(7);
+    await bridge.activate(8);
+    expect(ops()).toEqual(['7:spawn/descend', '7:depart', '8:spawn/teleport']);
+    const spawn = sent.at(-1)!.cmd as Extract<SpiderCommand, { op: 'spawn' }>;
+    expect(spawn.at).toEqual({ x: 10, y: 20, heading: 1.5 });
+    // Acting in the first tab again brings it back there.
+    await bridge.strikeAt(7, { x: 1, y: 1 });
+    expect(ops().slice(3)).toEqual(['8:depart', '7:spawn/teleport', '7:approach', '7:strike']);
+  });
+
+  it('answers a hello only from the current tab, and as a teleport after the first entrance', async () => {
+    const { bridge } = setup();
+    await bridge.activate(7);
+    await bridge.activate(8);
+    expect(bridge.helloReply(7)).toEqual({ active: false });
+    bridge.reportPlace(8, { x: 300, y: 200, heading: 0.4 });
+    expect(bridge.helloReply(8)).toEqual({
+      active: true,
+      look: { size: 1, pace: 'normal', marks: 'target' },
+      at: { x: 300, y: 200, heading: 0.4 },
+      arrive: 'teleport',
+    });
+    expect(bridge.helloReply(undefined)).toEqual({ active: false });
+  });
+
+  it('ignores place reports from other tabs and malformed ones', async () => {
+    const { bridge } = setup();
+    await bridge.activate(7);
+    bridge.reportPlace(9, { x: 1, y: 1, heading: 0 });
+    bridge.reportPlace(7, { x: Number.NaN, y: 1, heading: 0 });
+    expect(bridge.helloReply(7).at).toEqual({ x: 10, y: 20, heading: 1.5 });
+  });
+
+  it('forgets the place when the task ends, so the next task descends again', async () => {
+    const { bridge, ops } = setup();
+    await bridge.activate(7);
+    await bridge.deactivate(7);
+    await bridge.activate(7);
+    expect(ops()).toEqual(['7:spawn/descend', '7:leave', '7:spawn/descend']);
+  });
+
+  it('departs before a navigation of the current tab only', async () => {
+    const { bridge, ops } = setup();
+    await bridge.activate(7);
+    await bridge.depart(7);
+    await bridge.depart(9);
+    expect(ops()).toEqual(['7:spawn/descend', '7:depart']);
   });
 
   it('sends nothing when disabled', async () => {
@@ -80,6 +139,7 @@ describe('SpiderBridge', () => {
     await bridge.strikeAt(7, { x: 1, y: 1 });
     await bridge.hide(7);
     bridge.scroll(7, 100);
+    await bridge.depart(7);
     await bridge.deactivate(7);
     expect(transport.send).not.toHaveBeenCalled();
   });
@@ -92,17 +152,6 @@ describe('SpiderBridge', () => {
     expect(bridge.helloReply(3)).toEqual({ active: false });
   });
 
-  it('answers the hello of an active tab with the look and the last position', async () => {
-    const { bridge } = setup();
-    await bridge.activate(7);
-    expect(bridge.helloReply(7)).toEqual({
-      active: true,
-      look: { size: 1, pace: 'normal', marks: 'target' },
-      at: { x: 10, y: 20 },
-    });
-    expect(bridge.helloReply(undefined)).toEqual({ active: false });
-  });
-
   it('never throws when the content script errors', async () => {
     const { bridge } = setup(ON, async () => {
       throw new Error('The tab was closed.');
@@ -110,6 +159,7 @@ describe('SpiderBridge', () => {
     await expect(bridge.activate(7)).resolves.toBeUndefined();
     await expect(bridge.strikeAt(7, { x: 1, y: 1 })).resolves.toBeNull();
     await expect(bridge.hide(7)).resolves.toBeUndefined();
+    await expect(bridge.depart(7)).resolves.toBeUndefined();
   });
 
   it('gives up at the cap when the content script never answers', async () => {
@@ -134,7 +184,7 @@ describe('SpiderBridge', () => {
     expect(bridge.isOn(7)).toBe(true);
   });
 
-  it('respawns and retries once when the page has no spider yet (hello raced)', async () => {
+  it('respawns as a teleport and retries once when the page has no spider yet (hello raced)', async () => {
     let spawned = false;
     const { bridge, ops } = setup(ON, async (_t, msg) => {
       if (msg.cmd.op === 'spawn') {
@@ -146,7 +196,7 @@ describe('SpiderBridge', () => {
     await bridge.activate(7);
     spawned = false; // the page navigated
     await bridge.strikeAt(7, { x: 1, y: 1 });
-    expect(ops()).toEqual(['spawn', 'approach', 'spawn', 'approach', 'strike']);
+    expect(ops()).toEqual(['7:spawn/descend', '7:approach', '7:spawn/teleport', '7:approach', '7:strike']);
   });
 
   it('forwards live settings changes to the spider on screen', async () => {
@@ -154,7 +204,7 @@ describe('SpiderBridge', () => {
     await bridge.activate(7);
     await change({ ...ON, size: 1.35 });
     await change({ ...ON, size: 1.35, enabled: false });
-    expect(ops()).toEqual(['spawn', 'tune', 'leave']);
+    expect(ops()).toEqual(['7:spawn/descend', '7:tune', '7:leave']);
     expect(bridge.isOn(7)).toBe(false);
   });
 
