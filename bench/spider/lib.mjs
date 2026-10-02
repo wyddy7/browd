@@ -11,7 +11,8 @@ import { chromium } from 'playwright';
 
 export const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.resolve(HERE, '../..');
-export const EXT = path.join(ROOT, 'dist');
+// SPIDER_DIST points the checks at another build (A/B against an older one).
+export const EXT = process.env.SPIDER_DIST ? path.resolve(process.env.SPIDER_DIST) : path.join(ROOT, 'dist');
 
 export function stamp() {
   return new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
