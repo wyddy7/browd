@@ -148,7 +148,19 @@ copy first).
 | H11 | Reduced motion is respected | macOS Reduce motion on: jumps, no wandering |
 | H12 | A new tab opened by the agent gets its own spider | Task that opens a link in a new tab and works there |
 
+## If it looks wrong
+
+- **It never walks, only jumps, and does not wander:** the OS has Reduce motion on
+  (macOS: Accessibility → Display). That is the reduced-motion path, by design.
+- **Numbered boxes all over the page compete with it:** Options → Display
+  Highlights is on (the default). Turn it off; the spider replaces them.
+- **No spider at all:** Options → Agent spider is off, or another Browd copy is
+  enabled (Chrome then refuses the debugger and nothing attaches).
+
 ## Known limits
+
+- `send_keys`, `select_dropdown_option` and `scroll_to_text` have no spider
+  step: Enter presses and dropdown picks happen without a tap.
 
 - Scrolling inside a scrollable element (not the page) moves content under
   planted feet without them following; they re-step only when stretched.
