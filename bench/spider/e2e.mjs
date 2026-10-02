@@ -33,6 +33,8 @@ const { ctx, extId } = await launch({ headless: !HEADED, video: path.join(OUT, '
 
 /** Poll the pose as fast as the round trip allows while `work` runs (or for `ms`). */
 async function sample(send, work, ms = 0) {
+  // Which line of this file asked for the samples: lets a failing check say where it happened.
+  const at = Number(new Error().stack.split('\n')[2].match(/:(\d+):\d+\)?$/)?.[1] ?? 0);
   const out = [];
   let on = true;
   const loop = (async () => {
@@ -45,7 +47,7 @@ async function sample(send, work, ms = 0) {
   if (ms && typeof work === 'function') await sleep(ms);
   on = false;
   await loop;
-  allPoses.push(...out.map(o => o.pose));
+  allPoses.push(...out.map(o => ({ ...o.pose, at })));
   return { out, result };
 }
 const legLengths = pose => pose.hips.map((h, i) => dist(h, pose.feet[i]));
@@ -128,7 +130,8 @@ try {
       return Array.from(range.getClientRects()).some(b => x >= b.left - 6 && x <= b.right + 6 && y >= b.top - 6 && y <= b.bottom + 6);
     };
   });
-  const reading = await sample(send, null, 9000);
+  // 12 s: a far block (650 px of stop-and-go travel, then two lines) takes up to ~10 s on its own.
+  const reading = await sample(send, null, 12000);
   st = await send({ op: 'state' });
   const quiet = await page.evaluate(() => ({
     mutations: window.__mut,
@@ -143,7 +146,7 @@ try {
   const burstPeak = Math.max(0, ...idleSamples.map(o => o.pose.speed));
   checks.record(
     'C4',
-    '9 s between actions: reads ≥2 blocks in bursts and freezes; page DOM unchanged',
+    '12 s between actions: reads ≥2 blocks in bursts and freezes; page DOM unchanged',
     readPoints.size >= 2 && stillShare >= 0.3 && stillShare <= 0.9 && burstPeak > 150 && quiet.mutations === 0 && quiet.outerHTMLUnchanged,
     {
       blocksRead: readPoints.size,
@@ -405,6 +408,7 @@ try {
     let touches = 0;
     let closest = Infinity;
     const touchBy = {};
+    const touchPoses = [];
     const segDist = (p, a, b) => {
       const abx = b.x - a.x;
       const aby = b.y - a.y;
@@ -446,7 +450,8 @@ try {
             closest = Math.min(closest, d);
             if (d < 2) {
               touches++;
-              const key = `${p.mode}|legs${a % 4}-${b % 4}|${p.speed > 40 ? 'moving' : 'still'}`;
+              if (touchPoses.at(-1) !== p && touchPoses.length < 60) touchPoses.push(p);
+              const key = `${p.mode}|legs${a % 4}-${b % 4}|${p.speed > 40 ? 'moving' : 'still'}|line ${p.at}`;
               touchBy[key] = (touchBy[key] ?? 0) + 1;
             }
           }
@@ -458,6 +463,7 @@ try {
       minKneeGapRad: r1(minGap * 10) / 10,
       samples: allPoses.length,
     });
+    if (touchPoses.length) fs.writeFileSync(path.join(OUT, 'touching-poses.json'), JSON.stringify(touchPoses));
     checks.record('C23', 'legs never touch each other away from the body', touches === 0, {
       touchingPoints: touches,
       closestPx: r1(closest),
@@ -474,7 +480,7 @@ try {
   const frontFeet = waitS.out.map(o => [o.pose.feet[0], o.pose.feet[4]]);
   const tapTravel = Math.max(...frontFeet.map(f => Math.max(dist(f[0], frontFeet[0][0]), dist(f[1], frontFeet[0][1]))));
   await send({ op: 'mood', mood: 'asking' });
-  await sleep(1000);
+  await sleep(1500); // turns on planted feet at ≤ 2.6 rad/s
   const ask = (await send({ op: 'state' })).pose;
   const askHeading = Math.atan2(Math.sin(ask.heading), Math.cos(ask.heading));
   const h0 = ask.heading;

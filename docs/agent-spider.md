@@ -24,7 +24,7 @@ where it was and reappears at the same spot there.
 | scrolls a little (wheel) | feet are planted in the page: they ride with it and step |
 | scrolls far (`scroll_to_bottom`) | a cut: the page carries it a few dozen px, the feet re-grip, it springs back |
 | any screenshot | disappears for the capture — spider and torn words; the model and the Judge never see it |
-| task done / failed | a full turn on the spot / a droop, then it climbs away on a thread |
+| task done / failed | a quick full turn on tiptoe / a droop, then it climbs away on a thread |
 
 **Focus words** come from the task text and the active subgoal of the plan:
 names and topic words, no verbs, fillers or URLs; capitals-only two-letter words
@@ -42,12 +42,21 @@ gradients; every action takes them all back.
 
 - **Anatomy.** Small head with four eyes, pedicel, abdomen on its own looser spring
   (lags on turns, swings once on stops). Legs about 200 px span at size 1.
-- **Legs.** Four pairs, femur thicker than tibia, the tibia drawn as a slight arc.
-  Each knee bends in the page plane to a fixed side of its hip→foot line — front
-  pairs toward the head, rear pairs toward the tail — so every knee stays in its
-  own leg's sector: no two legs cross and no knee ever flips. A leg is never drawn
-  or simulated longer than its bones; a planted foot the page outruns slips at full
-  reach. Feet snap to the edges of words they land on.
+- **Legs.** Four pairs, femur thicker than tibia, the tibia drawn as an arc
+  bowed away from the body. Seen from above, each femur keeps its own direction
+  out of the body (a fan of knees, following its foot by at most ±0.24 rad) and the
+  tibia reaches the foot. Each foot keeps to its own sector, ±0.25 rad around its
+  rest direction: a step never aims past it nor under the body (≥ 0.85 of the rest
+  distance), a planted foot steps at once before it drifts out, and a swing travels
+  an arc around the hip, not a chord. Neighbouring rests are 0.7–0.9 rad apart, so
+  two legs never meet. A leg is never drawn or simulated longer than its bones; a
+  planted foot the page outruns slips at full reach. Feet snap to the edges of
+  words they land on.
+- **Turning.** On planted feet the body turns at ≤ 2.6 rad/s with a soft start
+  (≤ 22 rad/s²) and every step aims where the foot belongs when it lands; a turn
+  that outran the steps left feet behind and pulled tibias across neighbours (the
+  «washcloth» look, 02.10). The done gesture is a quick turn on tiptoe: the feet
+  turn with the body instead of stepping.
 - **Gait.** Alternating four-leg groups; stride rate rises with speed. Idle moves
   are stop-and-go, but nothing jolts: each burst (60–130 px) follows a
   minimum-jerk path — it starts and stops with zero acceleration, peak ~400 px/s —
@@ -108,7 +117,8 @@ background                                         content script (top frame)
 5. **One spider per task**, in the current tab; other tabs get `active: false`.
 6. **Decoration never fails or stalls an action**; layout reads (blocks, words)
    happen on the spider's own schedule, never per frame.
-7. **Legs never stretch** past their bones, drawn or simulated.
+7. **Legs never stretch** past their bones, drawn or simulated, and **never meet**
+   each other (C12, C23).
 8. **Captures never contain it** — spider and torn words.
 9. **Benchmarks run without it** (`bench/om2w/run.mjs` writes `enabled: false`).
 
@@ -126,14 +136,14 @@ node motion.mjs         # frame-by-frame strips: descend, leap, scrolls, read, t
 node studio.mjs [size] [colour]   # 3× close-up stills for a design check
 ```
 
-Tier A (`e2e.mjs`), last run 24/24, 1 skipped:
+Tier A (`e2e.mjs`), last runs 25/25, 1 skipped (02.10):
 
 | | Check | Measured |
 | --- | --- | --- |
 | C1 | no element on a page without a task | none |
 | C2 | first entrance: descends and lands | ~630 ms, ≤5 px off |
 | C3 | closed shadow root on `<html>`, no pointer events | yes |
-| C4 | 9 s of thinking: reads ≥2 blocks in bursts and freezes, DOM unchanged | 2 blocks, still 54–55 % of the time, bursts to 600 px/s, 0 mutations |
+| C4 | 12 s of thinking: reads ≥2 blocks in bursts and freezes, DOM unchanged | 2 blocks, still ~45 % of the time, bursts to ~410 px/s, 0 mutations (a far block alone takes up to ~10 s, so 9 s was flaky) |
 | C4b | focus words get torn out, DOM untouched | first word after ~2.6 s, 0 mutations |
 | C4c | an action sends every torn word home | all `back` at once, gone within 0.9 s |
 | C5 | frame budget while reading and tearing | 16.7 ms per frame, 0 long tasks |
@@ -144,7 +154,7 @@ Tier A (`e2e.mjs`), last run 24/24, 1 skipped:
 | C10 | `scrollTo(bottom)` | longest drawn leg 92.7 of 98 px, stretch ≤0.97, back within 1.7 px |
 | C10b | small wheel scroll | walked, no cut, stretch ≤0.99 |
 | C11 | background tab resolves at once | **skipped headless**; runs with `--headed` |
-| C12 | knees never flip | 0 of 8 legs over ~17 000 samples |
+| C12 | knees fan out in order, never on a neighbour | 0 out of order, min gap 0.15–0.17 rad over ~17 000 samples |
 | C13 | depart, then the next action brings it back | ~205 ms, then arrived |
 | C14 | teleport arrival | exact spot and heading, scale 0 → 1.10 → 1, no descent |
 | C15 | captures with the spider and a torn word on screen | 0 px hidden vs ~4400 px visible |
@@ -155,6 +165,7 @@ Tier A (`e2e.mjs`), last run 24/24, 1 skipped:
 | C20 | smooth reading (frame clock of the page) | velocity change per frame p95 44–50 px/s, peak ~410 px/s (before the fix: 144 and 726) |
 | C21 | heavy never-still page (~20k nodes, a style change every frame) | 0 extra dropped frames with the spider reading and tearing |
 | C22 | the agent reads the DOM | eases from 147 px/s to rest, no new move, drift 0.1 px |
+| C23 | legs never touch away from the body (idle and busy samples) | 0 touching points, closest 3.6–5.6 px in three runs (before: ~1300 points, 2.6 % of poses); a failure names the scenario line and writes `touching-poses.json` |
 
 Tier B (`pipeline.mjs`), last run 12/12 — navigation, typing, a click, a screenshot;
 scripted OpenAI-compatible model on localhost that takes 1.2 s per call:

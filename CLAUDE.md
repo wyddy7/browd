@@ -309,7 +309,7 @@ open questions: `docs/agent-spider.md`. Never break its invariants: the site's D
 is never modified (torn words, marks and holes are canvas drawing), the host
 element is never touched after creation (`readClickSignature` hashes `outerHTML`),
 every bridge call is capped and swallows its errors, captures never contain it,
-legs are never drawn longer than their bones, benchmark runs disable it
+legs are never drawn longer than their bones and never meet (e2e C12/C23), benchmark runs disable it
 (`spider-settings.enabled = false`). E2E: `bench/spider/e2e.mjs` (overlay, no
 model) and `bench/spider/pipeline.mjs` (real agent on a scripted localhost model, $0).
 

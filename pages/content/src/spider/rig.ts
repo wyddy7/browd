@@ -46,6 +46,8 @@ export interface Control {
   leap: boolean;
   /** Stay put (spring held at the current spot). */
   hold: boolean;
+  /** A quick turn on tiptoe: the feet turn with the body instead of stepping. */
+  spin?: boolean;
 }
 
 export type HandMode =
@@ -105,6 +107,22 @@ const LEG_LAYOUT = [
 
 /** How far a femur may swing after its foot, radians either way. */
 const FEMUR_FOLLOW = 0.24;
+/**
+ * Turning on planted feet: the legs step around as the body turns, so the
+ * turn may not outrun them — a foot left behind pulls its tibia across the
+ * neighbour's leg. Max rate (rad/s) and angular acceleration (rad/s²).
+ */
+const TURN_MAX = 2.6;
+const TURN_ACC = 22;
+/**
+ * Each foot keeps to its own sector around its rest direction (rad either
+ * way, from the current heading): a step never aims past it, and a planted
+ * foot steps at once a little before it would drift past it (a swing starts
+ * where the foot is). Neighbouring rests are 0.7–0.9 rad apart, so two feet
+ * never share a direction.
+ */
+const FOOT_SECTOR = 0.25;
+const FOOT_DRIFT = 0.21;
 
 export const HEAD = { rx: 6.2, ry: 5.2, rim: 4.4 };
 export const ABDOMEN = { rx: 9.5, ry: 7.2, gap: 13 };
@@ -128,6 +146,8 @@ export class Rig {
 
   airborne = true;
   dashing = false;
+  /** On tiptoe for a quick turn (the done gesture). */
+  spinning = false;
   scale = 1;
   crouch = 0;
   private leapScale = 1;
@@ -239,8 +259,30 @@ export class Rig {
     return leg.femur + leg.tibia;
   }
 
-  private idealFoot(leg: Leg, bodyDoc: V): V {
-    return add(this.hip(leg, bodyDoc), fromAngle(this.heading + leg.side * leg.angle, leg.home));
+  private idealFoot(leg: Leg, bodyDoc: V, heading = this.heading): V {
+    const hip = add(bodyDoc, fromAngle(heading + leg.side * leg.hipAngle, HEAD.rim * this.size));
+    return add(hip, fromAngle(heading + leg.side * leg.angle, leg.home));
+  }
+
+  /**
+   * The rest spot of a foot `t` seconds ahead — body moved by its velocity,
+   * heading turned by its rate, plus half a step of lead — so a foot that
+   * lands mid-turn lands ahead of the turn, not behind it.
+   */
+  private footAhead(leg: Leg, bodyDoc: V, rel: V, t: number): V {
+    const s = this.size;
+    const ahead = t + leg.dur * 0.5;
+    const heading = this.heading + clamp(this.angVel * ahead, -0.35, 0.35);
+    const moved = clampLen(vec(0, 0), mul(rel, ahead), 16 * s);
+    const aim = add(this.idealFoot(leg, add(bodyDoc, moved), heading), clampLen(vec(0, 0), mul(rel, 0.07), 16 * s));
+    // Never past the foot's own sector, measured from where the hip is now,
+    // and never pulled in under the body (walking sideways pulls the trailing
+    // side's feet toward the body, onto the neighbours' knees).
+    const hip = this.hip(leg, bodyDoc);
+    const rest = this.heading + leg.side * leg.angle;
+    const off = angleDiff(rest, Math.atan2(aim.y - hip.y, aim.x - hip.x));
+    const dir = rest + clamp(off, -FOOT_SECTOR, FOOT_SECTOR);
+    return add(hip, fromAngle(dir, Math.max(dist(hip, aim), leg.home * 0.85)));
   }
 
   /** Tip of a front leg (index 0), in view coordinates; side +1 = right. */
@@ -318,7 +360,13 @@ export class Rig {
     }
     const speed = Math.hypot(this.vel.x, this.vel.y);
     const want = ctl.face ?? (speed > 30 ? Math.atan2(this.vel.y, this.vel.x) : this.heading);
-    this.angVel += (70 * angleDiff(this.heading, want) - 15 * this.angVel) * dt;
+    const torque = 70 * angleDiff(this.heading, want) - 15 * this.angVel;
+    if (this.airborne || this.dashing || ctl.spin) {
+      this.angVel += torque * dt;
+    } else {
+      // On planted feet: a gentle start and a rate the steps can keep up with.
+      this.angVel = clamp(this.angVel + clamp(torque, -TURN_ACC, TURN_ACC) * dt, -TURN_MAX, TURN_MAX);
+    }
     this.heading += this.angVel * dt;
 
     // Abdomen: its own looser spring behind the head, held at pedicel length.
@@ -335,7 +383,7 @@ export class Rig {
     if (this.crouch > 0 && !ctl.leap) this.crouch = Math.max(0, this.crouch - dt * 6);
 
     void frameDt;
-    this.stepLegs(dt, now, speed, ctl.leap);
+    this.stepLegs(dt, now, speed, ctl.leap, !!ctl.spin);
     this.stepHands(dt, now);
   }
 
@@ -347,9 +395,31 @@ export class Rig {
       Math.hypot(moved.x, moved.y) * frameDt > 24 * this.size ? vec(0, 0) : lerp(this.scrollVel, moved, 0.35);
   }
 
-  private stepLegs(dt: number, now: number, bodySpeed: number, leap: boolean): void {
+  private stepLegs(dt: number, now: number, bodySpeed: number, leap: boolean, spin: boolean): void {
     const s = this.size;
     const bodyDoc = this.toDoc(this.body);
+    if (spin && !this.airborne && !this.dashing) {
+      // On tiptoe: every foot at its rest spot, turning with the body.
+      this.spinning = true;
+      for (const leg of this.legs) {
+        const target = sub(this.idealFoot(leg, bodyDoc), bodyDoc);
+        leg.rel = lerp(leg.rel ?? sub(leg.foot, bodyDoc), target, Math.min(1, dt * 40));
+        leg.foot = add(bodyDoc, leg.rel);
+        leg.lift = Math.min(5 * s, leg.lift + dt * 60);
+        leg.t = -1;
+        leg.grip = null;
+        leg.feel = null;
+      }
+      return;
+    }
+    if (this.spinning) {
+      // Down from tiptoe: the feet are already at their rest spots.
+      this.spinning = false;
+      for (const leg of this.legs) {
+        leg.rel = null;
+        leg.lastStep = now;
+      }
+    }
     if (!this.airborne) {
       if (!this.dashing && (leap || bodySpeed > 700 * s)) {
         this.dashing = true;
@@ -405,6 +475,10 @@ export class Rig {
         continue;
       }
       if (leg.t >= 0) {
+        // Where the foot belongs when it lands: the body keeps turning and
+        // moving during the swing, so the target is re-aimed every substep.
+        const left = (1 - leg.t) * leg.dur;
+        leg.to = clampLen(hip, this.footAhead(leg, bodyDoc, rel, left), reach * 0.95);
         leg.t += dt / leg.dur;
         if (leg.t >= 1) {
           leg.t = -1;
@@ -414,7 +488,13 @@ export class Rig {
           leg.grip = g.rect;
           leg.lift = 0;
         } else {
-          leg.foot = clampLen(hip, lerp(leg.from, leg.to, easeInOut(leg.t)), reach * 0.99);
+          // An arc around the hip, not a chord: a straight swing cuts in toward
+          // the body and passes over the neighbour's knee.
+          const e = easeInOut(leg.t);
+          const a0 = Math.atan2(leg.from.y - hip.y, leg.from.x - hip.x);
+          const a1 = Math.atan2(leg.to.y - hip.y, leg.to.x - hip.x);
+          const r = dist(leg.from, hip) + (dist(leg.to, hip) - dist(leg.from, hip)) * e;
+          leg.foot = clampLen(hip, add(hip, fromAngle(a0 + angleDiff(a0, a1) * e, r)), reach * 0.99);
           leg.lift = Math.sin(Math.PI * leg.t) * (speed > 300 ? 12 : 9) * s;
         }
         continue;
@@ -425,14 +505,16 @@ export class Rig {
       const ideal = add(this.idealFoot(leg, bodyDoc), lead);
       const off = dist(leg.foot, ideal);
       const stretch = dist(leg.foot, hip) / reach;
-      const urgent = stretch > 0.95 || off > threshold * 2.4;
+      const footDir = Math.atan2(leg.foot.y - hip.y, leg.foot.x - hip.x);
+      const drift = Math.abs(angleDiff(this.heading + leg.side * leg.angle, footDir));
+      const urgent = stretch > 0.95 || off > threshold * 2.4 || drift > FOOT_DRIFT;
       // Tidying at rest is rare and only for a foot clearly out of place: no fidgeting.
       const tidy = speed < 15 && off > 14 * s && now - leg.lastStep > 800 && stepping[0] + stepping[1] === 0;
       const turn = (stepping[1 - leg.group] === 0 || speed > 220 * s) && stepping[leg.group] < 4;
       if ((off > threshold && turn) || urgent || tidy) {
         leg.grip = null;
         leg.from = clampLen(hip, leg.foot, reach * 0.98);
-        leg.to = clampLen(hip, add(ideal, clampLen(vec(0, 0), mul(rel, dur), 12 * s)), reach * 0.95);
+        leg.to = clampLen(hip, this.footAhead(leg, bodyDoc, rel, dur), reach * 0.95);
         leg.t = 0;
         leg.dur = dur;
         leg.lastStep = now;
@@ -517,7 +599,7 @@ export class Rig {
       const hip = this.toView(this.hip(leg, bodyDoc));
       // A lifted foot is nearer the viewer: drawn a little toward the hip.
       const foot0 = this.toView(leg.foot);
-      const liftShare = clamp(leg.lift / (60 * this.size), 0, 0.2);
+      const liftShare = clamp(leg.lift / (120 * this.size), 0, 0.1);
       const footRaw = lerp(foot0, hip, liftShare);
       // The femur keeps its own direction and follows the foot only a little.
       const rest = this.heading + leg.side * leg.kneeAngle;

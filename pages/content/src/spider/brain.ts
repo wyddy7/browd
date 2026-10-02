@@ -154,9 +154,9 @@ export class Brain {
     if (this.reducedMotion) return { target: here, k: 0, c: 0, vmax: 0, face: null, leap: false, hold: true };
 
     if (this.mood === 'done') {
-      // A quick full turn on the spot, then still.
+      // A quick full turn on tiptoe (the feet turn with it), then still.
       const t = clamp(since / 650, 0, 1);
-      return { ...hold, face: this.turnFrom + Math.PI * 2 * easeInOut(t) };
+      return { ...hold, face: this.turnFrom + Math.PI * 2 * easeInOut(t), spin: since < 1000 };
     }
     if (this.mood === 'failed') {
       this.rig.crouch = Math.min(1, this.rig.crouch + 0.05);
