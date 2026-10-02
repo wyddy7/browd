@@ -96,7 +96,9 @@ const manifest = withOperaSidebar(
     content_scripts: [
       {
         matches: ['http://*/*', 'https://*/*', '<all_urls>'],
-        all_frames: true,
+        // Top frame only: the content script hosts the agent spider, which is
+        // drawn over the whole tab. iframes (ads, embeds) do not need it.
+        all_frames: false,
         js: ['content/index.iife.js'],
       },
     ],

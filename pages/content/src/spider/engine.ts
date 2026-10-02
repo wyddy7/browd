@@ -325,7 +325,7 @@ export class Spider {
     this.visible = false;
     if (this.canvas) this.canvas.style.visibility = 'hidden';
     this.clearAll();
-    this.log({ op: 'hide' });
+    this.log({ op: 'hide', body: { ...this.body } });
     if (!this.raf || document.hidden) return Promise.resolve(this.ack({ ok: true }));
     // Resolve after two presented frames so the cleared canvas is on screen
     // before the background captures it.

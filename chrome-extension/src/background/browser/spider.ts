@@ -108,8 +108,15 @@ export class SpiderBridge {
   async strikeAt(tabId: number, point: SpiderPoint, rect?: SpiderRect): Promise<SpiderAck | null> {
     if (!this.isOn(tabId)) return null;
     const capMs = Math.round(APPROACH_CAP_MS * PACE_FACTOR[this.settings.pace]);
-    await this.send(tabId, { op: 'approach', point, rect: rect && toRect(rect), capMs }, capMs + 250);
-    return this.send(tabId, { op: 'strike', point, rect: rect && toRect(rect) }, 350);
+    const t0 = Date.now();
+    const approach = await this.send(tabId, { op: 'approach', point, rect: rect && toRect(rect), capMs }, capMs + 250);
+    const strike = await this.send(tabId, { op: 'strike', point, rect: rect && toRect(rect) }, 350);
+    // One line per action: whether the spider was really there, and what it cost.
+    logger.info(
+      `strike tab=${tabId} at=${Math.round(point.x)},${Math.round(point.y)} arrived=${approach?.arrived ?? 'no-answer'}` +
+        `${approach?.reason ? ` reason=${approach.reason}` : ''} struck=${strike?.ok ?? false} ms=${Date.now() - t0}`,
+    );
+    return strike;
   }
 
   async typing(tabId: number, on: boolean): Promise<void> {

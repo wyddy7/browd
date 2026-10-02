@@ -35,7 +35,9 @@ export function serveFixtures(dir = path.join(HERE, 'fixtures'), extra = () => f
   });
 }
 
-export async function launch({ headless = true, video = null, reducedMotion = 'no-preference', viewport } = {}) {
+let debugPort = 9500 + Math.floor(Math.random() * 400);
+
+export async function launch({ headless = true, video = null, reducedMotion = 'no-preference', viewport, swLog = false } = {}) {
   if (!fs.existsSync(path.join(EXT, 'manifest.json'))) throw new Error(`no build at ${EXT} — run pnpm build first`);
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'browd-spider-'));
   const ctx = await chromium.launchPersistentContext(profile, {
@@ -44,11 +46,41 @@ export async function launch({ headless = true, video = null, reducedMotion = 'n
     viewport: viewport ?? { width: 1280, height: 800 },
     reducedMotion,
     ...(video ? { recordVideo: { dir: video, size: viewport ?? { width: 1280, height: 800 } } } : {}),
-    args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`, '--window-position=2600,0'],
+    args: [
+      `--disable-extensions-except=${EXT}`,
+      `--load-extension=${EXT}`,
+      '--window-position=2600,0',
+      ...(swLog ? [`--remote-debugging-port=${++debugPort}`] : []),
+    ],
   });
   const sw = ctx.serviceWorkers()[0] || (await ctx.waitForEvent('serviceworker', { timeout: 30_000 }));
   const extId = new URL(sw.url()).host;
-  return { ctx, extId, profile };
+  const swLines = [];
+  if (swLog) await tapServiceWorkerConsole(debugPort, extId, swLines);
+  return { ctx, extId, profile, swLines };
+}
+
+/**
+ * Playwright does not surface MV3 service-worker console here, so read it
+ * over the worker's own CDP WebSocket (same approach as bench/om2w --sw-log).
+ */
+async function tapServiceWorkerConsole(port, extId, lines) {
+  const list = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
+  const target = list.find(x => x.type === 'service_worker' && x.url.includes(extId));
+  if (!target) return;
+  const ws = new WebSocket(target.webSocketDebuggerUrl);
+  await new Promise(resolve => {
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ id: 1, method: 'Runtime.enable' }));
+      resolve();
+    };
+  });
+  ws.onmessage = m => {
+    const msg = JSON.parse(m.data);
+    if (msg.method === 'Runtime.consoleAPICalled') {
+      lines.push({ t: Date.now(), text: msg.params.args.map(a => a.value ?? a.description ?? '').join(' ') });
+    }
+  };
 }
 
 /** An extension page that can reach chrome.tabs / chrome.storage. */
