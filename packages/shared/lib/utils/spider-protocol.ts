@@ -35,16 +35,22 @@ export interface SpiderRect {
 
 /**
  * How the spider enters a page: `descend` on a thread (first appearance in a
- * task) or `teleport` — it reappears at the exact viewport spot it left on
- * the previous page or tab, so it reads as the same spider moving on.
+ * task), `teleport` — it pops out at the exact viewport spot it left on the
+ * previous page or tab — or `handoff`: the next page of the same tab, where
+ * it simply stands on as it stood (same spot, heading and legs), drawn as
+ * soon as the page has painted its content, so a navigation shows no gap.
  */
-export type SpiderArrival = 'descend' | 'teleport';
+export type SpiderArrival = 'descend' | 'teleport' | 'handoff';
 
 /** Where the spider was and which way it faced, carried across pages. */
 export interface SpiderPlace {
   x: number;
   y: number;
   heading: number;
+  /** Feet relative to the body (viewport px), for a handoff that keeps the legs as they were. */
+  feet?: SpiderPoint[];
+  /** Abdomen relative to the body. */
+  abdomen?: SpiderPoint;
 }
 
 export type SpiderCommand =
@@ -69,8 +75,10 @@ export type SpiderCommand =
   | { op: 'show' }
   /** Climb out of view on a thread, then remove the overlay. */
   | { op: 'leave' }
-  /** Collapse into a point before a navigation or a tab switch; resolves when gone. */
+  /** Collapse into a point before a tab switch; resolves when gone. */
   | { op: 'depart' }
+  /** The tab is about to navigate: stand still where it is and report the full place (no collapse). */
+  | { op: 'handoff' }
   /** The agent reads the DOM (a main-thread stall may follow): hold still until off. */
   | { op: 'scan'; on: boolean }
   /** What the agent is doing now (sent on change only). */
@@ -125,6 +133,8 @@ export interface SpiderAck {
   /** Words torn out of the page right now (state only). */
   stickers?: Array<{ text: string; rect: SpiderRect; phase: string }>;
   mood?: SpiderMood;
+  /** For `handoff`: the full place (with legs) to stand on with on the next page. */
+  place?: SpiderPlace;
 }
 
 export interface SpiderHelloReply {

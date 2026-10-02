@@ -81,7 +81,15 @@ export class Spider {
 
   place(): SpiderPlace {
     const r = (x: number) => Math.round(x * 10) / 10;
-    return { x: r(this.rig.body.x), y: r(this.rig.body.y), heading: r(this.rig.heading) };
+    const rv = (p: V) => ({ x: r(p.x), y: r(p.y) });
+    const { feet, abdomen } = this.rig.limbs();
+    return {
+      x: r(this.rig.body.x),
+      y: r(this.rig.body.y),
+      heading: Math.round(this.rig.heading * 1000) / 1000,
+      feet: feet.map(rv),
+      abdomen: rv(abdomen),
+    };
   }
 
   // ---------- commands ----------
@@ -89,6 +97,7 @@ export class Spider {
   spawn(look: SpiderLook, at?: SpiderPlace, arrive: SpiderArrival = 'descend'): SpiderAck {
     this.applyLook(look);
     if (this.mode !== 'gone' && this.mode !== 'leave' && this.mode !== 'departed') return this.ack({ ok: true });
+    if (arrive === 'handoff' && at) return this.standOn(at);
     this.overlay.mount();
     const x = clamp(at?.x ?? innerWidth * 0.62, 50, innerWidth - 50);
     const y = clamp(at?.y ?? innerHeight * 0.4, 70, innerHeight - 50);
@@ -123,6 +132,52 @@ export class Spider {
     this.log({ op: teleport ? 'spawn-teleport' : 'spawn', body: { x, y } });
     this.start();
     return this.ack({ ok: true });
+  }
+
+  /**
+   * The next page of the same tab: the spider stands on exactly as it stood —
+   * same spot, heading, legs — with no entrance at all. Drawing starts once the
+   * page has painted its own content: our canvas counts as content, and drawn
+   * first it would end the browser's paint holding early (a blank page with a
+   * spider on it). Until then the old page's last frame, spider included, is
+   * what is on screen.
+   */
+  private standOn(at: SpiderPlace): SpiderAck {
+    const x = clamp(at.x, 30, innerWidth - 30);
+    const y = clamp(at.y, 30, innerHeight - 30);
+    this.rig.place(vec(x, y), at.heading, this.look.size);
+    this.rig.standAs(at.feet, at.abdomen);
+    this.rig.scale = 1;
+    this.rig.crouch = 0;
+    this.rig.thread = null;
+    this.target = vec(x, y);
+    this.faceTo = null;
+    this.flight = null;
+    this.leavePending = false;
+    this.stickers.clear();
+    window.clearTimeout(this.departTimer);
+    this.setMode('free');
+    this.brain.interrupt(performance.now(), 700);
+    this.log({ op: 'spawn-handoff', body: { x, y } });
+    void whenPainted(1500).then(how => {
+      if (this.mode === 'gone') return;
+      this.overlay.mount();
+      // How long after the page's first contentful paint the spider was mounted (ms).
+      const fcp = performance.getEntriesByName('first-contentful-paint')[0]?.startTime;
+      const lag = fcp === undefined ? '' : `:+${Math.round(performance.now() - fcp)}ms`;
+      this.log({ op: `drawn:${how}${lag}`, body: { ...this.rig.body } });
+    });
+    this.start();
+    return this.ack({ ok: true });
+  }
+
+  /** The tab is about to navigate: stand still where it is (no collapse) and hand over the full place. */
+  handoff(): SpiderAck {
+    if (!this.spawned || this.mode === 'leave') return this.ack({ ok: false, reason: 'not-spawned' });
+    this.settleWaiter(this.approachWaiter, { ok: true, arrived: false, reason: 'cap' });
+    this.brain.setMood('waiting', performance.now());
+    this.log({ op: 'handoff', body: { ...this.rig.body } });
+    return { ...this.ack({ ok: true }), place: this.place() };
   }
 
   tune(look: SpiderLook): SpiderAck {
@@ -645,9 +700,9 @@ export class Spider {
   }
 
   private onBeforeUnload(): void {
-    const place = this.place();
-    void this.depart();
-    this.onUnload?.(place);
+    // No collapse: the spider stands until the page is swapped (the browser
+    // holds the last frame), and the next page draws it on the same spot.
+    this.onUnload?.(this.place());
   }
 
   private unmount(): void {
@@ -691,4 +746,30 @@ export class Spider {
     this.events.push({ t: Date.now(), ...e });
     if (this.events.length > 400) this.events.shift();
   }
+}
+
+/**
+ * Resolves once the page has painted its own content (the first contentful
+ * paint), or after `timeoutMs` — whichever is first. Names what happened.
+ */
+function whenPainted(timeoutMs: number): Promise<'fcp' | 'timeout'> {
+  return new Promise(resolve => {
+    let observer: PerformanceObserver | null = null;
+    let timer = 0;
+    const done = (how: 'fcp' | 'timeout') => {
+      observer?.disconnect();
+      window.clearTimeout(timer);
+      resolve(how);
+    };
+    if (performance.getEntriesByName('first-contentful-paint').length) return done('fcp');
+    timer = window.setTimeout(() => done('timeout'), timeoutMs);
+    try {
+      observer = new PerformanceObserver(list => {
+        if (list.getEntries().some(e => e.name === 'first-contentful-paint')) done('fcp');
+      });
+      observer.observe({ type: 'paint', buffered: true });
+    } catch {
+      // No paint timing: the timeout decides.
+    }
+  });
 }

@@ -22,6 +22,7 @@ import {
 } from '@extension/storage';
 import type {
   SpiderAck,
+  SpiderArrival,
   SpiderCommand,
   SpiderHelloReply,
   SpiderMessage,
@@ -82,6 +83,9 @@ export class SpiderBridge implements PagePresence {
   private current: number | null = null;
   /** Where it was last seen standing, carried across pages and tabs. */
   private place: SpiderPlace | null = null;
+  /** The tab whose page is being replaced (navigation): its next page gets a handoff, not a teleport. */
+  private handoffTab: number | null = null;
+  private handoffAt = 0;
   /** Already shown in this task: further entrances are teleports, not descents. */
   private shown = false;
   private mood: SpiderMood | null = null;
@@ -125,10 +129,16 @@ export class SpiderBridge implements PagePresence {
   }
 
   async beforeNavigate(tabId: number): Promise<void> {
-    // A page is about to load: on the next page the spider waits until the agent moves again.
+    // A page is about to load: the spider stands still (no collapse) and the next page of
+    // this tab draws it on the same spot with the same legs — a handoff, not an entrance.
     this.mood = 'waiting';
     this.sentMood = 'waiting';
-    await this.depart(tabId);
+    if (!this.isOn(tabId) || this.current !== tabId) return;
+    const ack = await this.send(tabId, { op: 'handoff' }, 150);
+    if (ack?.place && isPlace(ack.place)) this.place = ack.place;
+    this.markHandoff(tabId);
+    const at = this.place ? `${Math.round(this.place.x)},${Math.round(this.place.y)}` : '-';
+    logger.info(`handoff tab=${tabId} at=${at}`);
   }
 
   async beforeCapture(tabId: number): Promise<void> {
@@ -231,7 +241,7 @@ export class SpiderBridge implements PagePresence {
       active: true,
       look: this.look(),
       at: this.place ?? undefined,
-      arrive: this.shown ? 'teleport' : 'descend',
+      arrive: this.arrival(tabId),
       mood: this.mood ?? undefined,
       focus: this.focus,
     };
@@ -244,6 +254,7 @@ export class SpiderBridge implements PagePresence {
   reportPlace(tabId: number | undefined, place: SpiderPlace): void {
     if (tabId === undefined || tabId !== this.current || !isPlace(place)) return;
     this.place = place;
+    this.markHandoff(tabId);
     logger.info(`unload tab=${tabId} at=${Math.round(place.x)},${Math.round(place.y)}`);
   }
 
@@ -280,6 +291,7 @@ export class SpiderBridge implements PagePresence {
         cmd.op !== 'spawn' &&
         cmd.op !== 'leave' &&
         cmd.op !== 'depart' &&
+        cmd.op !== 'handoff' &&
         this.current === tabId
       ) {
         // A page that loaded after the hello raced, or a fresh injection.
@@ -291,7 +303,10 @@ export class SpiderBridge implements PagePresence {
       // Only a spider standing on the page gives a place worth carrying over
       // (not one still on its thread at y = -80, nor one mid-teleport).
       if (ack?.pose && ack.visible && tabId === this.current && GROUNDED.test(ack.pose.mode)) {
-        this.place = { x: ack.pose.body.x, y: ack.pose.body.y, heading: ack.pose.heading };
+        // Keep the legs of the last full place (handoff, unload) if the body has not moved since.
+        const same = this.place && Math.hypot(this.place.x - ack.pose.body.x, this.place.y - ack.pose.body.y) < 1;
+        this.place =
+          same && this.place ? this.place : { x: ack.pose.body.x, y: ack.pose.body.y, heading: ack.pose.heading };
       }
       return ack;
     } catch (error) {
@@ -308,7 +323,7 @@ export class SpiderBridge implements PagePresence {
     if (prev !== null && this.active.has(prev)) {
       await this.send(prev, { op: 'depart' }, 350);
     }
-    logger.info(`move tab=${prev ?? '-'}→${tabId} arrive=${this.shown ? 'teleport' : 'descend'}`);
+    logger.info(`move tab=${prev ?? '-'}→${tabId} arrive=${this.arrival(tabId)}`);
     await this.send(tabId, this.spawnCmd(), 400);
     this.shown = true;
     this.markSent();
@@ -319,10 +334,25 @@ export class SpiderBridge implements PagePresence {
       op: 'spawn',
       look: this.look(),
       at: this.place ?? undefined,
-      arrive: this.shown ? 'teleport' : 'descend',
+      arrive: this.current === null ? 'teleport' : this.arrival(this.current),
       mood: this.mood ?? undefined,
       focus: this.focus,
     };
+  }
+
+  /**
+   * How the spider enters a page of `tabId`: a descent the first time in a
+   * task; a handoff on the next page of the tab it was just standing in (it
+   * stands on with no entrance); a teleport anywhere else (another tab).
+   */
+  private arrival(tabId: number): SpiderArrival {
+    if (!this.shown) return 'descend';
+    return this.handoffTab === tabId && Date.now() - this.handoffAt < 15000 ? 'handoff' : 'teleport';
+  }
+
+  private markHandoff(tabId: number): void {
+    this.handoffTab = tabId;
+    this.handoffAt = Date.now();
   }
 
   /** The spawn just carried the current mood and focus. */
@@ -334,6 +364,7 @@ export class SpiderBridge implements PagePresence {
   private resetTask(): void {
     this.shown = false;
     this.place = null;
+    this.handoffTab = null;
     this.mood = null;
     this.sentMood = null;
     this.sentFocus = '';
@@ -345,7 +376,14 @@ export class SpiderBridge implements PagePresence {
       return (await withCap(this.transport.send(tabId, msg), capMs)) ?? null;
     } catch (error) {
       const text = error instanceof Error ? error.message : String(error);
-      if (!NO_RECEIVER.test(text) || cmd.op === 'leave' || cmd.op === 'show' || cmd.op === 'depart') throw error;
+      if (
+        !NO_RECEIVER.test(text) ||
+        cmd.op === 'leave' ||
+        cmd.op === 'show' ||
+        cmd.op === 'depart' ||
+        cmd.op === 'handoff'
+      )
+        throw error;
       // Tab was open before the extension loaded: no content script yet.
       const last = this.lastInject.get(tabId) ?? 0;
       if (Date.now() - last < 3000) throw error;

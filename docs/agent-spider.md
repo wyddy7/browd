@@ -18,7 +18,7 @@ where it was and reappears at the same spot there.
 | an interaction tool starts (*acting*) | alert; no new tearing |
 | `click_element`, `click_at`, `drag_at` | crouches, leaps with legs gathered (≈0.5 s), lands with them spread, winds up and taps the point; a ring marks the contact; then the real click. Every torn word goes home first |
 | `input_text`, `fill_field_by_label`, `type_at` | goes to the field, taps it, drums with both hands until the keys are in |
-| navigates (link, `go_to_url`) | tucks and collapses into a point with a ring; the next page closes a ring at the same spot, it pops out facing the same way and looks around (*waiting* until the agent moves) |
+| navigates (link, `go_to_url`) | a **handoff**: it stays standing on the old page until the browser swaps it, and the next page draws it on the same spot with the same heading and legs right after that page's first contentful paint — no collapse, no entrance (*waiting* until the agent moves) |
 | works in another tab | the same teleport, tab to tab — one spider per task (bridge unit-tested; not yet seen end to end, see H4) |
 | asks you (HITL approve / ask) | turns toward the side panel, front legs up, hands waving |
 | scrolls a little (wheel) | feet are planted in the page: they ride with it and step |
@@ -119,7 +119,19 @@ background                                         content script (top frame)
 - `SpiderBridge` keeps one spider per task in the current tab and the last place
   it stood (never from a spider still on its thread or mid-teleport). Every call
   is capped and swallows its own errors. Log lines: `[Spider] strike … arrived=…
-  ms=…`, `move tab=a→b`, `unload … at=x,y`, `depart …`.
+  ms=…`, `move tab=a→b`, `unload … at=x,y`, `handoff …`, `depart …`.
+- **Navigation = handoff (02.10).** The content script runs at `document_start`
+  but adds nothing until the background says so. Before a `go_to_url` the bridge
+  sends `handoff` (stand still, return the full place with feet and abdomen); a
+  link click hands over from the page's own `beforeunload`. The next page of the
+  same tab gets `arrive: 'handoff'`: the spider is placed exactly as it stood and
+  the overlay is mounted on the page's **first contentful paint** (fallback
+  1.5 s). Not earlier: our canvas counts as content, and drawn first it would end
+  Chrome's paint holding early — a blank page with a spider on it. Within one
+  site Chrome keeps showing the old page (spider included) until the new one
+  paints, so the gap is one frame. Across sites without a user gesture Chrome
+  shows a blank page while loading; the spider is absent for that time. Tab
+  switches still collapse and teleport (another tab is another place).
 - Settings `spider-settings` (`packages/storage/lib/settings/spider.ts`): on/off,
   size, pace, marks, colour, tear. Options → General → **Agent spider**; the spider
   button in the chat input toggles it, also mid-task.
@@ -192,7 +204,7 @@ scripted OpenAI-compatible model on localhost that takes 1.2 s per call:
 | --- | --- | --- |
 | P1 | the real pipeline completes the task | `task.ok`, form submitted |
 | P2 | first page: spawned, got the focus words and the thinking mood, read, tapped the link | `focus:join,arachnid,society,second,… mood:thinking spawn landed read approach arrive` |
-| P3 | the navigation is a teleport | same spot ±0.5 px, before the first action, no descent |
+| P3 | the navigation is a handoff | no collapse, same spot ±0.5 px, drawn 1–2 ms after the new page's first contentful paint, before the first action, no entrance. Video of the run: 1 frame without the spider at the page swap (the collapse-and-teleport build: 6 frames, plus ~0.6 s of shrinking and popping) |
 | P4 | every keystroke inside the drumming window | 19 of 19 |
 | P5 | strike at the click point before the real click | ~18 ms before, 0.9 px apart |
 | P6 | the agent's screenshot has no spider | 0 px; control with the spider drawn there: ~2600 px |
@@ -259,5 +271,8 @@ dislike spiders):
   outer graph; the acting mood comes from `act.start`.
 - Scrolling inside a scrollable element does not move the planted feet with it.
 - Targets in cross-origin iframes get their point from the main frame's box model.
-- If a navigation commits very fast, the collapse on the old page is cut short.
+- Navigating to another site without a user gesture: Chrome shows a blank page while
+  the next one loads, and the spider is absent for that time (nothing to draw on).
+- The handoff carries the pose, not the motion: a spider caught mid-walk stands
+  still on the next page and starts its next move from rest.
 - The hello is one runtime message per top-frame page load, also with no task.

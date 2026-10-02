@@ -381,23 +381,39 @@ try {
     { bridge: linkLine.replace('[Spider] ', ''), pageLogBeforeUnload: firstEvents.map(e => e.op).join(' ') },
   );
 
-  // P3 — the navigation is a teleport: the old page reported where the spider was as it unloaded,
-  // and the new page's spider appears at that spot (no second descent on a thread).
+  // P3 — the navigation is a handoff: the old page hands over where the spider stands (no collapse),
+  // and the new page draws it on that spot as soon as the page has painted — no entrance, no descent.
   const unloadLine = swLines.find(l => l.text.includes('[Spider] unload'))?.text ?? '';
+  const handoffLine = swLines.find(l => l.text.includes('[Spider] handoff'))?.text ?? '';
   const unloadAt = /at=(-?\d+),(-?\d+)/.exec(unloadLine);
-  const spawn2 = secondEvents.find(e => e.op === 'spawn' || e.op === 'spawn-teleport');
+  const spawn2 = secondEvents.find(e => e.op.startsWith('spawn'));
+  const drawn2 = secondEvents.find(e => e.op.startsWith('drawn'));
+  const lag2 = drawn2 ? Number(/\+(\d+)ms/.exec(drawn2.op)?.[1] ?? NaN) : null;
   const firstAct2 = secondEvents.find(e => e.op === 'approach');
   const off2 =
     unloadAt && spawn2 ? Math.hypot(spawn2.body.x - Number(unloadAt[1]), spawn2.body.y - Number(unloadAt[2])) : null;
   checks.record(
     'P3',
-    'navigation = teleport: unload reports the spot, the next page spawns there as a teleport before acting, no descent',
-    spawn2?.op === 'spawn-teleport' && off2 !== null && off2 <= 2 && !!firstAct2 && spawn2.t <= firstAct2.t &&
-      !secondEvents.some(e => e.op === 'landed'),
+    'navigation = handoff: no collapse; the next page stands it on the same spot, drawn ≤ 50 ms after its first contentful paint, before acting, no entrance',
+    // A go_to_url hands off before navigating; a link click hands off from the page's own unload.
+    !!(handoffLine || unloadLine) &&
+      !firstEvents.some(e => e.op === 'depart') &&
+      spawn2?.op === 'spawn-handoff' &&
+      off2 !== null &&
+      off2 <= 2 &&
+      !!drawn2 &&
+      drawn2.op.startsWith('drawn:fcp') &&
+      lag2 !== null &&
+      lag2 <= 50 &&
+      !!firstAct2 &&
+      spawn2.t <= firstAct2.t &&
+      !secondEvents.some(e => e.op === 'landed' || e.op === 'arrived-teleport'),
     {
+      handoff: handoffLine.replace('[Spider] ', ''),
       unload: unloadLine.replace('[Spider] ', ''),
       secondPageSpawn: spawn2 && `${spawn2.op} at ${Math.round(spawn2.body.x)},${Math.round(spawn2.body.y)}`,
       offsetPx: off2 && Math.round(off2 * 10) / 10,
+      drawn: drawn2?.op,
       spawnBeforeActionMs: spawn2 && firstAct2 ? firstAct2.t - spawn2.t : null,
     },
   );

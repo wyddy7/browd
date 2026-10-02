@@ -58,6 +58,8 @@ if (window.top === window && !window.__browdSpider) {
         return ensure().scroll();
       case 'depart':
         return ensure().depart();
+      case 'handoff':
+        return ensure().handoff();
       case 'hide':
         return ensure().hide();
       case 'show':

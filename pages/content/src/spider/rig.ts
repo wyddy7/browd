@@ -184,6 +184,31 @@ export class Rig {
     this.rings = [];
   }
 
+  /** Feet and abdomen relative to the body (view space): what a handoff carries to the next page. */
+  limbs(): { feet: V[]; abdomen: V } {
+    const body = this.toDoc(this.body);
+    return { feet: this.legs.map(l => sub(l.foot, body)), abdomen: sub(this.abdomen, this.body) };
+  }
+
+  /** Stand exactly as on the previous page: feet and abdomen where they were relative to the body. */
+  standAs(feet: V[] | undefined, abdomen: V | undefined): void {
+    this.airborne = false;
+    this.dashing = false;
+    const body = this.toDoc(this.body);
+    this.legs.forEach((leg, i) => {
+      const rel = feet?.[i];
+      leg.t = -1;
+      leg.rel = null;
+      leg.feel = null;
+      leg.lift = 0;
+      leg.grip = null;
+      if (rel && Number.isFinite(rel.x) && Number.isFinite(rel.y)) {
+        leg.foot = clampLen(this.hip(leg, body), add(body, rel), this.reach(leg) * 0.99);
+      }
+    });
+    if (abdomen && Number.isFinite(abdomen.x) && Number.isFinite(abdomen.y)) this.abdomen = add(this.body, abdomen);
+  }
+
   resize(size: number): void {
     this.size = size;
     this.legs = this.buildLegs();

@@ -94,7 +94,7 @@ describe('SpiderBridge', () => {
     expect(ops().slice(3)).toEqual(['8:depart', '7:spawn/teleport', '7:approach', '7:strike']);
   });
 
-  it('answers a hello only from the current tab, and as a teleport after the first entrance', async () => {
+  it('answers a hello only from the current tab; the next page of that tab is a handoff at the place it unloaded', async () => {
     const { bridge } = setup();
     await bridge.activate(7);
     await bridge.activate(8);
@@ -104,10 +104,34 @@ describe('SpiderBridge', () => {
       active: true,
       look: { size: 1, pace: 'normal', marks: 'target', color: 'violet', tear: true },
       at: { x: 300, y: 200, heading: 0.4 },
-      arrive: 'teleport',
+      arrive: 'handoff',
       focus: [],
     });
     expect(bridge.helloReply(undefined)).toEqual({ active: false });
+  });
+
+  it('hands off before a navigation: no collapse, the full place (legs too) goes to the next page', async () => {
+    const feet = Array.from({ length: 8 }, (_, i) => ({ x: i, y: -i }));
+    const { bridge, ops } = setup(ON, async (_tab, msg) =>
+      msg.cmd.op === 'handoff'
+        ? ack({ place: { x: 120, y: 340, heading: 0.25, feet, abdomen: { x: -13, y: 0 } } })
+        : ack(),
+    );
+    await bridge.activate(7);
+    await bridge.beforeNavigate(7);
+    expect(ops()).toEqual(['7:spawn/descend', '7:handoff']);
+    const reply = bridge.helloReply(7);
+    expect(reply.arrive).toBe('handoff');
+    expect(reply.at).toEqual({ x: 120, y: 340, heading: 0.25, feet, abdomen: { x: -13, y: 0 } });
+    expect(reply.mood).toBe('waiting');
+  });
+
+  it('still teleports between tabs (another tab is another place, not the next page)', async () => {
+    const { bridge, ops } = setup();
+    await bridge.activate(7);
+    await bridge.beforeNavigate(7);
+    await bridge.activate(8);
+    expect(ops()).toEqual(['7:spawn/descend', '7:handoff', '7:depart', '8:spawn/teleport']);
   });
 
   it('ignores place reports from other tabs and malformed ones', async () => {

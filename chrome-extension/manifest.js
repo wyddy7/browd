@@ -99,6 +99,10 @@ const manifest = withOperaSidebar(
         // Top frame only: the content script hosts the agent spider, which is
         // drawn over the whole tab. iframes (ads, embeds) do not need it.
         all_frames: false,
+        // As early as possible: on the next page of a navigation the spider is
+        // drawn the moment the page paints its content (a handoff, no gap).
+        // The script itself adds nothing to a page until the background says so.
+        run_at: 'document_start',
         js: ['content/index.iife.js'],
       },
     ],
