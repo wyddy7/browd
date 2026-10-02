@@ -665,6 +665,83 @@ try {
   );
   await send3({ op: 'leave' });
 
+  // C25 — the jump to the chat: it leaps out over the right edge (where the panel is) and removes its
+  // element; back on the page it leaps in from beyond the right edge and lands.
+  await sleep(1500);
+  await page.goto(`${base}/article.html`);
+  await sleep(600);
+  const tab4 = await tabIdOf(ext, page.url());
+  const send4 = spider(ext, tab4);
+  await send4({ op: 'spawn', look: LOOK, at: { x: 600, y: 360, heading: 0 }, arrive: 'teleport' });
+  await sleep(1000);
+  const vw = await page.evaluate(() => innerWidth);
+  const out4 = await sample(send4, () => send4({ op: 'exit', side: 'right' }), 100);
+  const hostAfterExit = await page.evaluate(() => !!document.querySelector('browd-spider'));
+  const exiting = out4.out.filter(o => o.pose.mode.startsWith('exit'));
+  const lastOut = exiting.at(-1)?.pose.body;
+  const in4 = await sample(
+    send4,
+    () => send4({ op: 'spawn', look: LOOK, at: { x: 100000, y: 400, heading: Math.PI }, arrive: 'edge' }),
+    900,
+  );
+  const st4 = await send4({ op: 'state' });
+  const firstIn = in4.out.find(o => o.pose.mode.startsWith('enter'))?.pose.body;
+  checks.record(
+    'C25',
+    'jump to the chat: leaps out over the right edge (legs gathered) and removes its element; leaps back in from beyond the right edge and lands',
+    out4.result?.ok === true &&
+      !hostAfterExit &&
+      !!lastOut &&
+      lastOut.x > vw - 40 &&
+      exiting.some(o => o.pose.mode.includes(':leap')) &&
+      !!firstIn &&
+      firstIn.x > vw &&
+      st4.events.some(e => e.op === 'entered') &&
+      Math.abs(st4.pose.body.x - (vw - 80)) < 8,
+    {
+      lastSeenOutX: lastOut && Math.round(lastOut.x),
+      viewport: vw,
+      leapt: exiting.some(o => o.pose.mode.includes(':leap')),
+      hostAfterExit,
+      firstSeenInX: firstIn && Math.round(firstIn.x),
+      landedX: Math.round(st4.pose.body.x),
+    },
+  );
+  await send4({ op: 'leave' });
+
+  // C26 — the seat in the chat panel: the same engine in the side panel page; it leaps in from the
+  // left (the page is to the panel's left), waits there, and leaps out to the left.
+  const panel = await extensionPage(ctx, extId, 'side-panel/index.html');
+  await sleep(1500);
+  const toPanel = msg => ext.evaluate(m => chrome.runtime.sendMessage(m), { type: 'browd:spider:panel', ...msg });
+  const parkAck = await toPanel({ op: 'park', look: LOOK, mood: 'waiting' });
+  await sleep(1000);
+  const pst = await toPanel({ op: 'state' });
+  const inPanel = await panel.evaluate(() => !!document.querySelector('browd-spider'));
+  const panelShot = await panel.screenshot();
+  fs.writeFileSync(path.join(OUT, 'panel-parked.png'), panelShot);
+  const unparkAck = await toPanel({ op: 'unpark' });
+  await sleep(150);
+  const goneFromPanel = await panel.evaluate(() => !document.querySelector('browd-spider'));
+  checks.record(
+    'C26',
+    'chat panel seat: the same spider leaps into the side panel from the left, waits there, leaps out to the left',
+    parkAck?.ok === true &&
+      inPanel &&
+      pst.events.some(e => e.op === 'spawn-edge-left') &&
+      pst.events.some(e => e.op === 'entered') &&
+      unparkAck?.ok === true &&
+      goneFromPanel,
+    {
+      parked: parkAck?.ok,
+      elementInPanel: inPanel,
+      panelEvents: pst.events?.map(e => e.op).join(' '),
+      unparked: unparkAck?.ok,
+      goneFromPanel,
+    },
+  );
+  await panel.close();
+
   await page.close();
   await ext.close();
 } finally {

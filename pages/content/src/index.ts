@@ -60,6 +60,8 @@ if (window.top === window && !window.__browdSpider) {
         return ensure().depart();
       case 'handoff':
         return ensure().handoff();
+      case 'exit':
+        return ensure().exit(cmd.side);
       case 'hide':
         return ensure().hide();
       case 'show':

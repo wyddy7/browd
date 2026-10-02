@@ -13,6 +13,12 @@
  * There is one spider per task. It lives in the *current* tab — the last one
  * the agent attached to or acted in — and teleports when the agent moves to
  * another tab or page. Every call is bounded and swallows its own errors.
+ *
+ * During a burst of navigations (a second one within `BURST_MS`) it does not
+ * stay on pages that keep being replaced: it leaps out to the right into the
+ * chat panel ("parked", see `side-panel/src/spiderPanel.ts`) and comes back —
+ * leaping in from the right edge — on the agent's next click or typing, or
+ * after `QUIET_MS` without a navigation. With no chat panel open it stays put.
  */
 import {
   DEFAULT_SPIDER_SETTINGS,
@@ -27,6 +33,7 @@ import type {
   SpiderHelloReply,
   SpiderMessage,
   SpiderMood,
+  SpiderPanelMessage,
   SpiderPlace,
   SpiderPoint,
   SpiderRect,
@@ -44,10 +51,16 @@ const APPROACH_CAP_MS = 900;
 const PACE_FACTOR = { calm: 1.35, normal: 1, fast: 0.7 } as const;
 /** Pose modes in which the spider stands on the page (its place is worth carrying over). */
 const GROUNDED = /^(idle|busy|approach)/;
+/** A second navigation within this window is a burst: the spider waits in the chat panel. */
+const BURST_MS = 8000;
+/** Parked this long with no navigation, it goes back to the page even without a click. */
+const QUIET_MS = 8000;
 
 export interface SpiderTransport {
   send(tabId: number, msg: SpiderMessage): Promise<SpiderAck | undefined>;
   inject(tabId: number): Promise<void>;
+  /** The chat panel (side panel page); undefined or a throw when it is not open. */
+  panel?(msg: SpiderPanelMessage): Promise<SpiderAck | undefined>;
 }
 
 export interface SpiderSettingsSource {
@@ -60,6 +73,7 @@ const chromeTransport: SpiderTransport = {
   inject: async tabId => {
     await chrome.scripting.executeScript({ target: { tabId, frameIds: [0] }, files: [SPIDER_CONTENT_SCRIPT] });
   },
+  panel: msg => chrome.runtime.sendMessage(msg) as Promise<SpiderAck | undefined>,
 };
 
 const NO_RECEIVER = /Receiving end does not exist|Could not establish connection/i;
@@ -86,6 +100,10 @@ export class SpiderBridge implements PagePresence {
   /** The tab whose page is being replaced (navigation): its next page gets a handoff, not a teleport. */
   private handoffTab: number | null = null;
   private handoffAt = 0;
+  /** Waiting in the chat panel during a burst of navigations. */
+  private parked = false;
+  private navs: number[] = [];
+  private lastNavAt = 0;
   /** Already shown in this task: further entrances are teleports, not descents. */
   private shown = false;
   private mood: SpiderMood | null = null;
@@ -134,6 +152,7 @@ export class SpiderBridge implements PagePresence {
     this.mood = 'waiting';
     this.sentMood = 'waiting';
     if (!this.isOn(tabId) || this.current !== tabId) return;
+    if (await this.noteNavigation(tabId, true)) return;
     const ack = await this.send(tabId, { op: 'handoff' }, 150);
     if (ack?.place && isPlace(ack.place)) this.place = ack.place;
     this.markHandoff(tabId);
@@ -154,6 +173,7 @@ export class SpiderBridge implements PagePresence {
   async typing(tabId: number, on: boolean): Promise<void> {
     if (!this.isOn(tabId)) return;
     if (on) await this.moveTo(tabId);
+    if (on) await this.unpark(tabId);
     await this.send(tabId, { op: 'typing', on }, 200);
   }
 
@@ -173,6 +193,15 @@ export class SpiderBridge implements PagePresence {
     if (mood) this.mood = mood;
     const tabId = this.current;
     if (tabId === null || !this.isOn(tabId)) return;
+    if (this.parked) {
+      // The burst is over when no navigation came for a while: back to the page.
+      if (Date.now() - this.lastNavAt > QUIET_MS) await this.unpark(tabId);
+      else if (this.mood && this.mood !== this.sentMood) {
+        this.sentMood = this.mood;
+        void this.panelSend({ op: 'mood', mood: this.mood }, 200);
+      }
+      return;
+    }
     await this.flushState(tabId);
   }
 
@@ -200,6 +229,10 @@ export class SpiderBridge implements PagePresence {
       this.current = tabId;
       return;
     }
+    if (this.parked) {
+      this.current = tabId;
+      return;
+    }
     if (this.current === tabId) {
       await this.send(tabId, this.spawnCmd(), 400);
       this.shown = true;
@@ -211,7 +244,12 @@ export class SpiderBridge implements PagePresence {
   /** Agent detached: from the current tab the spider climbs away; the task is over when no tab is left. */
   async deactivate(tabId: number): Promise<void> {
     if (!this.active.delete(tabId)) return;
-    if (this.current === tabId) {
+    if (this.current === tabId && this.parked) {
+      // The task ended while the spider waited in the chat: it says goodbye from there.
+      this.current = null;
+      this.parked = false;
+      void this.panelSend({ op: 'leave', mood: this.mood ?? undefined }, 300);
+    } else if (this.current === tabId) {
       this.current = null;
       if (this.settings.enabled) {
         // The ending mood (done / failed) goes first, so the gesture plays before the climb.
@@ -236,7 +274,7 @@ export class SpiderBridge implements PagePresence {
 
   /** Answer to the content script's hello after a page load in this tab. */
   helloReply(tabId: number | undefined): SpiderHelloReply {
-    if (tabId === undefined || !this.isOn(tabId) || this.current !== tabId) return { active: false };
+    if (tabId === undefined || !this.isOn(tabId) || this.current !== tabId || this.parked) return { active: false };
     const reply: SpiderHelloReply = {
       active: true,
       look: this.look(),
@@ -245,6 +283,7 @@ export class SpiderBridge implements PagePresence {
       mood: this.mood ?? undefined,
       focus: this.focus,
     };
+    if (reply.arrive === 'handoff') this.handoffTab = null; // one page gets it
     this.shown = true;
     this.markSent();
     return reply;
@@ -255,6 +294,7 @@ export class SpiderBridge implements PagePresence {
     if (tabId === undefined || tabId !== this.current || !isPlace(place)) return;
     this.place = place;
     this.markHandoff(tabId);
+    void this.noteNavigation(tabId, false);
     logger.info(`unload tab=${tabId} at=${Math.round(place.x)},${Math.round(place.y)}`);
   }
 
@@ -262,6 +302,7 @@ export class SpiderBridge implements PagePresence {
   async strikeAt(tabId: number, point: SpiderPoint, rect?: SpiderRect): Promise<SpiderAck | null> {
     if (!this.isOn(tabId)) return null;
     await this.moveTo(tabId);
+    await this.unpark(tabId);
     const capMs = Math.round(APPROACH_CAP_MS * PACE_FACTOR[this.settings.pace]);
     const t0 = Date.now();
     const approach = await this.send(tabId, { op: 'approach', point, rect: rect && toRect(rect), capMs }, capMs + 250);
@@ -283,6 +324,8 @@ export class SpiderBridge implements PagePresence {
   }
 
   async send(tabId: number, cmd: SpiderCommand, capMs: number): Promise<SpiderAck | null> {
+    // Parked in the chat: the pages get nothing but the spawn that brings it back.
+    if (this.parked && cmd.op !== 'spawn' && cmd.op !== 'exit') return null;
     const deadline = Date.now() + capMs;
     try {
       let ack = await this.sendOnce(tabId, cmd, capMs);
@@ -292,6 +335,7 @@ export class SpiderBridge implements PagePresence {
         cmd.op !== 'leave' &&
         cmd.op !== 'depart' &&
         cmd.op !== 'handoff' &&
+        cmd.op !== 'exit' &&
         this.current === tabId
       ) {
         // A page that loaded after the hello raced, or a fresh injection.
@@ -318,6 +362,11 @@ export class SpiderBridge implements PagePresence {
   /** The spider goes to `tabId`: it collapses in the tab it was in and reappears here. */
   private async moveTo(tabId: number): Promise<void> {
     if (this.current === tabId) return;
+    if (this.parked) {
+      // It comes back from the chat straight into the new tab (see unpark).
+      this.current = tabId;
+      return;
+    }
     const prev = this.current;
     this.current = tabId;
     if (prev !== null && this.active.has(prev)) {
@@ -329,12 +378,75 @@ export class SpiderBridge implements PagePresence {
     this.markSent();
   }
 
-  private spawnCmd(): SpiderCommand {
+  /**
+   * A navigation of the current tab begins (go_to_url's hook, or the page
+   * unloading). The second within `BURST_MS` parks the spider in the chat.
+   * `pageAlive`: the old page can still show the leap out (go_to_url's hook).
+   * Returns whether the spider is parked now.
+   */
+  private async noteNavigation(tabId: number, pageAlive: boolean): Promise<boolean> {
+    const now = Date.now();
+    // One navigation reported twice: the hook before it, then the page's unload.
+    const repeat = now - this.lastNavAt < 1500;
+    this.lastNavAt = now;
+    if (repeat || this.parked) return this.parked;
+    this.navs = [...this.navs.filter(t => now - t < BURST_MS), now];
+    if (this.navs.length < 2) return false;
+    return this.park(tabId, pageAlive);
+  }
+
+  /** Leap out to the right into the chat panel — only if the panel is open to receive it. */
+  private async park(tabId: number, pageAlive: boolean): Promise<boolean> {
+    const ack = await this.panelSend({ op: 'park', look: this.look(), mood: this.mood ?? undefined }, 250);
+    if (!ack?.ok) return false;
+    // Exit first, then mark parked (a parked bridge sends pages nothing but spawns and exits).
+    const exit = this.send(tabId, { op: 'exit', side: 'right' }, 800);
+    this.parked = true;
+    this.sentMood = this.mood;
+    logger.info(`park tab=${tabId} (navigation burst)`);
+    if (pageAlive) await exit;
+    return true;
+  }
+
+  /** Back from the chat: it leaps out of the panel to the left and into the page from its right edge. */
+  private async unpark(tabId: number): Promise<void> {
+    if (!this.parked) return;
+    this.parked = false;
+    this.navs = [];
+    void this.panelSend({ op: 'unpark' }, 900);
+    logger.info(`unpark tab=${tabId}`);
+    const at = { x: 100000, y: this.place?.y ?? 360, heading: Math.PI };
+    const cmd: SpiderCommand = {
+      op: 'spawn',
+      look: this.look(),
+      at,
+      arrive: 'edge',
+      mood: this.mood ?? undefined,
+      focus: this.focus,
+    };
+    await this.send(tabId, cmd, 400);
+    this.shown = true;
+    this.markSent();
+  }
+
+  private async panelSend(msg: Omit<SpiderPanelMessage, 'type'>, capMs: number): Promise<SpiderAck | null> {
+    if (!this.transport.panel) return null;
+    try {
+      return (await withCap(this.transport.panel({ type: 'browd:spider:panel', ...msg }), capMs)) ?? null;
+    } catch {
+      // No chat panel open.
+      return null;
+    }
+  }
+
+  private spawnCmd(arrive?: SpiderArrival): SpiderCommand {
+    const how = arrive ?? (this.current === null ? 'teleport' : this.arrival(this.current));
+    if (how === 'handoff') this.handoffTab = null; // one page gets it
     return {
       op: 'spawn',
       look: this.look(),
       at: this.place ?? undefined,
-      arrive: this.current === null ? 'teleport' : this.arrival(this.current),
+      arrive: how,
       mood: this.mood ?? undefined,
       focus: this.focus,
     };
@@ -365,6 +477,9 @@ export class SpiderBridge implements PagePresence {
     this.shown = false;
     this.place = null;
     this.handoffTab = null;
+    this.parked = false;
+    this.navs = [];
+    this.lastNavAt = 0;
     this.mood = null;
     this.sentMood = null;
     this.sentFocus = '';
@@ -381,7 +496,8 @@ export class SpiderBridge implements PagePresence {
         cmd.op === 'leave' ||
         cmd.op === 'show' ||
         cmd.op === 'depart' ||
-        cmd.op === 'handoff'
+        cmd.op === 'handoff' ||
+        cmd.op === 'exit'
       )
         throw error;
       // Tab was open before the extension loaded: no content script yet.
@@ -416,9 +532,13 @@ export class SpiderBridge implements PagePresence {
     this.settings = next;
     const tabId = this.current;
     if (tabId === null) return;
-    if (wasOn && !next.enabled) void this.send(tabId, { op: 'leave' }, 300);
+    if (wasOn && !next.enabled && this.parked) {
+      this.parked = false;
+      void this.panelSend({ op: 'leave' }, 300);
+    } else if (wasOn && !next.enabled) void this.send(tabId, { op: 'leave' }, 300);
     else if (!wasOn && next.enabled) {
-      void this.send(tabId, this.spawnCmd(), 300);
+      // Switched on from the chat: an entrance, not a silent handoff.
+      void this.send(tabId, this.spawnCmd(this.shown ? 'teleport' : 'descend'), 300);
       this.markSent();
     } else if (next.enabled) void this.send(tabId, { op: 'tune', look: this.look() }, 300);
   }

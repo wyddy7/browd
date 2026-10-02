@@ -27,7 +27,18 @@ import { palette } from './palette';
 import { type Control, HAND_TIP, Rig } from './rig';
 import { Stickers } from './stickers';
 
-type Mode = 'gone' | 'descend' | 'arrive' | 'free' | 'approach' | 'busy' | 'depart' | 'departed' | 'leave';
+type Mode =
+  | 'gone'
+  | 'descend'
+  | 'arrive'
+  | 'enter'
+  | 'free'
+  | 'approach'
+  | 'busy'
+  | 'depart'
+  | 'departed'
+  | 'exit'
+  | 'leave';
 
 interface Waiter {
   resolve: (ack: SpiderAck) => void;
@@ -64,6 +75,7 @@ export class Spider {
   private targetMark: { rect: SpiderRect; born: number } | null = null;
   private approachWaiter: Waiter | null = null;
   private departWaiter: Waiter | null = null;
+  private exitWaiter: Waiter | null = null;
   private tapResolve: (() => void) | null = null;
   private events: SpiderEvent[] = [];
 
@@ -98,6 +110,7 @@ export class Spider {
     this.applyLook(look);
     if (this.mode !== 'gone' && this.mode !== 'leave' && this.mode !== 'departed') return this.ack({ ok: true });
     if (arrive === 'handoff' && at) return this.standOn(at);
+    if (arrive === 'edge') return this.enterFromEdge(at);
     this.overlay.mount();
     const x = clamp(at?.x ?? innerWidth * 0.62, 50, innerWidth - 50);
     const y = clamp(at?.y ?? innerHeight * 0.4, 70, innerHeight - 50);
@@ -169,6 +182,68 @@ export class Spider {
     });
     this.start();
     return this.ack({ ok: true });
+  }
+
+  /**
+   * A leap in from beyond the nearer screen edge to `at` — on a page it comes
+   * from the right (where the chat panel is), in the panel from the left.
+   */
+  private enterFromEdge(at?: SpiderPlace): SpiderAck {
+    const s = this.look.size;
+    const wantX = at?.x ?? innerWidth;
+    const fromRight = wantX > innerWidth / 2;
+    const gx = clamp(wantX, 80 * s, innerWidth - 80 * s);
+    const gy = clamp(at?.y ?? innerHeight * 0.55, 70, innerHeight - 70);
+    const start = vec(fromRight ? innerWidth + 70 * s : -70 * s, gy);
+    const now = performance.now();
+    this.overlay.mount();
+    this.rig.place(start, fromRight ? Math.PI : 0, s);
+    this.rig.land();
+    this.rig.scale = 1;
+    this.rig.crouch = 0;
+    this.rig.thread = null;
+    this.target = vec(gx, gy);
+    this.faceTo = null;
+    this.leavePending = false;
+    this.stickers.clear();
+    window.clearTimeout(this.departTimer);
+    this.brain.interrupt(now, 600);
+    this.flight = glide(this.rig.toDoc(start), vec(0, 0), this.rig.toDoc(this.target), now, 520);
+    this.setMode('enter');
+    this.log({ op: `spawn-edge-${fromRight ? 'right' : 'left'}`, body: { x: gx, y: gy } });
+    this.start();
+    return this.ack({ ok: true });
+  }
+
+  /** Leap out over a screen edge, then remove the overlay. Resolves when it is gone. */
+  exit(side: 'left' | 'right'): Promise<SpiderAck> {
+    if (!this.spawned) return Promise.resolve(this.ack({ ok: true }));
+    this.settleWaiter(this.approachWaiter, { ok: true, arrived: false, reason: 'not-spawned' });
+    const now = performance.now();
+    this.brain.interrupt(now);
+    this.log({ op: `exit-${side}`, body: { ...this.rig.body } });
+    if (this.reducedMotion || document.hidden || !this.raf || this.mode === 'departed' || this.mode === 'leave') {
+      this.unmount();
+      return Promise.resolve(this.ack({ ok: true }));
+    }
+    const s = this.look.size;
+    const body = this.rig.body;
+    const to = vec(side === 'right' ? innerWidth + 90 * s : -90 * s, body.y);
+    const T = moveTime(dist(body, to), 220, 1500 * s, 320, 620);
+    this.flight = glide(this.rig.toDoc(body), this.rig.vel, this.rig.toDoc(to), now, T);
+    this.rig.handMode = { kind: 'rest' };
+    this.setMode('exit');
+    return new Promise(resolve => {
+      const waiter: Waiter = { resolve, timers: [] };
+      waiter.timers.push(
+        window.setTimeout(() => {
+          this.exitWaiter = null;
+          this.unmount();
+          this.settleWaiter(waiter, { ok: true });
+        }, T + 400),
+      );
+      this.exitWaiter = waiter;
+    });
   }
 
   /** The tab is about to navigate: stand still where it is (no collapse) and hand over the full place. */
@@ -557,6 +632,23 @@ export class Spider {
           leap: false,
           hold: false,
         };
+      case 'enter':
+      case 'exit': {
+        // A jump between the page and the chat panel: a leap all the way, legs gathered.
+        if (!this.flight) return hold;
+        const at = glideAt(this.flight, now);
+        return {
+          target: this.rig.toView(at.p),
+          tvel: at.v,
+          tacc: at.a,
+          k: 900,
+          c: 60,
+          vmax: 4000,
+          face: null,
+          leap: !at.done,
+          hold: false,
+        };
+      }
       default:
         return hold;
     }
@@ -640,6 +732,16 @@ export class Spider {
         this.settleWaiter(this.departWaiter, { ok: true });
         this.armReappear();
       }
+    } else if (this.mode === 'enter' && (!this.flight || glideAt(this.flight, now).done) && speed < 120) {
+      this.setMode('free');
+      this.brain.interrupt(now, 500);
+      this.log({ op: 'entered', body: { ...this.rig.body } });
+    } else if (this.mode === 'exit' && (!this.flight || glideAt(this.flight, now).done)) {
+      const waiter = this.exitWaiter;
+      this.exitWaiter = null;
+      this.unmount();
+      this.settleWaiter(waiter, { ok: true });
+      return;
     } else if (this.mode === 'leave' && this.rig.body.y < -110 * s) {
       this.unmount();
       return;

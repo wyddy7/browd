@@ -38,9 +38,11 @@ export interface SpiderRect {
  * task), `teleport` — it pops out at the exact viewport spot it left on the
  * previous page or tab — or `handoff`: the next page of the same tab, where
  * it simply stands on as it stood (same spot, heading and legs), drawn as
- * soon as the page has painted its content, so a navigation shows no gap.
+ * soon as the page has painted its content, so a navigation shows no gap —
+ * or `edge`: it leaps in from beyond the nearer screen edge (from the chat
+ * panel, which sits to the right of the page) and lands at `at`.
  */
-export type SpiderArrival = 'descend' | 'teleport' | 'handoff';
+export type SpiderArrival = 'descend' | 'teleport' | 'handoff' | 'edge';
 
 /** Where the spider was and which way it faced, carried across pages. */
 export interface SpiderPlace {
@@ -79,6 +81,8 @@ export type SpiderCommand =
   | { op: 'depart' }
   /** The tab is about to navigate: stand still where it is and report the full place (no collapse). */
   | { op: 'handoff' }
+  /** Leap out over a screen edge (toward the chat panel: right), then remove the overlay; resolves when gone. */
+  | { op: 'exit'; side: 'left' | 'right' }
   /** The agent reads the DOM (a main-thread stall may follow): hold still until off. */
   | { op: 'scan'; on: boolean }
   /** What the agent is doing now (sent on change only). */
@@ -161,4 +165,15 @@ export interface SpiderHello {
 export interface SpiderPoseReport {
   type: 'browd:spider:pose';
   place: SpiderPlace;
+}
+
+/**
+ * Background → side panel: during a burst of navigations the spider waits in
+ * the chat panel instead of on pages that keep being replaced ("parked").
+ */
+export interface SpiderPanelMessage {
+  type: 'browd:spider:panel';
+  op: 'park' | 'unpark' | 'mood' | 'leave' | 'state';
+  look?: SpiderLook;
+  mood?: SpiderMood;
 }

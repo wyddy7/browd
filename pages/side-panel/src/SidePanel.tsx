@@ -37,6 +37,7 @@ import { TracePanel, type TraceEntry } from './components/TracePanel';
 import { EventType, type AgentEvent, ExecutionState } from './types/event';
 import type { HITLRequest, HITLDecision } from '../../../chrome-extension/src/background/agent/hitl/types';
 import { HITL_REQUEST_MESSAGE } from '../../../chrome-extension/src/background/agent/hitl/types';
+import { startPanelSpider } from './spiderPanel';
 import './SidePanel.css';
 
 type ModelOption = {
@@ -215,6 +216,9 @@ const SidePanel = () => {
   // tool call in flight, planner/replanner round). Empty between
   // calls — empty for >5s = stuck. Driven by ExecutionState.TASK_LIVE.
   const [liveStatus, setLiveStatus] = useState<string | null>(null);
+  // The agent spider waits here during a burst of navigations (see spiderPanel.ts).
+  useEffect(() => startPanelSpider(), []);
+
   useEffect(() => {
     if (!lightboxUrl) return;
     const onKey = (e: KeyboardEvent) => {

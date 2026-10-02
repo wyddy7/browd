@@ -304,7 +304,7 @@ modes, `rig.ts` body and drawing, `brain.ts` behaviour by the agent's mood,
 `stickers.ts` torn-out words, `motion.ts` glides — every move starts and stops without a kick, `reader.ts`, `overlay.ts`). `Page` talks only to the
 `PagePresence` interface (`browser/presence.ts`); `browser/spider.ts`
 (`SpiderBridge`) implements it and reads agent events from the one subscription in
-`background/index.ts` through `browser/agentMood.ts`. Full contract, checks and
+`background/index.ts` through `browser/agentMood.ts`. During a burst of navigations it waits in the chat panel: `side-panel/src/spiderPanel.ts` runs the same engine there (alias `@spider`). Full contract, checks and
 open questions: `docs/agent-spider.md`. Never break its invariants: the site's DOM
 is never modified (torn words, marks and holes are canvas drawing), the host
 element is never touched after creation (`readClickSignature` hashes `outerHTML`),

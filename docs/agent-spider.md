@@ -20,6 +20,7 @@ where it was and reappears at the same spot there.
 | `input_text`, `fill_field_by_label`, `type_at` | goes to the field, taps it, drums with both hands until the keys are in |
 | navigates (link, `go_to_url`) | a **handoff**: it stays standing on the old page until the browser swaps it, and the next page draws it on the same spot with the same heading and legs right after that page's first contentful paint — no collapse, no entrance (*waiting* until the agent moves) |
 | works in another tab | the same teleport, tab to tab — one spider per task (bridge unit-tested; not yet seen end to end, see H4) |
+| navigates again within 8 s (a burst) | it **jumps into the chat**: leaps out over the right edge of the page and lands in the side panel from the left, reads the chat while it waits; on the agent's next click or typing (or after 8 s without a navigation) it leaps out of the panel to the left and into the page from its right edge, straight to the target. With no chat panel open it stays on the pages |
 | asks you (HITL approve / ask) | turns toward the side panel, front legs up, hands waving |
 | scrolls a little (wheel) | feet are planted in the page: they ride with it and step |
 | scrolls far (`scroll_to_bottom`) | a cut: the page carries it a few dozen px, the feet re-grip, it springs back |
@@ -132,6 +133,18 @@ background                                         content script (top frame)
   paints, so the gap is one frame. Across sites without a user gesture Chrome
   shows a blank page while loading; the spider is absent for that time. Tab
   switches still collapse and teleport (another tab is another place).
+- **Burst → the chat panel (02.10).** The bridge counts navigations of the
+  current tab (the go_to_url hook and the page's unload are one navigation if
+  within 1.5 s). The second within `BURST_MS` (8 s) parks the spider: it asks the
+  panel first (`browd:spider:panel` `park` — no panel open, no answer, no park),
+  then sends the page `exit right`. While parked, hellos are `active: false` and
+  pages get no commands except the spawn that brings it back: on `beforePointer`
+  / `typing`, or on the first agent event after `QUIET_MS` (8 s) without a
+  navigation — panel `unpark` (it leaps out to the left), page spawn with
+  `arrive: 'edge'` from the right edge, then the approach glides on from there.
+  The task ending while parked sends the panel `leave`. The panel side is
+  `side-panel/src/spiderPanel.ts`: the same `Spider` engine (aliased as
+  `@spider`), no tearing there.
 - Settings `spider-settings` (`packages/storage/lib/settings/spider.ts`): on/off,
   size, pace, marks, colour, tear. Options → General → **Agent spider**; the spider
   button in the chat input toggles it, also mid-task.
@@ -166,7 +179,7 @@ node motion.mjs         # frame-by-frame strips: descend, leap, scrolls, read, t
 node studio.mjs [size] [colour]   # 3× close-up stills for a design check
 ```
 
-Tier A (`e2e.mjs`), last runs 25/25, 1 skipped (02.10):
+Tier A (`e2e.mjs`), last runs 27/27, 1 skipped (02.10):
 
 | | Check | Measured |
 | --- | --- | --- |
@@ -196,8 +209,10 @@ Tier A (`e2e.mjs`), last runs 25/25, 1 skipped (02.10):
 | C21 | heavy never-still page (~20k nodes, a style change every frame) | 0 extra dropped frames with the spider reading and tearing |
 | C22 | the agent reads the DOM | eases from 147 px/s to rest, no new move, drift 0.1 px |
 | C23 | legs never touch away from the body (idle and busy samples) | 0 touching points, closest 3.6–5.6 px in three runs (before: ~1300 points, 2.6 % of poses); a failure names the scenario line and writes `touching-poses.json` |
+| C25 | jump out over the right edge and back in from it | leapt (legs gathered), last seen at x 1369 of 1280, element removed; back in first seen at x 1350, landed at 1200 (= width − 80) |
+| C26 | the seat in the chat panel | in the side panel page: `spawn-edge-left entered`, element present, gone after `unpark` (screenshot `panel-parked.png`) |
 
-Tier B (`pipeline.mjs`), last run 12/12 — navigation, typing, a click, a screenshot;
+Tier B (`pipeline.mjs`), last run 12/12 (`--burst`: 13/13) — navigation, typing, a click, a screenshot;
 scripted OpenAI-compatible model on localhost that takes 1.2 s per call:
 
 | | Check | Measured |
@@ -214,12 +229,15 @@ scripted OpenAI-compatible model on localhost that takes 1.2 s per call:
 | P10 | moods follow the agent | thinking → acting → done; done gesture ≥600 ms before the climb; words torn during the run |
 | P11 | the chat toggle mid-task | gone in ~0.5 s, back in ~10 ms |
 | P12 | the agent's DOM reads reach the spider first | 9 scan windows in the run |
+| P13 | `--burst`: two go_to_url hops park it in the chat; the next click brings it back | bridge `park` then `unpark`; panel `spawn-edge-left entered mood:thinking read mood:acting exit-left`; page `spawn-edge-right approach` |
 
 Unit tests: `chrome-extension/src/background/browser/__tests__/spiderBridge.test.ts`
-(18: tab teleports, hello only from the current tab, place only from a standing
-spider, focus words from the task and the active subgoal, moods sent once per
-change with the ending mood before the climb, toggle on mid-task, disabled sends
-nothing, never throws, caps, injection, respawn, live settings, pace).
+(26: tab teleports, handoff on navigation with the full place, hello only from the
+current tab, place only from a standing spider, focus words from the task and the
+active subgoal, moods sent once per change with the ending mood before the climb,
+toggle on mid-task, disabled sends nothing, never throws, caps, injection, respawn,
+live settings, pace; parking: a burst parks, no panel no park, one navigation
+counted once, quiet spell brings it back, goodbye from the chat at task end).
 
 ## Open questions for a manual pass
 

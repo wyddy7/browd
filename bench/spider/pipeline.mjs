@@ -28,7 +28,11 @@ const TASK = `Go to the second page, join the arachnid society with the email ${
 // ---------- scripted model ----------
 
 const reqLog = fs.createWriteStream(path.join(OUT, 'llm-requests.jsonl'));
-const script = { stage: 'link', calls: [] };
+// --burst: two go_to_url hops first (a burst of navigations parks the spider in the chat panel),
+// then the usual task; its first click brings the spider back to the page.
+const BURST = process.argv.includes('--burst');
+const script = { stage: BURST ? 'hop1' : 'link', calls: [] };
+let fixtureBase = '';
 // A real model takes a while: the spider reads (and tears words) meanwhile.
 const THINK_MS = Number(arg('think', '1200'));
 // Before the screenshot step the model waits here, so the harness can flip the chat toggle mid-task.
@@ -82,6 +86,14 @@ function decide(body) {
   }
   if (forced === 'task_complete' || (tools.includes('task_complete') && !tools.includes('click_element'))) {
     return { kind: 'final', tool: 'task_complete', args: { intent: 'finish', outcome: 'answered', response: `Joined with ${EMAIL}.` } };
+  }
+  if (tools.includes('click_element') && script.stage === 'hop1') {
+    script.stage = 'hop2';
+    return { kind: 'act', tool: 'go_to_url', args: { intent: 'look at the second page', url: `${fixtureBase}/second.html` } };
+  }
+  if (tools.includes('click_element') && script.stage === 'hop2') {
+    script.stage = 'link';
+    return { kind: 'act', tool: 'go_to_url', args: { intent: 'back to the article', url: `${fixtureBase}/article.html` } };
   }
   if (tools.includes('click_element')) {
     const els = elements(state);
@@ -209,6 +221,7 @@ function mock(req, res) {
 
 const checks = new Checks();
 const { server, base } = await serveFixtures(undefined, mock);
+fixtureBase = base;
 const { ctx, extId, swLines } = await launch({ headless: !HEADED, video: path.join(OUT, 'video'), swLog: true });
 const evLog = [];
 const spiderByUrl = new Map();
@@ -377,13 +390,14 @@ try {
   checks.record(
     'P2',
     'first page: spider spawned on attach and tapped the link before the navigation',
-    firstEvents.some(e => e.op === 'spawn') && /arrived=true/.test(linkLine) && /struck=true/.test(linkLine),
+    firstEvents.some(e => e.op.startsWith('spawn')) && /arrived=true/.test(linkLine) && /struck=true/.test(linkLine),
     { bridge: linkLine.replace('[Spider] ', ''), pageLogBeforeUnload: firstEvents.map(e => e.op).join(' ') },
   );
 
   // P3 — the navigation is a handoff: the old page hands over where the spider stands (no collapse),
   // and the new page draws it on that spot as soon as the page has painted — no entrance, no descent.
-  const unloadLine = swLines.find(l => l.text.includes('[Spider] unload'))?.text ?? '';
+  // The last unload: the link click into the second page (a --burst run hops through pages before it).
+  const unloadLine = swLines.findLast(l => l.text.includes('[Spider] unload'))?.text ?? '';
   const handoffLine = swLines.find(l => l.text.includes('[Spider] handoff'))?.text ?? '';
   const unloadAt = /at=(-?\d+),(-?\d+)/.exec(unloadLine);
   const spawn2 = secondEvents.find(e => e.op.startsWith('spawn'));
@@ -407,7 +421,8 @@ try {
       lag2 <= 50 &&
       !!firstAct2 &&
       spawn2.t <= firstAct2.t &&
-      !secondEvents.some(e => e.op === 'landed' || e.op === 'arrived-teleport'),
+      // No entrance on arrival (the chat-toggle check later switches it off and on, with an entrance).
+      !secondEvents.some(e => e.t <= firstAct2.t && (e.op === 'landed' || e.op === 'arrived-teleport')),
     {
       handoff: handoffLine.replace('[Spider] ', ''),
       unload: unloadLine.replace('[Spider] ', ''),
@@ -417,6 +432,33 @@ try {
       spawnBeforeActionMs: spawn2 && firstAct2 ? firstAct2.t - spawn2.t : null,
     },
   );
+
+  // P13 (--burst) — two go_to_url hops within 8 s park the spider in the chat panel (it leaps out over
+  // the right edge); the agent's next click brings it back, leaping in from the right edge.
+  if (BURST) {
+    const parkLine = swLines.find(l => l.text.includes('[Spider] park'));
+    const unparkLine = swLines.find(l => l.text.includes('[Spider] unpark'));
+    const backIn = firstEvents.find(e => e.op === 'spawn-edge-right');
+    const actAfter = firstEvents.find(e => e.op === 'approach');
+    // Ask the panel from another extension page (a page never receives its own runtime messages).
+    const probe = await extensionPage(ctx, extId);
+    const panelSt = await probe
+      .evaluate(() => chrome.runtime.sendMessage({ type: 'browd:spider:panel', op: 'state' }))
+      .catch(() => null);
+    await probe.close();
+    checks.record(
+      'P13',
+      'burst: two quick navigations park the spider in the chat panel; the next click brings it back from the right edge',
+      !!parkLine && !!unparkLine && parkLine.t <= unparkLine.t && !!backIn && !!actAfter && backIn.t <= actAfter.t &&
+        !!panelSt?.events?.some(e => e.op === 'spawn-edge-left') && !!panelSt?.events?.some(e => e.op === 'exit-left'),
+      {
+        park: parkLine?.text.replace('[Spider] ', ''),
+        unpark: unparkLine?.text.replace('[Spider] ', ''),
+        pageAfterUnpark: firstEvents.map(e => e.op).filter(op => /spawn|entered|approach|strike/.test(op)).join(' '),
+        panel: panelSt?.events?.map(e => e.op).join(' '),
+      },
+    );
+  }
 
   // P4 — typing: tapped the field centre, keys arrived inside typing-on/off.
   const fieldTap = secondEvents.find(e => e.op === 'strike');

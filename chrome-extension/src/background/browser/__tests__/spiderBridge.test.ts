@@ -7,7 +7,7 @@
  * moves to another tab or page.
  */
 import { describe, it, expect, vi } from 'vitest';
-import type { SpiderAck, SpiderCommand, SpiderMessage } from '@extension/shared';
+import type { SpiderAck, SpiderCommand, SpiderMessage, SpiderPanelMessage } from '@extension/shared';
 import type { SpiderSettings } from '@extension/storage';
 
 vi.mock('@src/background/log', () => ({
@@ -44,8 +44,13 @@ const ack = (extra: Partial<SpiderAck> = {}): SpiderAck => ({
   ...extra,
 });
 
-function setup(settings: SpiderSettings = ON, send?: SpiderTransport['send']) {
+function setup(
+  settings: SpiderSettings = ON,
+  send?: SpiderTransport['send'],
+  panel?: (msg: SpiderPanelMessage) => Promise<SpiderAck | undefined>,
+) {
   const sent: Array<{ tabId: number; cmd: SpiderCommand }> = [];
+  const panelOps: string[] = [];
   let listener: (() => void) | null = null;
   let current = settings;
   const transport: SpiderTransport = {
@@ -54,6 +59,14 @@ function setup(settings: SpiderSettings = ON, send?: SpiderTransport['send']) {
       return send ? send(tabId, msg) : ack();
     }),
     inject: vi.fn(async () => {}),
+    ...(panel
+      ? {
+          panel: async (msg: SpiderPanelMessage) => {
+            panelOps.push(msg.op);
+            return panel(msg);
+          },
+        }
+      : {}),
   };
   const source: SpiderSettingsSource = {
     getSettings: async () => current,
@@ -69,7 +82,14 @@ function setup(settings: SpiderSettings = ON, send?: SpiderTransport['send']) {
     await new Promise(r => setTimeout(r, 0));
   };
   const ops = () => sent.map(({ tabId, cmd }) => `${tabId}:${cmd.op}${cmd.op === 'spawn' ? `/${cmd.arrive}` : ''}`);
-  return { bridge, transport, sent, ops, change };
+  return { bridge, transport, sent, ops, change, panelOps };
+}
+
+/** A controllable clock for the burst window. */
+function clock(start = 1_000_000) {
+  let now = start;
+  vi.spyOn(Date, 'now').mockImplementation(() => now);
+  return { advance: (ms: number) => (now += ms) };
 }
 
 describe('SpiderBridge', () => {
@@ -312,5 +332,74 @@ describe('SpiderBridge', () => {
     await bridge.strikeAt(7, { x: 1, y: 1 });
     const approach = sent.find(m => m.cmd.op === 'approach')!.cmd as { capMs: number };
     expect(approach.capMs).toBe(1215);
+  });
+
+  describe('parking in the chat during a burst of navigations', () => {
+    const openPanel = async () => ({ ok: true, visible: true });
+
+    it('parks on the second navigation within 8 s and comes back from the right edge on the next click', async () => {
+      const t = clock();
+      const { bridge, ops, panelOps } = setup(ON, undefined, openPanel);
+      await bridge.activate(7);
+      await bridge.beforeNavigate(7);
+      t.advance(3000);
+      await bridge.beforeNavigate(7);
+      expect(ops()).toEqual(['7:spawn/descend', '7:handoff', '7:exit']);
+      expect(panelOps).toEqual(['park']);
+      // Parked: new pages of the tab stay empty, page commands are not sent.
+      expect(bridge.helloReply(7)).toEqual({ active: false });
+      await bridge.beforeCapture(7);
+      expect(ops()).toHaveLength(3);
+      await bridge.strikeAt(7, { x: 100, y: 50 });
+      expect(panelOps).toEqual(['park', 'unpark']);
+      expect(ops().slice(3)).toEqual(['7:spawn/edge', '7:approach', '7:strike']);
+      vi.restoreAllMocks();
+    });
+
+    it('stays on the pages when no chat panel is open', async () => {
+      const t = clock();
+      const { bridge, ops } = setup(ON, undefined, async () => undefined);
+      await bridge.activate(7);
+      await bridge.beforeNavigate(7);
+      t.advance(3000);
+      await bridge.beforeNavigate(7);
+      expect(ops()).toEqual(['7:spawn/descend', '7:handoff', '7:handoff']);
+      expect(bridge.helloReply(7).active).toBe(true);
+      vi.restoreAllMocks();
+    });
+
+    it('counts a navigation once (the hook before it and the page unload after it)', async () => {
+      const t = clock();
+      const { bridge, panelOps } = setup(ON, undefined, openPanel);
+      await bridge.activate(7);
+      await bridge.beforeNavigate(7);
+      t.advance(400);
+      bridge.reportPlace(7, { x: 1, y: 2, heading: 0 });
+      await Promise.resolve();
+      expect(panelOps).toEqual([]);
+      vi.restoreAllMocks();
+    });
+
+    it('goes back to the page after 8 s without a navigation, and says goodbye from the chat at the end', async () => {
+      const t = clock();
+      const { bridge, ops, panelOps } = setup(ON, undefined, openPanel);
+      await bridge.activate(7);
+      await bridge.beforeNavigate(7);
+      t.advance(2000);
+      await bridge.beforeNavigate(7);
+      t.advance(9000);
+      await bridge.onAgentEvent({ actor: 'navigator', state: 'step.start', data: { details: '' } } as never);
+      expect(panelOps).toEqual(['park', 'unpark']);
+      expect(ops().at(-1)).toBe('7:spawn/edge');
+      // A new burst, and the task ends while it waits in the chat.
+      t.advance(1000);
+      await bridge.beforeNavigate(7);
+      t.advance(2000);
+      await bridge.beforeNavigate(7);
+      await bridge.deactivate(7);
+      expect(panelOps).toEqual(['park', 'unpark', 'park', 'leave']);
+      expect(ops()).not.toContain('7:leave');
+      vi.restoreAllMocks();
+    });
   });
 });
