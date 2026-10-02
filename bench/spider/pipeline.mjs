@@ -484,6 +484,10 @@ try {
     { moods: [...new Set(moodOps)].join(' → '), doneToLeaveMs: doneEv && leaveEv ? leaveEv.t - doneEv.t : null, wordsTorn: tears },
   );
 
+  // P12 — every DOM read of the agent reaches the spider first, so it holds still through page stalls.
+  const scans = [...firstEvents, ...endEvents].filter(e => e.op === 'scan-on').length;
+  checks.record('P12', "the agent's DOM reads arrive as scan on/off before they run", scans >= 2, { scanWindows: scans });
+
   // P11 — the chat toggle hides and brings back the spider while the task runs.
   checks.record(
     'P11',

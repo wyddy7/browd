@@ -50,7 +50,9 @@ export class Stickers {
   /** Tear `hit` out of the page; the given front leg pulls it. */
   tear(hit: WordHit, side: 1 | -1, now: number, fill: string, textColor: string, restyle: boolean): boolean {
     const key = `${Math.round(hit.rect.x + scrollX)}:${Math.round(hit.rect.y + scrollY)}`;
-    if (this.list.length >= MAX_LIVE || (this.recent.get(key) ?? 0) > now - 8000) return false;
+    // Not the same word twice within 8 s. (No default of 0: `now` is page time, under 8000 on a fresh page.)
+    const last = this.recent.get(key);
+    if (this.list.length >= MAX_LIVE || (last !== undefined && now - last < 8000)) return false;
     this.recent.set(key, now);
     const origin = { x: hit.rect.x + scrollX, y: hit.rect.y + scrollY, width: hit.rect.width, height: hit.rect.height };
     const { art, w, h } = paintWord(hit, fill, textColor, restyle);

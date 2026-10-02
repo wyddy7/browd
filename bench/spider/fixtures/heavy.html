@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Heavy page — image grid</title>
+<style>
+  body { margin: 0; background: #fff; color: #202124; font: 13px/1.4 Arial, sans-serif; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; padding: 16px; }
+  .card { display: flex; flex-direction: column; gap: 4px; }
+  .img { height: 220px; border-radius: 10px; background: linear-gradient(135deg, var(--a), var(--b)); }
+  .cap { color: #202124; } .src { color: #5f6368; font-size: 12px; }
+  .cap span { display: inline; }
+  .pulse { outline: 1px solid transparent; }
+</style>
+</head>
+<body>
+<div class="grid" id="grid"></div>
+<script>
+  // A heavy, never-still page: thousands of nodes and a style change on every frame,
+  // the way image search keeps loading and animating. Any forced layout here is expensive.
+  const grid = document.getElementById('grid');
+  const words = ['A beautiful spider web at dawn', 'Agents and spiders in the garden', 'Macro photo of a jumping spider',
+    'Spider silk under the microscope', 'Autumn forest with a spider', 'Orb weaver spider on a leaf'];
+  for (let i = 0; i < 600; i++) {
+    const c = document.createElement('div');
+    c.className = 'card';
+    c.style.setProperty('--a', `hsl(${(i * 37) % 360} 40% 70%)`);
+    c.style.setProperty('--b', `hsl(${(i * 53) % 360} 50% 40%)`);
+    const cap = words[i % words.length].split(' ').map(w => `<span>${w}</span>`).join(' ');
+    c.innerHTML = `<div class="img"></div><div class="cap">${cap}</div><div class="src">example${i % 9}.com · ${i}</div>` +
+      Array.from({ length: 24 }, () => '<i></i>').join('');
+    grid.appendChild(c);
+  }
+  const cards = grid.children;
+  const tick = () => {
+    const el = cards[Math.floor(Math.random() * cards.length)];
+    el.classList.toggle('pulse');
+    el.style.paddingBottom = el.style.paddingBottom ? '' : '0.01px';
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+  window.__frames = [];
+  let last = 0;
+  const meter = t => {
+    if (last) window.__frames.push(t - last);
+    last = t;
+    requestAnimationFrame(meter);
+  };
+  requestAnimationFrame(meter);
+</script>
+</body>
+</html>

@@ -71,6 +71,8 @@ export type SpiderCommand =
   | { op: 'leave' }
   /** Collapse into a point before a navigation or a tab switch; resolves when gone. */
   | { op: 'depart' }
+  /** The agent reads the DOM (a main-thread stall may follow): hold still until off. */
+  | { op: 'scan'; on: boolean }
   /** What the agent is doing now (sent on change only). */
   | { op: 'mood'; mood: SpiderMood }
   /** Words of the task and the current subgoal: what the spider looks for while it reads. */
@@ -118,6 +120,8 @@ export interface SpiderAck {
   events?: SpiderEvent[];
   /** Mean frame interval over the last second, ms (state only). */
   frameMs?: number;
+  /** The last drawn frame: its number and `performance.now()` (state only) — exact timing for motion checks. */
+  frame?: { n: number; t: number };
   /** Words torn out of the page right now (state only). */
   stickers?: Array<{ text: string; rect: SpiderRect; phase: string }>;
   mood?: SpiderMood;

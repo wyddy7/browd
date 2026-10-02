@@ -13,16 +13,22 @@
  * - done: a quick turn on the spot; failed: a droop. Then it can leave.
  */
 import type { SpiderMood, SpiderPoint as V } from '@extension/shared';
-import { add, clamp, clampLen, dist, easeInOut, fromAngle, lerp, sub, unit, vec } from './geometry';
+import { add, clamp, clampLen, dist, easeInOut, fromAngle, lerp, minJerk, sub, unit, vec } from './geometry';
 import type { Palette } from './palette';
-import { type Block, type Line, findBlocks, findWords, focusMatcher, pickNext } from './reader';
+import { type Block, type Line, type WordHit, findBlocks, findWords, focusMatcher, pickNext } from './reader';
 import { type Control, HAND_TIP, type Rig } from './rig';
 import type { Stickers } from './stickers';
 
+/** A focus word of the current block, read once when the block was chosen (document coordinates). */
+interface Word {
+  hit: WordHit;
+  doc: { x: number; y: number; width: number; height: number };
+}
+
 type Plan =
   | { kind: 'pause'; until: number }
-  | { kind: 'travel'; goal: V; then: 'read' | 'look'; block?: Block; lines?: Line[] }
-  | { kind: 'read'; block: Block; lines: Line[]; line: number; x: number }
+  | { kind: 'travel'; goal: V; then: 'read' | 'look'; block?: Block; lines?: Line[]; words?: Word[] }
+  | { kind: 'read'; block: Block; lines: Line[]; line: number; x: number; words: Word[] }
   | { kind: 'look'; until: number; base: number };
 
 interface Stop {
@@ -45,12 +51,29 @@ export class Brain {
   private words: string[] = [];
   private plan: Plan = { kind: 'pause', until: 0 };
   private visited = new WeakSet<Element>();
-  /** Stop-and-go: the current waypoint (document space) or a freeze. */
-  private waypoint: V | null = null;
+  /** Stop-and-go: the current burst along a minimum-jerk path (document space), or a freeze. */
+  private burst: { from: V; to: V; t0: number; T: number } | null = null;
+  /** Where the body rests during a freeze or a mood pose (document space). */
+  private anchor: V | null = null;
   private stop: Stop | null = null;
   private pull: { side: 1 | -1; at: number; from: V; to: V } | null = null;
   private turnFrom = 0;
   pace: keyof typeof PACE = 'normal';
+  private scanningOn = false;
+
+  /** The agent is reading the DOM: ease out of the current burst, start no new one. */
+  get scanning(): boolean {
+    return this.scanningOn;
+  }
+
+  set scanning(on: boolean) {
+    if (on && !this.scanningOn && this.burst) {
+      // Come to rest a little ahead, on the soft spring — no brake.
+      this.burst = null;
+      this.anchor = this.rig.toDoc(add(this.rig.body, { x: this.rig.vel.x * 0.06, y: this.rig.vel.y * 0.06 }));
+    }
+    this.scanningOn = on;
+  }
   tear = true;
 
   constructor(
@@ -65,7 +88,8 @@ export class Brain {
     this.mood = mood;
     this.moodAt = now;
     this.stop = null;
-    this.waypoint = null;
+    this.burst = null;
+    this.anchor = null;
     this.endPull();
     this.rig.feel(1, null);
     this.rig.feel(-1, null);
@@ -79,14 +103,18 @@ export class Brain {
   setFocus(words: string[]): void {
     this.words = words.slice(0, 12);
     this.matcher = focusMatcher(this.words);
+    // The cached words of the current block are for the old focus: pick afresh.
+    if (this.plan.kind === 'read' || this.plan.kind === 'travel') this.plan = { kind: 'pause', until: 0 };
     this.log({ op: `focus:${this.words.join(',')}` });
   }
 
   /** A command took over (approach, depart…): drop the plan and the pulls; look around for `pauseMs` after. */
   interrupt(now: number, pauseMs = 450): void {
     this.plan = { kind: 'pause', until: now + pauseMs };
-    this.waypoint = null;
+    this.burst = null;
+    this.anchor = null;
     this.stop = null;
+    this.rig.gripRects = [];
     this.endPull();
     this.rig.feel(1, null);
     this.rig.feel(-1, null);
@@ -96,7 +124,8 @@ export class Brain {
   onScroll(kind: 'cut' | 'walk', now: number): void {
     if (this.plan.kind === 'read' || this.plan.kind === 'travel') {
       this.plan = { kind: 'pause', until: now + (kind === 'cut' ? 500 : 300) };
-      this.waypoint = null;
+      this.burst = null;
+      this.anchor = null;
       this.stop = null;
     }
   }
@@ -110,10 +139,10 @@ export class Brain {
     const m = PACE[this.pace] ?? 1;
     const s = this.rig.size;
     const here = this.rig.body;
-    const hold: Control = { target: here, k: 0, c: 0, vmax: 0, face: null, leap: false, hold: true };
+    const hold = this.settle(m, null);
     const since = now - this.moodAt;
 
-    if (this.reducedMotion) return hold;
+    if (this.reducedMotion) return { target: here, k: 0, c: 0, vmax: 0, face: null, leap: false, hold: true };
 
     if (this.mood === 'done') {
       // A quick full turn on the spot, then still.
@@ -149,11 +178,9 @@ export class Brain {
     const here = rig.body;
     this.updatePull(now);
 
-    // Freeze between bursts.
+    // Freeze between bursts: a soft spring to where it stopped, no brake.
     if (this.stop) {
-      if (now < this.stop.until) {
-        return { target: here, k: 0, c: 0, vmax: 0, face: this.faceForPlan(now), leap: false, hold: true };
-      }
+      if (now < this.stop.until) return this.settle(m, this.faceForPlan(now));
       if (this.stop.feelSide) rig.feel(this.stop.feelSide, null);
       const atGoal = this.stop.atGoal;
       this.stop = null;
@@ -162,36 +189,58 @@ export class Brain {
 
     const plan = this.plan;
     if (plan.kind === 'pause' || plan.kind === 'look') {
-      if (now < plan.until) {
-        return { target: here, k: 0, c: 0, vmax: 0, face: this.faceForPlan(now), leap: false, hold: true };
-      }
+      if (now < plan.until) return this.settle(m, this.faceForPlan(now));
       this.pickBlock(now, s);
     }
 
     const goal = this.goal();
-    if (!goal) return { target: here, k: 0, c: 0, vmax: 0, face: null, leap: false, hold: true };
+    if (!goal) return this.settle(m, null);
     const goalView = rig.toView(goal);
-    if (!this.waypoint) {
-      // Next burst: 50–110 px toward the goal.
-      const step = clampLen(vec(0, 0), sub(goalView, here), (50 + Math.random() * 60) * s);
-      this.waypoint = rig.toDoc(add(here, step));
+    // While the agent reads the DOM the page may freeze for a moment: stand still then,
+    // so a stall looks like a pause, not like a hitch in the middle of a move.
+    if (!this.burst && this.scanning) return this.settle(m, this.faceForPlan(now));
+    if (!this.burst) {
+      // Next burst: 50–110 px toward the goal, on a minimum-jerk path — it
+      // starts and stops with zero acceleration, so nothing jolts.
+      const step = clampLen(vec(0, 0), sub(goalView, here), (60 + Math.random() * 70) * s);
+      const length = Math.hypot(step.x, step.y);
+      const T = (clamp(length / (240 * s), 0.26, 0.6) * 1000) / m;
+      this.burst = { from: rig.toDoc(here), to: rig.toDoc(add(here, step)), t0: now, T };
+      this.anchor = null;
     }
-    const wpView = rig.toView(this.waypoint);
-    const speed = Math.hypot(rig.vel.x, rig.vel.y);
-    if (dist(here, wpView) < 4 * s && speed < 40) {
-      this.waypoint = null;
+    const b = this.burst;
+    const tau = (now - b.t0) / b.T;
+    const toView = rig.toView(b.to);
+    if (tau >= 1 && dist(here, toView) < 3 * s) {
+      this.burst = null;
+      this.anchor = b.to;
       const atGoal = dist(here, goalView) < 6 * s;
-      // Freeze; now and then a front leg feels ahead.
       const reading = this.plan.kind === 'read';
-      const feelSide: 1 | -1 | 0 = !atGoal && Math.random() < 0.35 ? (Math.random() < 0.5 ? 1 : -1) : 0;
+      // Now and then a front leg feels ahead during the freeze.
+      const feelSide: 1 | -1 | 0 = !atGoal && Math.random() < 0.2 ? (Math.random() < 0.5 ? 1 : -1) : 0;
       if (feelSide) rig.feel(feelSide, add(here, mul2(unit(sub(goalView, here)), 55 * s)));
-      // Freezes: short while reading along a line, longer between moves elsewhere.
-      const freeze = reading ? 160 + Math.random() * 220 : 220 + Math.random() * 320;
+      const freeze = reading ? 160 + Math.random() * 200 : 200 + Math.random() * 260;
       this.stop = { until: now + freeze / m, feelSide, atGoal };
       if (atGoal) this.arrive(now, s, pal);
-      return { target: here, k: 0, c: 0, vmax: 0, face: this.faceForPlan(now), leap: false, hold: true };
+      return this.settle(m, this.faceForPlan(now));
     }
-    return { target: wpView, k: 240 * m * m, c: 26 * m, vmax: 600 * m * s, face: null, leap: false, hold: false };
+    const along = rig.toView(lerp(b.from, b.to, minJerk(tau)));
+    // A stiff spring tracks the smooth path.
+    return { target: along, k: 600 * m * m, c: 46 * m, vmax: 1200 * m, face: null, leap: false, hold: false };
+  }
+
+  /** Rest at the anchor (taken where the body is when first asked) on a soft spring. */
+  private settle(m: number, face: number | null): Control {
+    this.anchor ??= this.rig.toDoc(this.rig.body);
+    return {
+      target: this.rig.toView(this.anchor),
+      k: 300 * m * m,
+      c: 34 * m,
+      vmax: 600 * m,
+      face,
+      leap: false,
+      hold: false,
+    };
   }
 
   private goal(): V | null {
@@ -228,13 +277,25 @@ export class Brain {
     }
     this.visited.add(next.el);
     const lines = next.lines.map(l => ({ x0: l.x0 + scrollX, x1: l.x1 + scrollX, y: l.y + scrollY }));
-    this.plan = {
-      kind: 'travel',
-      goal: { x: lines[0].x0 + 4 - HAND_TIP * s, y: lines[0].y },
-      then: 'read',
-      block: next,
-      lines,
-    };
+    // The block's focus words, read from the layout once, here — never per step.
+    const words: Word[] =
+      this.matcher && this.tear
+        ? findWords(next.el, this.matcher, innerHeight, 12).map(hit => ({
+            hit,
+            doc: { x: hit.rect.x + scrollX, y: hit.rect.y + scrollY, width: hit.rect.width, height: hit.rect.height },
+          }))
+        : [];
+    // Feet snap to these instead of asking the page what is under them.
+    this.rig.gripRects = [
+      ...lines.map(l => ({ x: l.x0, y: l.y - 8, width: l.x1 - l.x0, height: 16 })),
+      ...words.map(w => w.doc),
+    ];
+    // A block picked for a focus word: go straight to that word, not to the start of its line.
+    const first = words[0];
+    const goal = first
+      ? { x: first.doc.x - 6 - HAND_TIP * s, y: first.doc.y + first.doc.height / 2 }
+      : { x: lines[0].x0 + 4 - HAND_TIP * s, y: lines[0].y };
+    this.plan = { kind: 'travel', goal, then: 'read', block: next, lines, words };
     this.log({ op: 'read', point: this.rig.toView({ x: lines[0].x0, y: lines[0].y }), body: { ...this.rig.body } });
     void now;
   }
@@ -244,7 +305,26 @@ export class Brain {
     const p = this.plan;
     if (p.kind === 'travel') {
       if (p.then === 'read' && p.block && p.lines) {
-        this.plan = { kind: 'read', block: p.block, lines: p.lines, line: 0, x: p.lines[0].x0 + 4 };
+        // Start reading where it arrived: on the focus word's line, or at the top.
+        const at = p.goal.x + HAND_TIP * s;
+        const lines = p.lines;
+        const nearest = lines.reduce(
+          (best, l, i) => (Math.abs(l.y - p.goal.y) < Math.abs(lines[best].y - p.goal.y) ? i : best),
+          0,
+        );
+        const onWord = (p.words ?? []).length > 0;
+        this.plan = {
+          kind: 'read',
+          block: p.block,
+          lines: p.lines,
+          line: onWord ? nearest : 0,
+          x: onWord ? at : p.lines[0].x0 + 4,
+          words: p.words ?? [],
+        };
+        // Arrived on the word itself: the hands are on it now.
+        const cursor = this.rig.toView({ x: this.plan.x, y: p.goal.y });
+        this.rig.handMode = { kind: 'read', p: cursor };
+        if (onWord && this.tear && this.mood !== 'acting') this.maybeTear(now, cursor, s, pal);
       } else {
         this.plan = { kind: 'look', until: now + 600, base: this.rig.heading };
       }
@@ -288,22 +368,24 @@ export class Brain {
   /** Document x just before the next focus word on this line, if there is one ahead of the cursor. */
   private nextFocusOnLine(p: Extract<Plan, { kind: 'read' }>, line: Line): number | null {
     if (!this.matcher || !this.tear || this.mood === 'acting') return null;
-    const lineView = line.y - scrollY;
-    const hit = findWords(p.block.el, this.matcher, innerHeight)
-      .filter(h => Math.abs(h.rect.y + h.rect.height / 2 - lineView) < h.rect.height * 0.6)
-      .map(h => h.rect.x + scrollX)
-      .filter(x => x > p.x + 20)
+    const x = p.words
+      .filter(w => Math.abs(w.doc.y + w.doc.height / 2 - line.y) < w.doc.height * 0.6)
+      .map(w => w.doc.x)
+      .filter(wx => wx > p.x + 20)
       .sort((a, b) => a - b)[0];
-    return hit === undefined ? null : hit - 6;
+    return x === undefined ? null : x - 6;
   }
 
   private maybeTear(now: number, cursor: V, s: number, pal: Palette): void {
     if (!this.matcher || this.pull || this.stickers.live >= 3) return;
     const p = this.plan;
     if (p.kind !== 'read') return;
-    // The focus word nearest the hands, within a leg's reach.
-    const hit = findWords(p.block.el, this.matcher, innerHeight)
-      .map(h => ({ h, c: { x: h.rect.x + h.rect.width / 2, y: h.rect.y + h.rect.height / 2 } }))
+    // The focus word nearest the hands, within a leg's reach (from the block's cached words).
+    const hit = p.words
+      .map(w => ({
+        h: { ...w.hit, rect: { ...w.hit.rect, x: w.doc.x - scrollX, y: w.doc.y - scrollY } },
+        c: this.rig.toView({ x: w.doc.x + w.doc.width / 2, y: w.doc.y + w.doc.height / 2 }),
+      }))
       .filter(({ c }) => dist(c, this.rig.body) < 140 * s)
       .sort((a, b) => dist(a.c, cursor) - dist(b.c, cursor))[0]?.h;
     if (!hit) return;

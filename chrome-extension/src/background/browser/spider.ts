@@ -113,6 +113,12 @@ export class SpiderBridge implements PagePresence {
     await this.strikeAt(tabId, point, rect);
   }
 
+  async scanning(tabId: number, on: boolean): Promise<void> {
+    if (!this.isOn(tabId) || this.current !== tabId) return;
+    // Sent before the DOM build blocks the page's thread, so the spider is already still.
+    await this.send(tabId, { op: 'scan', on }, on ? 150 : 100);
+  }
+
   scrolled(tabId: number, dy: number): void {
     if (!this.isOn(tabId) || this.current !== tabId) return;
     void this.send(tabId, { op: 'scroll', dy }, 200);

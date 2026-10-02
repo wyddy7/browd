@@ -492,7 +492,12 @@ export default class Page {
       try {
         await this.removeHighlight();
         const displayHighlights = this._config.displayHighlights || useVision;
-        const content = await this.getClickableElements(displayHighlights, focusElement, signal);
+        // The DOM build runs on the page's main thread and can stall its rendering
+        // on heavy pages; the presence holds still meanwhile, so the stall shows as a pause.
+        await pagePresence().scanning(this._tabId, true);
+        const content = await this.getClickableElements(displayHighlights, focusElement, signal).finally(() =>
+          pagePresence().scanning(this._tabId, false),
+        );
         if (!content) {
           logger.warning(`Failed to get clickable elements (attempt ${attempt + 1}/2)`);
           if (attempt === 0) {

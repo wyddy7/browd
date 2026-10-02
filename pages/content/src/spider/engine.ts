@@ -133,6 +133,13 @@ export class Spider {
     return this.ack({ ok: true });
   }
 
+  /** The agent reads the DOM; the page may stall. Hold still (no new bursts) until it is done. */
+  scan(on: boolean): SpiderAck {
+    if (on !== this.brain.scanning) this.log({ op: on ? 'scan-on' : 'scan-off' });
+    this.brain.scanning = on;
+    return this.ack({ ok: true });
+  }
+
   focus(words: string[]): SpiderAck {
     this.brain.setFocus(words);
     return this.ack({ ok: true });
@@ -334,6 +341,7 @@ export class Spider {
       frameMs,
       stickers: this.stickers.snapshot(),
       mood: this.brain.mood ?? undefined,
+      frame: { n: this.frameCount, t: this.lastFrame },
     };
   }
 

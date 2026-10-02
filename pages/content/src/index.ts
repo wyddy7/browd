@@ -66,6 +66,8 @@ if (window.top === window && !window.__browdSpider) {
         return ensure().leave();
       case 'mood':
         return ensure().mood(cmd.mood);
+      case 'scan':
+        return ensure().scan(cmd.on);
       case 'focus':
         return ensure().focus(cmd.words);
       case 'state':

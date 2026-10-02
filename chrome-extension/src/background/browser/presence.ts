@@ -28,6 +28,8 @@ export interface PagePresence {
   beforePointer(tabId: number, point: PresencePoint, rect?: PresenceRect): Promise<void>;
   /** Keys are being typed (true) or done (false). */
   typing(tabId: number, on: boolean): Promise<void>;
+  /** The agent reads the page's DOM (on/off): a main-thread job that can stall the page's frames. */
+  scanning(tabId: number, on: boolean): Promise<void>;
   /** The agent scrolls the page by about `dy` px. */
   scrolled(tabId: number, dy: number): void;
   /** The tab is about to navigate. */
@@ -43,6 +45,7 @@ const none: PagePresence = {
   detached: () => {},
   beforePointer: async () => {},
   typing: async () => {},
+  scanning: async () => {},
   scrolled: () => {},
   beforeNavigate: async () => {},
   beforeCapture: async () => {},

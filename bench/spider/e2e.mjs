@@ -38,7 +38,7 @@ async function sample(send, work, ms = 0) {
   const loop = (async () => {
     while (on) {
       const s = await send({ op: 'state' });
-      out.push({ t: Date.now(), pose: s.pose, events: s.events });
+      out.push({ t: Date.now(), pose: s.pose, events: s.events, frame: s.frame });
     }
   })();
   const result = typeof work === 'function' ? await work() : await sleep(ms);
@@ -177,17 +177,23 @@ try {
     { firstTornAfterMs: torn ? tearSamples.length * 200 : null, word: torn?.stickers[0].text, tears: tearEvents.length, mutations: afterTear.mutations },
   );
 
-  // C4c — a new action takes every word back at once.
-  await sleep(300);
-  const before4c = (await send({ op: 'state' })).stickers.length;
-  await send({ op: 'approach', point: { x: 640, y: 400 }, capMs: 900 });
+  // C4c — a new action takes every word back at once: send it while a word is out.
+  let before4c = 0;
+  for (let i = 0; i < 80 && !before4c; i++) {
+    const live = (await send({ op: 'state' })).stickers.filter(x => x.phase !== 'back');
+    before4c = live.length;
+    if (!before4c) await sleep(150);
+  }
+  // Read the stickers right after the approach is sent, not after it lands.
+  const going = send({ op: 'approach', point: { x: 640, y: 400 }, capMs: 900 });
   const back4c = (await send({ op: 'state' })).stickers.map(x => x.phase);
+  await going;
   await sleep(900);
   const left4c = (await send({ op: 'state' })).stickers.length;
   checks.record(
     'C4c',
     'an action sends every torn word home right away; gone within ~1 s',
-    before4c >= 1 && back4c.every(ph => ph === 'back') && left4c === 0,
+    before4c >= 1 && back4c.length >= 1 && back4c.every(ph => ph === 'back') && left4c === 0,
     { liveBefore: before4c, phasesRightAfter: back4c, liveAfter900ms: left4c },
   );
   await send({ op: 'focus', words: [] });
@@ -197,6 +203,54 @@ try {
     st.frameMs > 0 && st.frameMs < 20 && quiet.longTasks.length === 0,
     { frameMs: r1(st.frameMs), longTasks: quiet.longTasks },
   );
+
+  // C20 — nothing jolts while it reads: frame-to-frame change of the body's velocity stays small.
+  {
+    // One sample per drawn frame, timed by the frame clock of the page, not by when the poll came back.
+    const fr = reading.out.filter((o, i) => i === 0 || o.frame.n !== reading.out[i - 1].frame.n);
+    const vel = fr.slice(1).map((o, i) => {
+      const dt = (o.frame.t - fr[i].frame.t) / 1000;
+      const gap = o.frame.n - fr[i].frame.n;
+      return { x: (o.pose.body.x - fr[i].pose.body.x) / dt, y: (o.pose.body.y - fr[i].pose.body.y) / dt, gap };
+    });
+    // Only directly consecutive frames count (a frame the poll skipped is not a jolt).
+    const dv = vel
+      .slice(1)
+      .map((v, i) => ({ v, prev: vel[i] }))
+      .filter(({ v, prev }) => v.gap === 1 && prev.gap === 1)
+      .map(({ v, prev }) => Math.hypot(v.x - prev.x, v.y - prev.y));
+    const sorted = [...dv].sort((a, b) => a - b);
+    const p95 = sorted[Math.floor(sorted.length * 0.95)] ?? 0;
+    const peak = Math.max(0, ...vel.filter(v => v.gap === 1).map(v => Math.hypot(v.x, v.y)));
+    checks.record(
+      'C20',
+      'smooth reading: velocity changes ≤ 160 px/s per frame (p95), peak speed under 500 px/s',
+      dv.length > 50 && p95 <= 160 && peak < 500,
+      { frames: dv.length, p95DeltaV: Math.round(p95), peakSpeed: Math.round(peak) },
+    );
+  }
+
+  // C22 — while the agent reads the DOM it holds still: eases out of a move, starts none until done.
+  {
+    let moving = null;
+    for (let i = 0; i < 80 && !moving; i++) {
+      const st = await send({ op: 'state' });
+      if (st.pose.speed > 120 && st.pose.mode.startsWith('idle')) moving = st;
+      else await sleep(25);
+    }
+    await send({ op: 'scan', on: true });
+    const held = await sample(send, null, 1200);
+    await send({ op: 'scan', on: false });
+    const later = held.out.filter(o => o.t - held.out[0].t > 300);
+    const maxLater = Math.max(0, ...later.map(o => o.pose.speed));
+    const drift = later.length ? dist(later[0].pose.body, later.at(-1).pose.body) : null;
+    checks.record(
+      'C22',
+      'agent reading the DOM: the spider eases to a stop and starts no new move until it is done',
+      !!moving && maxLater < 25 && drift !== null && drift < 3,
+      { speedWhenAsked: moving && Math.round(moving.pose.speed), maxSpeedAfter300ms: Math.round(maxLater), driftPx: drift && r1(drift) },
+    );
+  }
 
   // C6/C7 — a long approach: crouch and pull back, leap with legs gathered, land with one small overshoot.
   await send({ op: 'approach', point: { x: 1050, y: 560 }, capMs: 900 });
@@ -459,6 +513,35 @@ try {
     st2?.ok && !host2 && appr.reason === 'not-spawned',
     { contentScript: st2?.ok, hostElement: host2, approachReason: appr.reason },
   );
+
+  // C21 — a heavy, never-still page (image grid, ~20k nodes, a style change every frame): the spider
+  // reading and tearing must not cost frames. Layout is read once per block, never per step.
+  await page.goto(`${base}/heavy.html`);
+  await sleep(1500);
+  const jank = async ms => {
+    await page.evaluate(() => (window.__frames = []));
+    await sleep(ms);
+    return page.evaluate(() => {
+      const f = window.__frames;
+      return { frames: f.length, over24: f.filter(x => x > 24).length, worst: Math.round(Math.max(...f)) };
+    });
+  };
+  const without = await jank(4000);
+  const tab3 = await tabIdOf(ext, page.url());
+  const send3 = spider(ext, tab3);
+  await send3({ op: 'spawn', look: LOOK, at: { x: 500, y: 300, heading: 0 }, arrive: 'teleport' });
+  await send3({ op: 'focus', words: ['spider', 'agent'] });
+  await send3({ op: 'mood', mood: 'thinking' });
+  await sleep(800);
+  const withSpider = await jank(6000);
+  const st3 = await send3({ op: 'state' });
+  checks.record(
+    'C21',
+    'heavy page: the spider reading and tearing drops no more frames than the page alone',
+    withSpider.over24 <= without.over24 + 2 && st3.frameMs < 20,
+    { pageAlone: without, withSpider, spiderFrameMs: r1(st3.frameMs), blocksRead: st3.events.filter(e => e.op === 'read').length },
+  );
+  await send3({ op: 'leave' });
 
   await page.close();
   await ext.close();

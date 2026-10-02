@@ -118,3 +118,9 @@ export function knee2D(hip: V, foot: V, femur: number, tibia: number, bend: numb
   const knee = add(hip, mul(rotate(dir, bend * a), femur));
   return { knee, tip: add(hip, mul(dir, d)) };
 }
+
+/** Minimum-jerk profile: 0 → 1 with zero velocity and acceleration at both ends. */
+export const minJerk = (t: number): number => {
+  const x = clamp(t, 0, 1);
+  return x * x * x * (10 - 15 * x + 6 * x * x);
+};

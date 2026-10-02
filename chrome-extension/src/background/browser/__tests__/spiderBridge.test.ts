@@ -134,6 +134,15 @@ describe('SpiderBridge', () => {
     expect(ops()).toEqual(['7:spawn/descend', '7:depart']);
   });
 
+  it('tells the spider to hold still while the agent reads the DOM, current tab only', async () => {
+    const { bridge, ops } = setup();
+    await bridge.activate(7);
+    await bridge.scanning(7, true);
+    await bridge.scanning(7, false);
+    await bridge.scanning(9, true);
+    expect(ops()).toEqual(['7:spawn/descend', '7:scan', '7:scan']);
+  });
+
   it('sends nothing when disabled', async () => {
     const { bridge, transport } = setup({ ...ON, enabled: false });
     await bridge.activate(7);

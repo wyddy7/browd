@@ -49,8 +49,13 @@ gradients; every action takes them all back.
   or simulated longer than its bones; a planted foot the page outruns slips at full
   reach. Feet snap to the edges of words they land on.
 - **Gait.** Alternating four-leg groups; stride rate rises with speed. Idle moves
-  are stop-and-go: bursts of 50–110 px, freezes of 160–550 ms, a front leg feeling
-  ahead now and then.
+  are stop-and-go, but nothing jolts: each burst (60–130 px) follows a
+  minimum-jerk path — it starts and stops with zero acceleration, peak ~400 px/s —
+  and a freeze is a soft spring to where it stopped, not a brake. Layout is read
+  once per block (words, lines), never per step: feet snap to those known boxes.
+- **Page stalls.** While the agent builds the DOM (a main-thread job that can freeze
+  a heavy page for 100+ ms) the spider eases to a stop and starts no new move, so
+  a stall reads as a pause instead of a hitch mid-move (`PagePresence.scanning`).
 - **Darts.** A long approach is a leap: 75 ms crouch and pull back (anticipation),
   legs gathered in flight, body slightly larger, landing with feet planted around
   where it will settle and a squash, one small overshoot.
@@ -121,7 +126,7 @@ node motion.mjs         # frame-by-frame strips: descend, leap, scrolls, read, t
 node studio.mjs [size] [colour]   # 3× close-up stills for a design check
 ```
 
-Tier A (`e2e.mjs`), last run 21/21, 1 skipped:
+Tier A (`e2e.mjs`), last run 24/24, 1 skipped:
 
 | | Check | Measured |
 | --- | --- | --- |
@@ -147,8 +152,11 @@ Tier A (`e2e.mjs`), last run 21/21, 1 skipped:
 | C17 | after navigation, nothing until told | `not-spawned` |
 | C18 | reduced motion | jump in ≤5 ms, no descent, no reading walk |
 | C19 | moods | waiting: speed 0, a front foot tapping 12 px; asking: heading 0 (toward the panel); done: 6.0 rad turn |
+| C20 | smooth reading (frame clock of the page) | velocity change per frame p95 44–50 px/s, peak ~410 px/s (before the fix: 144 and 726) |
+| C21 | heavy never-still page (~20k nodes, a style change every frame) | 0 extra dropped frames with the spider reading and tearing |
+| C22 | the agent reads the DOM | eases from 147 px/s to rest, no new move, drift 0.1 px |
 
-Tier B (`pipeline.mjs`), last run 11/11 — navigation, typing, a click, a screenshot;
+Tier B (`pipeline.mjs`), last run 12/12 — navigation, typing, a click, a screenshot;
 scripted OpenAI-compatible model on localhost that takes 1.2 s per call:
 
 | | Check | Measured |
@@ -164,6 +172,7 @@ scripted OpenAI-compatible model on localhost that takes 1.2 s per call:
 | P9 | added time per action | ~405–525 ms, mean ~480 ms |
 | P10 | moods follow the agent | thinking → acting → done; done gesture ≥600 ms before the climb; words torn during the run |
 | P11 | the chat toggle mid-task | gone in ~0.5 s, back in ~10 ms |
+| P12 | the agent's DOM reads reach the spider first | 9 scan windows in the run |
 
 Unit tests: `chrome-extension/src/background/browser/__tests__/spiderBridge.test.ts`
 (18: tab teleports, hello only from the current tab, place only from a standing

@@ -89,31 +89,6 @@ interface Drawn {
   bow: V;
 }
 
-const GRIP_TAGS = new Set([
-  'A',
-  'SPAN',
-  'B',
-  'I',
-  'EM',
-  'STRONG',
-  'CODE',
-  'BUTTON',
-  'INPUT',
-  'LABEL',
-  'IMG',
-  'SUP',
-  'SUB',
-  'SMALL',
-  'ABBR',
-  'CITE',
-  'TIME',
-  'KBD',
-  'MARK',
-  'SELECT',
-  'TEXTAREA',
-  'svg',
-]);
-
 // Leg pairs head to tail at size 1: hip position on the head rim, rest
 // direction from the heading, rest distance as a share of the length, bones,
 // knee side. Front pairs bend toward the head, rear pairs toward the tail:
@@ -155,6 +130,8 @@ export class Rig {
   squashAt = -Infinity;
   dip = vec(0, 0);
   thread: { anchor: V; alpha: number } | null = null;
+  /** Document-space rects feet may snap to (the brain's current block); no page reads per step. */
+  gripRects: SpiderRect[] = [];
   rings: Array<{ p: V; born: number; dur: number; from: number; to: number; inward: boolean }> = [];
   private lastScroll = vec(0, 0);
   private velScrollAt = vec(0, 0);
@@ -418,7 +395,7 @@ export class Rig {
       if (leg.feel) {
         // Lifted: the foot reaches for the point (within reach), in the air.
         const goal = clampLen(hip, leg.feel, reach * 0.95);
-        leg.foot = lerp(leg.foot, goal, Math.min(1, dt * 22));
+        leg.foot = lerp(leg.foot, goal, Math.min(1, dt * 12));
         leg.lift = 10 * s;
         leg.rel = null;
         continue;
@@ -445,7 +422,8 @@ export class Rig {
       const off = dist(leg.foot, ideal);
       const stretch = dist(leg.foot, hip) / reach;
       const urgent = stretch > 0.95 || off > threshold * 2.4;
-      const tidy = speed < 15 && off > 8 * s && now - leg.lastStep > 450 && stepping[0] + stepping[1] === 0;
+      // Tidying at rest is rare and only for a foot clearly out of place: no fidgeting.
+      const tidy = speed < 15 && off > 14 * s && now - leg.lastStep > 800 && stepping[0] + stepping[1] === 0;
       const turn = (stepping[1 - leg.group] === 0 || speed > 220 * s) && stepping[leg.group] < 4;
       if ((off > threshold && turn) || urgent || tidy) {
         leg.grip = null;
@@ -475,7 +453,7 @@ export class Rig {
       } else if (hm.kind === 'reach') {
         goal = add(hm.p, mul(lat, 2.5 * s));
       } else if (hm.kind === 'read') {
-        const phase = Math.sin(now / 140 + (i ? Math.PI : 0));
+        const phase = Math.sin(now / 260 + (i ? Math.PI : 0));
         goal = add(add(hm.p, mul(lat, 3 * s)), mul(f, -Math.max(0, phase) * 4 * s));
       } else if (hm.kind === 'type') {
         const phase = Math.sin(now / 55 + (i ? Math.PI : 0));
@@ -511,18 +489,19 @@ export class Rig {
     }
   }
 
-  /** Snap a document point to the edge of the word-sized element under it. */
+  /**
+   * Snap a document point to the edge of a known word or line box under it.
+   * The boxes come from the brain (read once per block): a step never asks
+   * the page for layout, which on a heavy page would force a reflow.
+   */
   private grip(pDoc: V): { p: V; rect: SpiderRect | null } {
-    const q = this.toView(pDoc);
-    if (q.x < 0 || q.y < 0 || q.x >= innerWidth || q.y >= innerHeight) return { p: pDoc, rect: null };
-    const el = document.elementFromPoint(q.x, q.y);
-    if (!el || !GRIP_TAGS.has(el.tagName)) return { p: pDoc, rect: null };
-    const r = el.getBoundingClientRect();
-    if (r.width < 4 || r.width > 520 || r.height > 120) return { p: pDoc, rect: null };
-    const rect = { x: r.x, y: r.y, width: r.width, height: r.height };
-    const edge = nearestOnRectEdge(q, rect);
-    const snapped = dist(edge, q) < 8 * this.size ? edge : q;
-    return { p: this.toDoc(snapped), rect: { x: r.x + scrollX, y: r.y + scrollY, width: r.width, height: r.height } };
+    const pad = 4 * this.size;
+    const rect = this.gripRects.find(
+      r => pDoc.x > r.x - pad && pDoc.x < r.x + r.width + pad && pDoc.y > r.y - pad && pDoc.y < r.y + r.height + pad,
+    );
+    if (!rect) return { p: pDoc, rect: null };
+    const edge = nearestOnRectEdge(pDoc, rect);
+    return { p: dist(edge, pDoc) < 8 * this.size ? edge : pDoc, rect };
   }
 
   // ---------- drawing ----------
