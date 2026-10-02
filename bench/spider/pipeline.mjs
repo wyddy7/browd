@@ -29,6 +29,13 @@ const TASK = `Go to the second page, join the arachnid society with the email ${
 
 const reqLog = fs.createWriteStream(path.join(OUT, 'llm-requests.jsonl'));
 const script = { stage: 'link', calls: [] };
+// A real model takes a while: the spider reads (and tears words) meanwhile.
+const THINK_MS = Number(arg('think', '1200'));
+// Before the screenshot step the model waits here, so the harness can flip the chat toggle mid-task.
+let releaseGate;
+const gate = new Promise(r => (releaseGate = r));
+let gateReached;
+const atGate = new Promise(r => (gateReached = r));
 let callSeq = 0;
 
 const textOf = content =>
@@ -188,8 +195,12 @@ function mock(req, res) {
       }
     }
     const out = completion(body, d);
-    if (out.json) res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(out.json));
-    else res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' }).end(out.sse);
+    const reply = () => {
+      if (out.json) res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(out.json));
+      else res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' }).end(out.sse);
+    };
+    const held = d.tool === 'screenshot' ? (gateReached(), gate) : Promise.resolve();
+    held.then(() => setTimeout(reply, THINK_MS));
   });
   return true;
 }
@@ -279,6 +290,37 @@ try {
     { task: TASK, tabId },
   );
 
+  let toggle = null;
+  atGate.then(async () => {
+    // P11: hide the spider from the chat input mid-task, then show it again.
+    const btn = panel.locator('[data-testid="spider-toggle"]');
+    const hostThere = () => page.evaluate(() => !!document.querySelector('browd-spider')).catch(() => null);
+    const before = await hostThere();
+    const tOff = Date.now();
+    await btn.click();
+    let goneMs = null;
+    while (Date.now() - tOff < 4000) {
+      if ((await hostThere()) === false) {
+        goneMs = Date.now() - tOff;
+        break;
+      }
+      await sleep(50);
+    }
+    const tOn = Date.now();
+    await btn.click();
+    let backMs = null;
+    while (Date.now() - tOn < 4000) {
+      if (await hostThere()) {
+        backMs = Date.now() - tOn;
+        break;
+      }
+      await sleep(50);
+    }
+    const pressed = await btn.getAttribute('aria-pressed');
+    toggle = { before, goneMs, backMs, pressedAfter: pressed };
+    await sleep(800);
+    releaseGate();
+  });
   while (Date.now() - t0 < 120_000) {
     await sleep(150);
     const evs = await panel.evaluate(() => window.__ev.splice(0));
@@ -302,7 +344,8 @@ try {
     if (terminal) break;
   }
   const endT = Date.now();
-  await sleep(2000);
+  // The done gesture (~0.7 s) plays before the climb (~1.5 s).
+  await sleep(3500);
   const hostAfter = await page.evaluate(() => !!document.querySelector('browd-spider')).catch(() => null);
   const final = await send({ op: 'state' }).catch(() => null);
   if (final?.events) spiderByUrl.set(page.url(), final);
@@ -426,6 +469,28 @@ try {
     lastEvent: final?.events?.at(-1)?.op,
     afterTaskMs: Date.now() - endT,
   });
+
+  // P10 — the spider followed the agent's state: moods in order, ending with the done gesture before the climb.
+  const moodOps = [...firstEvents, ...(final?.events ?? secondEvents)].filter(e => e.op.startsWith('mood:')).map(e => e.op.slice(5));
+  const endEvents = final?.events ?? secondEvents;
+  const doneEv = endEvents.find(e => e.op === 'mood:done');
+  const leaveEv = endEvents.find(e => e.op === 'leave' && (!doneEv || e.t >= doneEv.t));
+  const tears = [...firstEvents, ...endEvents].filter(e => e.op === 'tear').length;
+  checks.record(
+    'P10',
+    'moods follow the agent (thinking → acting/waiting → done), the done gesture plays before it climbs away',
+    moodOps.includes('thinking') && (moodOps.includes('acting') || moodOps.includes('waiting')) && !!doneEv && !!leaveEv &&
+      leaveEv.t - doneEv.t >= 600,
+    { moods: [...new Set(moodOps)].join(' → '), doneToLeaveMs: doneEv && leaveEv ? leaveEv.t - doneEv.t : null, wordsTorn: tears },
+  );
+
+  // P11 — the chat toggle hides and brings back the spider while the task runs.
+  checks.record(
+    'P11',
+    'chat toggle mid-task: the spider leaves, then comes back',
+    !!toggle && toggle.before === true && toggle.goneMs !== null && toggle.backMs !== null && toggle.pressedAfter === 'true',
+    toggle ?? { error: 'gate never reached' },
+  );
 
   // Cost of the decoration per action, as the bridge measured it (approach + strike).
   const pairs = strikeLines.map(l => Number(/ms=(\d+)/.exec(l.text)?.[1])).filter(Number.isFinite);

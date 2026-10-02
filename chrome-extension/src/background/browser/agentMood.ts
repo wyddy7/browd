@@ -41,6 +41,14 @@ export function moodOf(event: AgentEventLike): SpiderMood | null {
   switch (event.state) {
     case 'task.start':
     case 'task.resume':
+    case 'step.start':
+      return 'thinking';
+    // Every action reports start and end through these; the tool events of
+    // a subgoal's inner agent do not always reach the outer stream.
+    case 'act.start':
+      return 'acting';
+    case 'act.ok':
+    case 'act.fail':
       return 'thinking';
     case 'task.hitl.approve':
     case 'task.hitl.ask':

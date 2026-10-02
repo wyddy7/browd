@@ -228,11 +228,13 @@ describe('SpiderBridge', () => {
     await bridge.onAgentEvent(live({ kind: 'llm_streaming', tokensSoFar: 40 }));
     await bridge.onAgentEvent(live({ kind: 'tool_start', name: 'go_to_url' }));
     await bridge.onAgentEvent(live({ kind: 'tool_start', name: 'click_element' }));
+    await bridge.onAgentEvent({ state: 'act.start', data: { details: 'Click the Join button' } });
+    await bridge.onAgentEvent({ state: 'act.ok', data: { details: 'Clicked' } });
     await bridge.onAgentEvent({ state: 'task.hitl.ask', data: { details: '' } });
     await bridge.onAgentEvent({ state: 'task.ok', data: { details: 'done' } });
     await bridge.deactivate(7);
     const moods = sent.filter(m => m.cmd.op === 'mood').map(m => (m.cmd as { mood: string }).mood);
-    expect(moods).toEqual(['thinking', 'waiting', 'acting', 'asking', 'done']);
+    expect(moods).toEqual(['thinking', 'waiting', 'acting', 'thinking', 'asking', 'done']);
     expect(sent.at(-1)!.cmd.op).toBe('leave');
   });
 

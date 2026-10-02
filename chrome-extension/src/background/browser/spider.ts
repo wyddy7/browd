@@ -119,6 +119,9 @@ export class SpiderBridge implements PagePresence {
   }
 
   async beforeNavigate(tabId: number): Promise<void> {
+    // A page is about to load: on the next page the spider waits until the agent moves again.
+    this.mood = 'waiting';
+    this.sentMood = 'waiting';
     await this.depart(tabId);
   }
 

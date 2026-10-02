@@ -109,6 +109,20 @@ try {
   await page.evaluate(() => window.scrollTo(0, 0));
   await sleep(1500);
   counts.read = await strip(page, 'read', { x: 0, y: 0, width: 1000, height: 700 }, 5000, () => sleep(10));
+  // Tearing: give it the words to look for and watch.
+  await send({ op: 'focus', words: ['spider', 'press', 'isbn'] });
+  await send({ op: 'mood', mood: 'thinking' });
+  counts.tear = await strip(page, 'tear', { x: 0, y: 0, width: 1000, height: 700 }, 7000, () => sleep(10));
+  await send({ op: 'focus', words: [] });
+  const stA = (await send({ op: 'state' })).pose;
+  counts.asking = await strip(
+    page,
+    'asking',
+    { x: Math.max(0, stA.body.x - 150), y: Math.max(0, stA.body.y - 150), width: 300, height: 300 },
+    1200,
+    () => send({ op: 'mood', mood: 'asking' }),
+  );
+  await send({ op: 'mood', mood: 'thinking' });
   const st = (await send({ op: 'state' })).pose;
   counts.depart = await strip(
     page,
