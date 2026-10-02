@@ -51,11 +51,14 @@ function setup(
 ) {
   const sent: Array<{ tabId: number; cmd: SpiderCommand }> = [];
   const panelOps: string[] = [];
+  /** Page and panel messages in the order they were sent: the one-spider rule is about order. */
+  const timeline: string[] = [];
   let listener: (() => void) | null = null;
   let current = settings;
   const transport: SpiderTransport = {
     send: vi.fn(async (tabId: number, msg: SpiderMessage) => {
       sent.push({ tabId, cmd: msg.cmd });
+      timeline.push(`${tabId}:${msg.cmd.op}${msg.cmd.op === 'spawn' ? `/${msg.cmd.arrive}` : ''}`);
       return send ? send(tabId, msg) : ack();
     }),
     inject: vi.fn(async () => {}),
@@ -63,6 +66,7 @@ function setup(
       ? {
           panel: async (msg: SpiderPanelMessage) => {
             panelOps.push(msg.op);
+            timeline.push(`panel:${msg.op}`);
             return panel(msg);
           },
         }
@@ -82,7 +86,7 @@ function setup(
     await new Promise(r => setTimeout(r, 0));
   };
   const ops = () => sent.map(({ tabId, cmd }) => `${tabId}:${cmd.op}${cmd.op === 'spawn' ? `/${cmd.arrive}` : ''}`);
-  return { bridge, transport, sent, ops, change, panelOps };
+  return { bridge, transport, sent, ops, change, panelOps, timeline };
 }
 
 /** A controllable clock for the burst window. */
@@ -334,71 +338,123 @@ describe('SpiderBridge', () => {
     expect(approach.capMs).toBe(1215);
   });
 
-  describe('parking in the chat during a burst of navigations', () => {
+  describe('the chat panel during a long burst of navigations (never two spiders)', () => {
     const openPanel = async () => ({ ok: true, visible: true });
+    const parkable = (panel: (msg: SpiderPanelMessage) => Promise<SpiderAck | undefined> = openPanel) => {
+      const env = setup(ON, undefined, panel);
+      env.bridge.setPanelOpen(true);
+      return env;
+    };
 
-    it('parks on the second navigation within 8 s and comes back from the right edge on the next click', async () => {
+    it('one or two quick hops stay on the pages; the third goes to the chat — out of the page first, then into the panel', async () => {
       const t = clock();
-      const { bridge, ops, panelOps } = setup(ON, undefined, openPanel);
+      const { bridge, timeline } = parkable();
       await bridge.activate(7);
       await bridge.beforeNavigate(7);
-      t.advance(3000);
+      t.advance(2500);
       await bridge.beforeNavigate(7);
-      expect(ops()).toEqual(['7:spawn/descend', '7:handoff', '7:exit']);
-      expect(panelOps).toEqual(['park']);
-      // Parked: new pages of the tab stay empty, page commands are not sent.
-      expect(bridge.helloReply(7)).toEqual({ active: false });
+      expect(timeline).toEqual(['7:spawn/descend', '7:handoff', '7:handoff']);
+      t.advance(2500);
+      await bridge.beforeNavigate(7);
+      expect(timeline.slice(3)).toEqual(['7:exit', 'panel:park']);
+      // In the chat: new pages stay empty, page commands are not sent.
+      expect(bridge.helloReply(7)).toEqual({ active: false, parked: true });
       await bridge.beforeCapture(7);
-      expect(ops()).toHaveLength(3);
+      expect(timeline).toHaveLength(5);
+      // Back on the next click: out of the panel first, then into the page from the right edge.
       await bridge.strikeAt(7, { x: 100, y: 50 });
-      expect(panelOps).toEqual(['park', 'unpark']);
-      expect(ops().slice(3)).toEqual(['7:spawn/edge', '7:approach', '7:strike']);
+      expect(timeline.slice(5)).toEqual(['panel:unpark', '7:spawn/edge', '7:approach', '7:strike']);
+      vi.restoreAllMocks();
+    });
+
+    it('a plan naming three sites goes to the chat from the first navigation', async () => {
+      clock();
+      const { bridge, timeline } = parkable();
+      bridge.setTask('compare prices on amazon.com, ebay.com and walmart.com');
+      await bridge.activate(7);
+      await bridge.beforeNavigate(7);
+      expect(timeline).toEqual(['7:spawn/descend', '7:exit', 'panel:park']);
+      vi.restoreAllMocks();
+    });
+
+    it('after a link click the panel waits for the next page to paint over the old one', async () => {
+      const t = clock();
+      const { bridge, timeline } = parkable();
+      await bridge.activate(7);
+      await bridge.beforeNavigate(7);
+      t.advance(2500);
+      await bridge.beforeNavigate(7);
+      t.advance(2500);
+      bridge.reportPlace(7, { x: 1, y: 2, heading: 0 }); // third navigation: a link click unloads the page
+      await new Promise(r => setTimeout(r, 0));
+      expect(timeline.slice(3)).toEqual(['7:exit']);
+      expect(bridge.helloReply(7)).toEqual({ active: false, parked: true });
+      bridge.pagePainted(7);
+      await new Promise(r => setTimeout(r, 0));
+      expect(timeline.slice(4)).toEqual(['panel:park']);
       vi.restoreAllMocks();
     });
 
     it('stays on the pages when no chat panel is open', async () => {
       const t = clock();
-      const { bridge, ops } = setup(ON, undefined, async () => undefined);
+      const { bridge, ops } = setup(ON, undefined, openPanel);
       await bridge.activate(7);
-      await bridge.beforeNavigate(7);
-      t.advance(3000);
-      await bridge.beforeNavigate(7);
-      expect(ops()).toEqual(['7:spawn/descend', '7:handoff', '7:handoff']);
+      for (let i = 0; i < 3; i++) {
+        await bridge.beforeNavigate(7);
+        t.advance(2500);
+      }
+      expect(ops()).toEqual(['7:spawn/descend', '7:handoff', '7:handoff', '7:handoff']);
       expect(bridge.helloReply(7).active).toBe(true);
       vi.restoreAllMocks();
     });
 
     it('counts a navigation once (the hook before it and the page unload after it)', async () => {
       const t = clock();
-      const { bridge, panelOps } = setup(ON, undefined, openPanel);
+      const { bridge, panelOps } = parkable();
       await bridge.activate(7);
       await bridge.beforeNavigate(7);
       t.advance(400);
       bridge.reportPlace(7, { x: 1, y: 2, heading: 0 });
-      await Promise.resolve();
+      t.advance(2500);
+      await bridge.beforeNavigate(7);
+      t.advance(400);
+      bridge.reportPlace(7, { x: 1, y: 2, heading: 0 });
+      await new Promise(r => setTimeout(r, 0));
       expect(panelOps).toEqual([]);
       vi.restoreAllMocks();
     });
 
-    it('goes back to the page after 8 s without a navigation, and says goodbye from the chat at the end', async () => {
+    it('back to the page after 8 s without a navigation; goodbye from the chat when the task ends there', async () => {
       const t = clock();
-      const { bridge, ops, panelOps } = setup(ON, undefined, openPanel);
+      const { bridge, timeline } = parkable();
+      bridge.setTask('a.com b.com c.com');
       await bridge.activate(7);
-      await bridge.beforeNavigate(7);
-      t.advance(2000);
       await bridge.beforeNavigate(7);
       t.advance(9000);
       await bridge.onAgentEvent({ actor: 'navigator', state: 'step.start', data: { details: '' } } as never);
-      expect(panelOps).toEqual(['park', 'unpark']);
-      expect(ops().at(-1)).toBe('7:spawn/edge');
-      // A new burst, and the task ends while it waits in the chat.
+      expect(timeline.slice(-2)).toEqual(['panel:unpark', '7:spawn/edge']);
+      // The plan's prediction was used once; now it takes three quick hops again.
       t.advance(1000);
       await bridge.beforeNavigate(7);
-      t.advance(2000);
+      expect(timeline.at(-1)).toBe('7:handoff');
+      t.advance(2500);
+      await bridge.beforeNavigate(7);
+      t.advance(2500);
       await bridge.beforeNavigate(7);
       await bridge.deactivate(7);
-      expect(panelOps).toEqual(['park', 'unpark', 'park', 'leave']);
-      expect(ops()).not.toContain('7:leave');
+      expect(timeline.slice(-3)).toEqual(['7:exit', 'panel:park', 'panel:leave']);
+      expect(timeline).not.toContain('7:leave');
+      vi.restoreAllMocks();
+    });
+
+    it('a panel that refuses the spider sends it back onto the page', async () => {
+      clock();
+      const { bridge, timeline } = parkable(async () => undefined);
+      bridge.setTask('a.com b.com c.com');
+      await bridge.activate(7);
+      await bridge.beforeNavigate(7);
+      expect(timeline).toEqual(['7:spawn/descend', '7:exit', 'panel:park', '7:spawn/edge']);
+      expect(bridge.helloReply(7).active).toBe(true);
       vi.restoreAllMocks();
     });
   });

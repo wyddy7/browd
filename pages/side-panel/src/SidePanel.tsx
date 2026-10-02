@@ -37,7 +37,7 @@ import { TracePanel, type TraceEntry } from './components/TracePanel';
 import { EventType, type AgentEvent, ExecutionState } from './types/event';
 import type { HITLRequest, HITLDecision } from '../../../chrome-extension/src/background/agent/hitl/types';
 import { HITL_REQUEST_MESSAGE } from '../../../chrome-extension/src/background/agent/hitl/types';
-import { startPanelSpider } from './spiderPanel';
+import { panelSpiderTaskEnded, startPanelSpider } from './spiderPanel';
 import './SidePanel.css';
 
 type ModelOption = {
@@ -623,6 +623,7 @@ const SidePanel = () => {
               currentPhaseRef.current = 'thinking';
               break;
             case ExecutionState.TASK_OK:
+              panelSpiderTaskEnded();
               setIsFollowUpMode(true);
               setInputEnabled(true);
               setShowStopButton(false);
@@ -652,6 +653,7 @@ const SidePanel = () => {
               setLiveStatus(null);
               break;
             case ExecutionState.TASK_FAIL:
+              panelSpiderTaskEnded();
               setIsFollowUpMode(true);
               setInputEnabled(true);
               setShowStopButton(false);
@@ -676,6 +678,7 @@ const SidePanel = () => {
               setLiveStatus(null);
               break;
             case ExecutionState.TASK_CANCEL:
+              panelSpiderTaskEnded();
               setIsFollowUpMode(false);
               setInputEnabled(true);
               setShowStopButton(false);

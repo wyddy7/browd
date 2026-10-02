@@ -20,7 +20,7 @@ where it was and reappears at the same spot there.
 | `input_text`, `fill_field_by_label`, `type_at` | goes to the field, taps it, drums with both hands until the keys are in |
 | navigates (link, `go_to_url`) | a **handoff**: it stays standing on the old page until the browser swaps it, and the next page draws it on the same spot with the same heading and legs right after that page's first contentful paint — no collapse, no entrance (*waiting* until the agent moves) |
 | works in another tab | the same teleport, tab to tab — one spider per task (bridge unit-tested; not yet seen end to end, see H4) |
-| navigates again within 8 s (a burst) | it **jumps into the chat**: leaps out over the right edge of the page and lands in the side panel from the left, reads the chat while it waits; on the agent's next click or typing (or after 8 s without a navigation) it leaps out of the panel to the left and into the page from its right edge, straight to the target. With no chat panel open it stays on the pages |
+| a long burst of navigations (the 3rd within 12 s, or from the 1st when the task and plan name ≥3 sites) | it **jumps into the chat**: leaps out over the right edge of the page — and only once it is gone — lands in the side panel from the left, reads the chat while it waits; on the agent's next click or typing (or after 8 s without a navigation) it leaves the panel to the left and — once gone there — leaps into the page from its right edge, straight to the target. One or two quick hops stay on the pages (handoff). Never two spiders at once |
 | asks you (HITL approve / ask) | turns toward the side panel, front legs up, hands waving |
 | scrolls a little (wheel) | feet are planted in the page: they ride with it and step |
 | scrolls far (`scroll_to_bottom`) | a cut: the page carries it a few dozen px, the feet re-grip, it springs back |
@@ -133,18 +133,27 @@ background                                         content script (top frame)
   paints, so the gap is one frame. Across sites without a user gesture Chrome
   shows a blank page while loading; the spider is absent for that time. Tab
   switches still collapse and teleport (another tab is another place).
-- **Burst → the chat panel (02.10).** The bridge counts navigations of the
-  current tab (the go_to_url hook and the page's unload are one navigation if
-  within 1.5 s). The second within `BURST_MS` (8 s) parks the spider: it asks the
-  panel first (`browd:spider:panel` `park` — no panel open, no answer, no park),
-  then sends the page `exit right`. While parked, hellos are `active: false` and
-  pages get no commands except the spawn that brings it back: on `beforePointer`
-  / `typing`, or on the first agent event after `QUIET_MS` (8 s) without a
-  navigation — panel `unpark` (it leaps out to the left), page spawn with
-  `arrive: 'edge'` from the right edge, then the approach glides on from there.
-  The task ending while parked sends the panel `leave`. The panel side is
-  `side-panel/src/spiderPanel.ts`: the same `Spider` engine (aliased as
-  `@spider`), no tearing there.
+- **Burst → the chat panel (02.10–03.10).** The bridge counts navigations of
+  the current tab (the go_to_url hook and the page's unload are one navigation
+  if within 1.5 s). A burst is the `BURST_COUNT`-th (3) within `BURST_MS` (12 s),
+  or — predicted, once per task — the first navigation when the task and the
+  plan name `PLANNED_SITES` (3) distinct sites; one or two quick hops stay on the
+  pages (owner 👤 03.10). Thresholds are the agent's picks 🤖, to be tuned live.
+  Parking needs the chat panel open (its port; closing the panel cancels the
+  task anyway).
+- **Never two spiders (owner 👤 03.10).** `seat` (`page` / `toPanel` / `panel` /
+  `toPage`) is the one place the spider is; pages get no command while it is not
+  `page` except the moves themselves. To the panel: go_to_url's hook awaits the
+  page's `exit right` (gone) before the panel's `park`; after a link click the
+  page is dying, so the panel waits for the next page's first paint (the hello
+  reply says `parked`, the page answers `browd:spider:painted`; fallback 2.5 s) —
+  until then the browser may still show the old page's held frame. Back: the
+  panel's `unpark` resolves when its spider is gone, only then the page gets
+  `spawn` with `arrive: 'edge'`. A panel that refuses sends it back to the page.
+  Strays: a fresh service worker broadcasts `leave` to panels, and the panel
+  sends its own spider away 3 s after it sees the task end if the background did
+  not. The panel side is `side-panel/src/spiderPanel.ts`: the same `Spider`
+  engine (aliased as `@spider`), no tearing there.
 - Settings `spider-settings` (`packages/storage/lib/settings/spider.ts`): on/off,
   size, pace, marks, colour, tear. Options → General → **Agent spider**; the spider
   button in the chat input toggles it, also mid-task.
@@ -229,15 +238,18 @@ scripted OpenAI-compatible model on localhost that takes 1.2 s per call:
 | P10 | moods follow the agent | thinking → acting → done; done gesture ≥600 ms before the climb; words torn during the run |
 | P11 | the chat toggle mid-task | gone in ~0.5 s, back in ~10 ms |
 | P12 | the agent's DOM reads reach the spider first | 9 scan windows in the run |
-| P13 | `--burst`: two go_to_url hops park it in the chat; the next click brings it back | bridge `park` then `unpark`; panel `spawn-edge-left entered mood:thinking read mood:acting exit-left`; page `spawn-edge-right approach` |
+| P13 | `--burst`: four go_to_url hops — two stay on the pages, the third parks it in the chat; the next click brings it back; never two at once | 2 handoffs, then `park (3 navigations)`; panel landed 3 ms after the page spider was out; page spider back 3 ms after the panel one was gone; panel `spawn-edge-left entered … read … exit-left gone`, page `spawn-edge-right approach` |
 
 Unit tests: `chrome-extension/src/background/browser/__tests__/spiderBridge.test.ts`
-(26: tab teleports, handoff on navigation with the full place, hello only from the
+(29: tab teleports, handoff on navigation with the full place, hello only from the
 current tab, place only from a standing spider, focus words from the task and the
 active subgoal, moods sent once per change with the ending mood before the climb,
 toggle on mid-task, disabled sends nothing, never throws, caps, injection, respawn,
-live settings, pace; parking: a burst parks, no panel no park, one navigation
-counted once, quiet spell brings it back, goodbye from the chat at task end).
+live settings, pace; the chat panel: two hops stay, the third parks — page out
+before panel in, panel out before page in; a plan of three sites parks at once
+(once per task); after a link click the panel waits for the next page's paint;
+no panel no park; one navigation counted once; quiet spell brings it back;
+goodbye from the chat at task end; a refusing panel sends it back).
 
 ## Open questions for a manual pass
 

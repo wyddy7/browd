@@ -9,14 +9,29 @@
 import type { SpiderAck, SpiderPanelMessage } from '@extension/shared';
 import { Spider } from '@spider/engine';
 
-export function startPanelSpider(): () => void {
-  let spider: Spider | null = null;
-  const none: SpiderAck = { ok: true, visible: false };
+let spider: Spider | null = null;
+let safety = 0;
+const none: SpiderAck = { ok: true, visible: false };
 
+/**
+ * The task ended (as the panel sees it). The background normally sends `leave`
+ * itself; if the spider is still sitting here a moment later — the background
+ * lost track of it — it leaves anyway, so a stray one never stays next to a
+ * spider on the page.
+ */
+export function panelSpiderTaskEnded(): void {
+  window.clearTimeout(safety);
+  safety = window.setTimeout(() => {
+    if (spider?.spawned) spider.leave();
+  }, 3000);
+}
+
+export function startPanelSpider(): () => void {
   const handle = async (msg: SpiderPanelMessage): Promise<SpiderAck> => {
     switch (msg.op) {
       case 'park': {
         if (!msg.look) return { ok: false, visible: false };
+        window.clearTimeout(safety);
         spider ??= new Spider();
         if (msg.mood) spider.mood(msg.mood);
         const at = { x: 96, y: Math.round(innerHeight * 0.62), heading: 0 };

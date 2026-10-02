@@ -10,9 +10,10 @@ import type {
   SpiderHello,
   SpiderHelloReply,
   SpiderMessage,
+  SpiderPainted,
   SpiderPoseReport,
 } from '@extension/shared';
-import { Spider } from './spider/engine';
+import { Spider, whenPainted } from './spider/engine';
 
 declare global {
   interface Window {
@@ -89,6 +90,12 @@ if (window.top === window && !window.__browdSpider) {
   chrome.runtime
     .sendMessage(hello)
     .then((reply: SpiderHelloReply | undefined) => {
+      if (reply?.parked) {
+        // The spider waits in the chat: it may move there once this page has replaced the old one on screen.
+        const painted: SpiderPainted = { type: 'browd:spider:painted' };
+        void whenPainted(1500).then(() => chrome.runtime.sendMessage(painted).catch(() => {}));
+        return;
+      }
       if (!reply?.active || !reply.look) return;
       const sp = ensure();
       if (reply.focus) sp.focus(reply.focus);

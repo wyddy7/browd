@@ -14,11 +14,18 @@
  * the agent attached to or acted in — and teleports when the agent moves to
  * another tab or page. Every call is bounded and swallows its own errors.
  *
- * During a burst of navigations (a second one within `BURST_MS`) it does not
- * stay on pages that keep being replaced: it leaps out to the right into the
- * chat panel ("parked", see `side-panel/src/spiderPanel.ts`) and comes back —
- * leaping in from the right edge — on the agent's next click or typing, or
- * after `QUIET_MS` without a navigation. With no chat panel open it stays put.
+ * During a long burst of navigations it does not stay on pages that keep
+ * being replaced: it waits in the chat panel (see `side-panel/src/spiderPanel.ts`)
+ * and comes back on the agent's next click or typing, or after `QUIET_MS`
+ * without a navigation. A burst is the `BURST_COUNT`-th navigation within
+ * `BURST_MS`, or — predicted — the first one when the task and the plan name
+ * `PLANNED_SITES` or more sites. One or two quick hops stay on the pages.
+ *
+ * There is never more than one spider on screen: `seat` is the single place it
+ * is, and a move between page and panel is sequenced — the leaving one is gone
+ * before the other appears. After a link-click navigation the panel waits for
+ * the next page's first paint, so the browser's held frame of the old page
+ * (spider included) is off screen first.
  */
 import {
   DEFAULT_SPIDER_SETTINGS,
@@ -51,10 +58,26 @@ const APPROACH_CAP_MS = 900;
 const PACE_FACTOR = { calm: 1.35, normal: 1, fast: 0.7 } as const;
 /** Pose modes in which the spider stands on the page (its place is worth carrying over). */
 const GROUNDED = /^(idle|busy|approach)/;
-/** A second navigation within this window is a burst: the spider waits in the chat panel. */
-const BURST_MS = 8000;
-/** Parked this long with no navigation, it goes back to the page even without a click. */
+/** This many navigations within `BURST_MS` are a burst: the spider waits in the chat panel. */
+const BURST_COUNT = 3;
+const BURST_MS = 12000;
+/** A task and plan naming this many distinct sites predict a burst: the chat from the first navigation. */
+const PLANNED_SITES = 3;
+/** In the chat this long with no navigation, it goes back to the page even without a click. */
 const QUIET_MS = 8000;
+/** After a link-click navigation the panel waits for the next page's paint, at most this long. */
+const PANEL_ENTRY_FALLBACK_MS = 2500;
+
+/** Where the one spider is: on the current page, in the chat panel, or moving between them. */
+type Seat = 'page' | 'toPanel' | 'panel' | 'toPage';
+
+/** Distinct sites named in some texts (hostnames, `www.` dropped). */
+export function sitesIn(texts: string[]): number {
+  const hosts = new Set<string>();
+  const re = /\b(?:https?:\/\/)?((?:[a-z0-9-]+\.)+[a-z]{2,24})\b/gi;
+  for (const t of texts) for (const m of t.matchAll(re)) hosts.add(m[1].toLowerCase().replace(/^www\./, ''));
+  return hosts.size;
+}
 
 export interface SpiderTransport {
   send(tabId: number, msg: SpiderMessage): Promise<SpiderAck | undefined>;
@@ -100,10 +123,15 @@ export class SpiderBridge implements PagePresence {
   /** The tab whose page is being replaced (navigation): its next page gets a handoff, not a teleport. */
   private handoffTab: number | null = null;
   private handoffAt = 0;
-  /** Waiting in the chat panel during a burst of navigations. */
-  private parked = false;
+  private seat: Seat = 'page';
+  /** The chat panel is open (its port is connected); a running task implies it. */
+  private panelOpen = false;
+  private panelEntryTimer: ReturnType<typeof setTimeout> | null = null;
   private navs: number[] = [];
   private lastNavAt = 0;
+  private plannedSites = 0;
+  /** The plan's prediction is used once per task: later hops back and forth would ping-pong the spider. */
+  private plannedUsed = false;
   /** Already shown in this task: further entrances are teleports, not descents. */
   private shown = false;
   private mood: SpiderMood | null = null;
@@ -152,7 +180,7 @@ export class SpiderBridge implements PagePresence {
     this.mood = 'waiting';
     this.sentMood = 'waiting';
     if (!this.isOn(tabId) || this.current !== tabId) return;
-    if (await this.noteNavigation(tabId, true)) return;
+    if (await this.noteNavigation(tabId, 'hook')) return;
     const ack = await this.send(tabId, { op: 'handoff' }, 150);
     if (ack?.place && isPlace(ack.place)) this.place = ack.place;
     this.markHandoff(tabId);
@@ -173,7 +201,7 @@ export class SpiderBridge implements PagePresence {
   async typing(tabId: number, on: boolean): Promise<void> {
     if (!this.isOn(tabId)) return;
     if (on) await this.moveTo(tabId);
-    if (on) await this.unpark(tabId);
+    if (on) await this.toPage(tabId);
     await this.send(tabId, { op: 'typing', on }, 200);
   }
 
@@ -183,25 +211,30 @@ export class SpiderBridge implements PagePresence {
   setTask(text: string): void {
     this.taskText = text;
     this.focus = focusWords([text]);
+    this.plannedSites = sitesIn([text]);
   }
 
   /** Every execution event of the agent. Cheap: most events change nothing and send nothing. */
   async onAgentEvent(event: AgentEventLike): Promise<void> {
     const plan = planTexts(event);
-    if (plan) this.focus = focusWords([...plan.slice(0, 1), this.taskText]);
+    if (plan) {
+      this.focus = focusWords([...plan.slice(0, 1), this.taskText]);
+      this.plannedSites = sitesIn([this.taskText, ...plan]);
+    }
     const mood = moodOf(event);
     if (mood) this.mood = mood;
     const tabId = this.current;
     if (tabId === null || !this.isOn(tabId)) return;
-    if (this.parked) {
+    if (this.seat === 'panel') {
       // The burst is over when no navigation came for a while: back to the page.
-      if (Date.now() - this.lastNavAt > QUIET_MS) await this.unpark(tabId);
+      if (Date.now() - this.lastNavAt > QUIET_MS) await this.toPage(tabId);
       else if (this.mood && this.mood !== this.sentMood) {
         this.sentMood = this.mood;
         void this.panelSend({ op: 'mood', mood: this.mood }, 200);
       }
       return;
     }
+    if (this.seat !== 'page') return;
     await this.flushState(tabId);
   }
 
@@ -229,7 +262,7 @@ export class SpiderBridge implements PagePresence {
       this.current = tabId;
       return;
     }
-    if (this.parked) {
+    if (this.seat !== 'page') {
       this.current = tabId;
       return;
     }
@@ -244,10 +277,10 @@ export class SpiderBridge implements PagePresence {
   /** Agent detached: from the current tab the spider climbs away; the task is over when no tab is left. */
   async deactivate(tabId: number): Promise<void> {
     if (!this.active.delete(tabId)) return;
-    if (this.current === tabId && this.parked) {
+    if (this.current === tabId && this.seat !== 'page') {
       // The task ended while the spider waited in the chat: it says goodbye from there.
       this.current = null;
-      this.parked = false;
+      this.settleSeat();
       void this.panelSend({ op: 'leave', mood: this.mood ?? undefined }, 300);
     } else if (this.current === tabId) {
       this.current = null;
@@ -274,7 +307,9 @@ export class SpiderBridge implements PagePresence {
 
   /** Answer to the content script's hello after a page load in this tab. */
   helloReply(tabId: number | undefined): SpiderHelloReply {
-    if (tabId === undefined || !this.isOn(tabId) || this.current !== tabId || this.parked) return { active: false };
+    if (tabId === undefined || !this.isOn(tabId) || this.current !== tabId) return { active: false };
+    // In (or on its way to) the chat: this page stays empty and only reports its first paint.
+    if (this.seat !== 'page') return { active: false, parked: true };
     const reply: SpiderHelloReply = {
       active: true,
       look: this.look(),
@@ -294,7 +329,7 @@ export class SpiderBridge implements PagePresence {
     if (tabId === undefined || tabId !== this.current || !isPlace(place)) return;
     this.place = place;
     this.markHandoff(tabId);
-    void this.noteNavigation(tabId, false);
+    void this.noteNavigation(tabId, 'unload');
     logger.info(`unload tab=${tabId} at=${Math.round(place.x)},${Math.round(place.y)}`);
   }
 
@@ -302,7 +337,7 @@ export class SpiderBridge implements PagePresence {
   async strikeAt(tabId: number, point: SpiderPoint, rect?: SpiderRect): Promise<SpiderAck | null> {
     if (!this.isOn(tabId)) return null;
     await this.moveTo(tabId);
-    await this.unpark(tabId);
+    await this.toPage(tabId);
     const capMs = Math.round(APPROACH_CAP_MS * PACE_FACTOR[this.settings.pace]);
     const t0 = Date.now();
     const approach = await this.send(tabId, { op: 'approach', point, rect: rect && toRect(rect), capMs }, capMs + 250);
@@ -323,9 +358,12 @@ export class SpiderBridge implements PagePresence {
     logger.info(`depart tab=${tabId} at=${at}`);
   }
 
-  async send(tabId: number, cmd: SpiderCommand, capMs: number): Promise<SpiderAck | null> {
-    // Parked in the chat: the pages get nothing but the spawn that brings it back.
-    if (this.parked && cmd.op !== 'spawn' && cmd.op !== 'exit') return null;
+  /**
+   * `seatMove`: part of a move between page and panel. Otherwise, while the
+   * spider is not on the page, pages get nothing — no spawn can sneak in.
+   */
+  async send(tabId: number, cmd: SpiderCommand, capMs: number, seatMove = false): Promise<SpiderAck | null> {
+    if (this.seat !== 'page' && !seatMove) return null;
     const deadline = Date.now() + capMs;
     try {
       let ack = await this.sendOnce(tabId, cmd, capMs);
@@ -362,8 +400,8 @@ export class SpiderBridge implements PagePresence {
   /** The spider goes to `tabId`: it collapses in the tab it was in and reappears here. */
   private async moveTo(tabId: number): Promise<void> {
     if (this.current === tabId) return;
-    if (this.parked) {
-      // It comes back from the chat straight into the new tab (see unpark).
+    if (this.seat !== 'page') {
+      // It comes back from the chat straight into the new tab (see toPage).
       this.current = tabId;
       return;
     }
@@ -378,55 +416,106 @@ export class SpiderBridge implements PagePresence {
     this.markSent();
   }
 
+  /** The chat panel opened or closed (its port). Closing it cancels the task anyway. */
+  setPanelOpen(open: boolean): void {
+    this.panelOpen = open;
+  }
+
+  /** A page told `parked` has painted: the old page is off screen, the panel may show the spider. */
+  pagePainted(tabId: number | undefined): void {
+    if (this.seat === 'toPanel' && tabId === this.current) void this.enterPanel();
+  }
+
   /**
-   * A navigation of the current tab begins (go_to_url's hook, or the page
-   * unloading). The second within `BURST_MS` parks the spider in the chat.
-   * `pageAlive`: the old page can still show the leap out (go_to_url's hook).
-   * Returns whether the spider is parked now.
+   * A navigation of the current tab begins: go_to_url's hook (the old page can
+   * still show the leap out) or the page unloading (a link click). Returns
+   * whether the spider is (going) in the chat now.
    */
-  private async noteNavigation(tabId: number, pageAlive: boolean): Promise<boolean> {
+  private async noteNavigation(tabId: number, how: 'hook' | 'unload'): Promise<boolean> {
     const now = Date.now();
     // One navigation reported twice: the hook before it, then the page's unload.
     const repeat = now - this.lastNavAt < 1500;
     this.lastNavAt = now;
-    if (repeat || this.parked) return this.parked;
+    if (repeat || this.seat !== 'page') return this.seat !== 'page';
     this.navs = [...this.navs.filter(t => now - t < BURST_MS), now];
-    if (this.navs.length < 2) return false;
-    return this.park(tabId, pageAlive);
-  }
-
-  /** Leap out to the right into the chat panel — only if the panel is open to receive it. */
-  private async park(tabId: number, pageAlive: boolean): Promise<boolean> {
-    const ack = await this.panelSend({ op: 'park', look: this.look(), mood: this.mood ?? undefined }, 250);
-    if (!ack?.ok) return false;
-    // Exit first, then mark parked (a parked bridge sends pages nothing but spawns and exits).
-    const exit = this.send(tabId, { op: 'exit', side: 'right' }, 800);
-    this.parked = true;
-    this.sentMood = this.mood;
-    logger.info(`park tab=${tabId} (navigation burst)`);
-    if (pageAlive) await exit;
+    const planned = !this.plannedUsed && this.plannedSites >= PLANNED_SITES;
+    if (!this.panelOpen || (!planned && this.navs.length < BURST_COUNT)) return false;
+    if (planned) this.plannedUsed = true;
+    logger.info(
+      `park tab=${tabId} (${planned ? `planned: ${this.plannedSites} sites` : `${this.navs.length} navigations`})`,
+    );
+    this.seat = 'toPanel';
+    if (how === 'hook') {
+      // Out of the page first, then into the panel: never two on screen.
+      await this.send(tabId, { op: 'exit', side: 'right' }, 800, true);
+      logger.info(`park tab=${tabId} out of the page`);
+      await this.enterPanel();
+    } else {
+      // The page is going away; the panel waits until the next page has painted over it.
+      void this.send(tabId, { op: 'exit', side: 'right' }, 800, true);
+      this.panelEntryTimer = setTimeout(() => void this.enterPanel(), PANEL_ENTRY_FALLBACK_MS);
+    }
     return true;
   }
 
-  /** Back from the chat: it leaps out of the panel to the left and into the page from its right edge. */
-  private async unpark(tabId: number): Promise<void> {
-    if (!this.parked) return;
-    this.parked = false;
+  /** The spider lands in the chat panel (the page side is already empty). */
+  private async enterPanel(): Promise<void> {
+    if (this.seat !== 'toPanel') return;
+    this.clearPanelTimer();
+    const ack = await this.panelSend({ op: 'park', look: this.look(), mood: this.mood ?? undefined }, 300);
+    if (this.seat !== 'toPanel') return;
+    if (ack?.ok) {
+      this.seat = 'panel';
+      this.sentMood = this.mood;
+      return;
+    }
+    // The panel did not take it: back onto the page.
+    logger.info('park refused by the panel; back to the page');
+    this.seat = 'toPage';
+    await this.landOnPage();
+  }
+
+  /** Back from the chat: it leaves the panel (gone first), then leaps into the page from its right edge. */
+  private async toPage(tabId: number): Promise<void> {
+    if (this.seat === 'page' || this.seat === 'toPage') return;
+    const fromPanel = this.seat === 'panel';
+    this.seat = 'toPage';
+    this.clearPanelTimer();
     this.navs = [];
-    void this.panelSend({ op: 'unpark' }, 900);
     logger.info(`unpark tab=${tabId}`);
-    const at = { x: 100000, y: this.place?.y ?? 360, heading: Math.PI };
-    const cmd: SpiderCommand = {
-      op: 'spawn',
-      look: this.look(),
-      at,
-      arrive: 'edge',
-      mood: this.mood ?? undefined,
-      focus: this.focus,
-    };
-    await this.send(tabId, cmd, 400);
-    this.shown = true;
-    this.markSent();
+    if (fromPanel) await this.panelSend({ op: 'unpark' }, 800);
+    logger.info(`unpark tab=${tabId} out of the panel`);
+    await this.landOnPage();
+  }
+
+  private async landOnPage(): Promise<void> {
+    const tabId = this.current;
+    if (tabId !== null && this.settings.enabled) {
+      const cmd: SpiderCommand = {
+        op: 'spawn',
+        look: this.look(),
+        at: { x: 100000, y: this.place?.y ?? 360, heading: Math.PI },
+        arrive: 'edge',
+        mood: this.mood ?? undefined,
+        focus: this.focus,
+      };
+      await this.send(tabId, cmd, 400, true);
+      this.shown = true;
+      this.markSent();
+    }
+    this.seat = 'page';
+  }
+
+  /** Forget a move between page and panel (task over, spider off). */
+  private settleSeat(): void {
+    this.seat = 'page';
+    this.navs = [];
+    this.clearPanelTimer();
+  }
+
+  private clearPanelTimer(): void {
+    if (this.panelEntryTimer) clearTimeout(this.panelEntryTimer);
+    this.panelEntryTimer = null;
   }
 
   private async panelSend(msg: Omit<SpiderPanelMessage, 'type'>, capMs: number): Promise<SpiderAck | null> {
@@ -477,9 +566,10 @@ export class SpiderBridge implements PagePresence {
     this.shown = false;
     this.place = null;
     this.handoffTab = null;
-    this.parked = false;
-    this.navs = [];
+    this.settleSeat();
     this.lastNavAt = 0;
+    this.plannedSites = 0;
+    this.plannedUsed = false;
     this.mood = null;
     this.sentMood = null;
     this.sentFocus = '';
@@ -532,8 +622,8 @@ export class SpiderBridge implements PagePresence {
     this.settings = next;
     const tabId = this.current;
     if (tabId === null) return;
-    if (wasOn && !next.enabled && this.parked) {
-      this.parked = false;
+    if (wasOn && !next.enabled && this.seat !== 'page') {
+      this.settleSeat();
       void this.panelSend({ op: 'leave' }, 300);
     } else if (wasOn && !next.enabled) void this.send(tabId, { op: 'leave' }, 300);
     else if (!wasOn && next.enabled) {

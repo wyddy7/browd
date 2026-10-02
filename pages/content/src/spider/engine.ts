@@ -854,7 +854,7 @@ export class Spider {
  * Resolves once the page has painted its own content (the first contentful
  * paint), or after `timeoutMs` — whichever is first. Names what happened.
  */
-function whenPainted(timeoutMs: number): Promise<'fcp' | 'timeout'> {
+export function whenPainted(timeoutMs: number): Promise<'fcp' | 'timeout'> {
   return new Promise(resolve => {
     let observer: PerformanceObserver | null = null;
     let timer = 0;

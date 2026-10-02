@@ -143,6 +143,8 @@ export interface SpiderAck {
 
 export interface SpiderHelloReply {
   active: boolean;
+  /** The spider waits in the chat panel: say `browd:spider:painted` once this page has painted. */
+  parked?: boolean;
   look?: SpiderLook;
   at?: SpiderPlace;
   arrive?: SpiderArrival;
@@ -176,4 +178,9 @@ export interface SpiderPanelMessage {
   op: 'park' | 'unpark' | 'mood' | 'leave' | 'state';
   look?: SpiderLook;
   mood?: SpiderMood;
+}
+
+/** Content script → background: this page (told `parked`) has painted, so the old page is off screen. */
+export interface SpiderPainted {
+  type: 'browd:spider:painted';
 }

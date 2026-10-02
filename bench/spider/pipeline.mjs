@@ -28,9 +28,10 @@ const TASK = `Go to the second page, join the arachnid society with the email ${
 // ---------- scripted model ----------
 
 const reqLog = fs.createWriteStream(path.join(OUT, 'llm-requests.jsonl'));
-// --burst: two go_to_url hops first (a burst of navigations parks the spider in the chat panel),
+// --burst: four go_to_url hops first (the third quick navigation parks the spider in the chat panel),
 // then the usual task; its first click brings the spider back to the page.
 const BURST = process.argv.includes('--burst');
+const HOPS = ['second', 'article', 'second', 'article'];
 const script = { stage: BURST ? 'hop1' : 'link', calls: [] };
 let fixtureBase = '';
 // A real model takes a while: the spider reads (and tears words) meanwhile.
@@ -87,13 +88,11 @@ function decide(body) {
   if (forced === 'task_complete' || (tools.includes('task_complete') && !tools.includes('click_element'))) {
     return { kind: 'final', tool: 'task_complete', args: { intent: 'finish', outcome: 'answered', response: `Joined with ${EMAIL}.` } };
   }
-  if (tools.includes('click_element') && script.stage === 'hop1') {
-    script.stage = 'hop2';
-    return { kind: 'act', tool: 'go_to_url', args: { intent: 'look at the second page', url: `${fixtureBase}/second.html` } };
-  }
-  if (tools.includes('click_element') && script.stage === 'hop2') {
-    script.stage = 'link';
-    return { kind: 'act', tool: 'go_to_url', args: { intent: 'back to the article', url: `${fixtureBase}/article.html` } };
+  const hop = /^hop(\d)$/.exec(script.stage);
+  if (tools.includes('click_element') && hop) {
+    const i = Number(hop[1]) - 1;
+    script.stage = i + 1 < HOPS.length ? `hop${i + 2}` : 'link';
+    return { kind: 'act', tool: 'go_to_url', args: { intent: `look at ${HOPS[i]}`, url: `${fixtureBase}/${HOPS[i]}.html` } };
   }
   if (tools.includes('click_element')) {
     const els = elements(state);
@@ -433,11 +432,14 @@ try {
     },
   );
 
-  // P13 (--burst) — two go_to_url hops within 8 s park the spider in the chat panel (it leaps out over
-  // the right edge); the agent's next click brings it back, leaping in from the right edge.
+  // P13 (--burst) — the third quick go_to_url parks the spider in the chat panel (the first two stay on
+  // the pages); the agent's next click brings it back. Never two at once: the page spider is out before
+  // the panel one lands, and the panel one is gone before the page one comes back.
   if (BURST) {
-    const parkLine = swLines.find(l => l.text.includes('[Spider] park'));
-    const unparkLine = swLines.find(l => l.text.includes('[Spider] unpark'));
+    const parkLine = swLines.find(l => l.text.includes('[Spider] park') && !l.text.includes('out of'));
+    const outOfPage = swLines.find(l => l.text.includes('out of the page'));
+    const unparkLine = swLines.find(l => l.text.includes('[Spider] unpark') && !l.text.includes('out of'));
+    const handoffs = swLines.filter(l => l.text.includes('[Spider] handoff')).length;
     const backIn = firstEvents.find(e => e.op === 'spawn-edge-right');
     const actAfter = firstEvents.find(e => e.op === 'approach');
     // Ask the panel from another extension page (a page never receives its own runtime messages).
@@ -446,12 +448,26 @@ try {
       .evaluate(() => chrome.runtime.sendMessage({ type: 'browd:spider:panel', op: 'state' }))
       .catch(() => null);
     await probe.close();
+    const panelIn = panelSt?.events?.find(e => e.op === 'spawn-edge-left');
+    const panelGone = panelSt?.events?.find(e => e.op === 'gone');
     checks.record(
       'P13',
-      'burst: two quick navigations park the spider in the chat panel; the next click brings it back from the right edge',
-      !!parkLine && !!unparkLine && parkLine.t <= unparkLine.t && !!backIn && !!actAfter && backIn.t <= actAfter.t &&
-        !!panelSt?.events?.some(e => e.op === 'spawn-edge-left') && !!panelSt?.events?.some(e => e.op === 'exit-left'),
+      'burst: two hops stay on the pages, the third parks it in the chat; the next click brings it back; never two at once',
+      handoffs === 2 &&
+        !!parkLine &&
+        !!outOfPage &&
+        !!panelIn &&
+        outOfPage.t <= panelIn.t + 30 &&
+        !!unparkLine &&
+        !!panelGone &&
+        !!backIn &&
+        panelGone.t <= backIn.t &&
+        !!actAfter &&
+        backIn.t <= actAfter.t,
       {
+        handoffsBeforePark: handoffs,
+        outOfPageToPanelInMs: outOfPage && panelIn ? panelIn.t - outOfPage.t : null,
+        panelGoneToPageInMs: panelGone && backIn ? backIn.t - panelGone.t : null,
         park: parkLine?.text.replace('[Spider] ', ''),
         unpark: unparkLine?.text.replace('[Spider] ', ''),
         pageAfterUnpark: firstEvents.map(e => e.op).filter(op => /spawn|entered|approach|strike/.test(op)).join(' '),
