@@ -20,7 +20,7 @@ boxes.
 | scrolls far (`scroll_to_bottom`, instant jumps) | a cut: the page carries it a few dozen px, the feet re-grip at once, it springs back to its spot |
 | `screenshot()` and every other capture | disappears for the capture (the model and the Judge never see it), reappears after |
 | navigates (link, `go_to_url`) | tucks and collapses into a point with a ring on the old page; the new page closes a ring at the same spot and it pops out with an overshoot, facing the same way |
-| works in another tab | the same teleport, from the old tab to the new one — one spider per task |
+| works in another tab | the same teleport, from the old tab to the new one — one spider per task (bridge unit-tested; not yet seen end to end, see H4) |
 | task ends | climbs out of view on a thread and removes its element |
 
 ### Motion
