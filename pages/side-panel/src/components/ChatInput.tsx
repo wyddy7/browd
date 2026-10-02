@@ -450,6 +450,7 @@ export default function ChatInput({
   return (
     <form
       ref={composerRef}
+      data-notice-dock="composer"
       onSubmit={handleSubmit}
       className={`browd-input overflow-visible transition-colors ${disabled ? 'cursor-not-allowed opacity-80' : ''}`}
       aria-label={t('chat_input_form')}>

@@ -1159,7 +1159,10 @@
     "message": "This is the Browd spider"
   },
   "notice_spider_body": {
-    "message": "It shows where the agent is working: it reads along and jumps to each button just before the click."
+    "message": "It shows where the agent is working."
+  },
+  "notice_spider_hide": {
+    "message": "Hide"
   },
   "notice_ok": {
     "message": "Got it"

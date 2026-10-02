@@ -524,16 +524,17 @@ try {
     const maxW = Math.max(0, ...f.map(x => x.w));
     checks.record(
       'P14',
-      'spider notice: grows out of the spider button into a card at the task start (spring overshoot), folds away when answered and is stored as seen',
+      'spider notice: grows out of the spider button into a low bar over the composer at the task start (spring overshoot), folds away when answered, stored as seen',
       !!first &&
         !!n.button &&
         Math.abs(first.w - n.button.w) < 12 &&
         Math.abs(first.h - n.button.h) < 12 &&
-        last.w > 200 &&
-        last.h > 60 &&
+        last.w > 300 &&
+        last.h >= 40 &&
+        last.h <= 70 &&
         maxW > last.w * 1.01 &&
         n.after.gone &&
-        n.after.seen.includes('spider-intro'),
+        n.after.seen.includes('spider-hello'),
       {
         button: n.button && `${Math.round(n.button.w)}×${Math.round(n.button.h)}`,
         firstFrame: first && `${Math.round(first.w)}×${Math.round(first.h)}`,

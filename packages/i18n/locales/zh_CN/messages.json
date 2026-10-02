@@ -1171,7 +1171,10 @@
     "message": "这是 Browd 蜘蛛"
   },
   "notice_spider_body": {
-    "message": "它显示代理正在哪里工作：跟着阅读，并在每次点击前跳到按钮上。"
+    "message": "显示代理正在哪里工作。"
+  },
+  "notice_spider_hide": {
+    "message": "隐藏"
   },
   "notice_ok": {
     "message": "知道了"

@@ -15,12 +15,14 @@ import { noticesStore } from '@extension/storage';
 import { NOTICES, type NoticeDef, type NoticeTrigger } from './registry';
 import { type Box, EXPAND, FOLD, SpringBox } from './springBox';
 
-const CARD_W = 296;
+/** A notice is a low, wide bar docked over the composer: two lines of text. */
 const EDGE = 12;
 const GAP = 8;
-const PAD = 14;
+const PAD_X = 12;
+const PAD_Y = 9;
+const ROW = 22;
 const ICON = 16;
-const RADIUS = 12;
+const RADIUS = 10;
 
 export function NoticeHost({ fire }: { fire: { trigger: NoticeTrigger; at: number } | null }) {
   const [notice, setNotice] = useState<NoticeDef | null>(null);
@@ -56,6 +58,14 @@ function anchorBox(anchor?: string): Box {
   return { x: innerWidth / 2 - 4, y: innerHeight - 120, w: 8, h: 8, r: 4 };
 }
 
+/** What the bar spans: the composer (`data-notice-dock`); without it, the panel's width. */
+function dockBox(dock?: string): Box {
+  const el = document.querySelector<HTMLElement>(`[data-notice-dock="${dock ?? 'composer'}"]`);
+  const r = el?.getBoundingClientRect();
+  if (r && r.width > 0) return { x: r.left, y: r.top, w: r.width, h: r.height, r: RADIUS };
+  return { x: EDGE, y: innerHeight - 140, w: innerWidth - 2 * EDGE, h: 0, r: RADIUS };
+}
+
 const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 function NoticeCard({ notice, onDone }: { notice: NoticeDef; onDone: () => void }) {
@@ -66,7 +76,9 @@ function NoticeCard({ notice, onDone }: { notice: NoticeDef; onDone: () => void 
   /** The two ends of the current move: the control and the card. */
   const ends = useRef<{ control: Box; card: Box }>({ control: anchorBox(), card: anchorBox() });
   const leaving = useRef(false);
-  const width = Math.min(CARD_W, innerWidth - 2 * EDGE);
+  // Laid out at its final width from the first frame (the text is never scaled during the morph).
+  const [dock] = useState(() => dockBox(notice.dock));
+  const width = dock.w;
 
   useLayoutEffect(() => {
     const boxEl = boxRef.current;
@@ -74,13 +86,8 @@ function NoticeCard({ notice, onDone }: { notice: NoticeDef; onDone: () => void 
     if (!boxEl || !content) return;
     const control = anchorBox(notice.anchor);
     const h = content.offsetHeight;
-    const card: Box = {
-      x: Math.min(Math.max(control.x - 6, EDGE), innerWidth - width - EDGE),
-      y: Math.max(EDGE, control.y - GAP - h),
-      w: width,
-      h,
-      r: RADIUS,
-    };
+    // Docked over the composer, its full width — not a card in a corner.
+    const card: Box = { x: dock.x, y: Math.max(EDGE, dock.y - GAP - h), w: width, h, r: RADIUS };
     ends.current = { control, card };
     let textIn = false;
 
@@ -97,8 +104,8 @@ function NoticeCard({ notice, onDone }: { notice: NoticeDef; onDone: () => void 
       if (icon) {
         const fromX = (c0.w - ICON) / 2;
         const fromY = (c0.h - ICON) / 2;
-        icon.style.left = `${fromX + (PAD - fromX) * open}px`;
-        icon.style.top = `${fromY + (PAD + 1 - fromY) * open}px`;
+        icon.style.left = `${fromX + (PAD_X - fromX) * open}px`;
+        icon.style.top = `${fromY + (PAD_Y + (ROW - ICON) / 2 - fromY) * open}px`;
       }
       if (!textIn && !leaving.current && open > 0.6) {
         textIn = true;
@@ -122,7 +129,7 @@ function NoticeCard({ notice, onDone }: { notice: NoticeDef; onDone: () => void 
     paint(control);
     s.to(card, EXPAND);
     return () => s.stop();
-  }, [notice, width]);
+  }, [notice, dock, width]);
 
   const answer = async (run?: () => Promise<void>) => {
     if (leaving.current) return;
@@ -171,25 +178,24 @@ function NoticeCard({ notice, onDone }: { notice: NoticeDef; onDone: () => void 
           <FaSpider className="size-4" />
         </div>
       )}
-      <div ref={contentRef} className="absolute left-0 top-0" style={{ width, padding: PAD, opacity: 0 }}>
-        <div
-          className="font-medium text-[var(--browd-text)]"
-          style={{ fontSize: 13, lineHeight: '18px', paddingLeft: notice.icon ? ICON + 10 : 0 }}>
-          {notice.title()}
-        </div>
-        <p
-          className="mt-1.5 text-[var(--browd-muted)]"
-          style={{ fontSize: 'var(--browd-text-small)', lineHeight: 1.45 }}>
-          {notice.body()}
-        </p>
-        <div className="mt-3 flex items-center justify-end gap-1.5">
+      <div
+        ref={contentRef}
+        className="absolute left-0 top-0"
+        style={{ width, padding: `${PAD_Y}px ${PAD_X}px`, opacity: 0 }}>
+        {/* Line 1: the title, the actions on the right. */}
+        <div className="flex items-center gap-1.5" style={{ height: ROW }}>
+          {notice.icon && <span className="shrink-0" style={{ width: ICON + 4 }} />}
+          <span className="truncate font-medium text-[var(--browd-text)]" style={{ fontSize: 13 }}>
+            {notice.title()}
+          </span>
+          <span className="flex-1" />
           {notice.secondary && (
             <button
               type="button"
               data-testid="notice-secondary"
               onClick={() => void answer(notice.secondary?.run)}
-              className="browd-icon-button rounded-[var(--browd-radius-sm)] px-2.5"
-              style={{ height: 'var(--browd-control-h-sm)', fontSize: 12.5 }}>
+              className="browd-icon-button shrink-0 rounded-[var(--browd-radius-sm)] px-2"
+              style={{ height: ROW, fontSize: 12 }}>
               {notice.secondary.label()}
             </button>
           )}
@@ -197,10 +203,16 @@ function NoticeCard({ notice, onDone }: { notice: NoticeDef; onDone: () => void 
             type="button"
             data-testid="notice-primary"
             onClick={() => void answer()}
-            className="rounded-[var(--browd-radius-sm)] px-3 font-medium text-[var(--browd-text)] transition-colors hover:bg-[var(--browd-control-hover)]"
-            style={{ height: 'var(--browd-control-h-sm)', fontSize: 12.5, background: 'var(--browd-panel-strong)' }}>
+            className="shrink-0 rounded-[var(--browd-radius-sm)] px-2.5 font-medium text-[var(--browd-text)] transition-colors hover:bg-[var(--browd-control-hover)]"
+            style={{ height: ROW, fontSize: 12, background: 'var(--browd-panel-strong)' }}>
             {notice.primary()}
           </button>
+        </div>
+        {/* Line 2: what it is, one line. */}
+        <div
+          className="truncate text-[var(--browd-muted)]"
+          style={{ fontSize: 'var(--browd-text-small)', lineHeight: '17px', paddingLeft: notice.icon ? ICON + 10 : 0 }}>
+          {notice.body()}
         </div>
       </div>
     </div>

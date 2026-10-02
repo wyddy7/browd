@@ -1171,7 +1171,10 @@
     "message": "Voici l'araignée Browd"
   },
   "notice_spider_body": {
-    "message": "Elle montre où travaille l'agent : elle lit avec lui et saute sur chaque bouton juste avant le clic."
+    "message": "Elle montre où travaille l'agent."
+  },
+  "notice_spider_hide": {
+    "message": "Masquer"
   },
   "notice_ok": {
     "message": "Compris"

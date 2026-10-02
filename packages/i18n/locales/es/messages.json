@@ -1171,7 +1171,10 @@
     "message": "Esta es la araña de Browd"
   },
   "notice_spider_body": {
-    "message": "Muestra dónde trabaja el agente: lee con él y salta a cada botón justo antes del clic."
+    "message": "Muestra dónde está trabajando el agente."
+  },
+  "notice_spider_hide": {
+    "message": "Ocultar"
   },
   "notice_ok": {
     "message": "Entendido"

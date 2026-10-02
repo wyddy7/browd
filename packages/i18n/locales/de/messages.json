@@ -1171,7 +1171,10 @@
     "message": "Das ist die Browd-Spinne"
   },
   "notice_spider_body": {
-    "message": "Sie zeigt, wo der Agent gerade arbeitet: Sie liest mit und springt vor jedem Klick zur Schaltfläche."
+    "message": "Sie zeigt, wo der Agent gerade arbeitet."
+  },
+  "notice_spider_hide": {
+    "message": "Ausblenden"
   },
   "notice_ok": {
     "message": "Verstanden"
