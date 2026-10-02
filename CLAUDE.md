@@ -300,13 +300,15 @@ state is not cached. Tab-gone aborts still reject as `TabGoneError`.
 ## Agent Spider (content script)
 
 `pages/content/` hosts the agent spider: a line-drawn spider in a closed
-shadow root that walks to whatever the agent clicks or types into, driven by
-`browser/spider.ts` (`SpiderBridge`) from `Page`. Full contract, checks and
+shadow root that reads the page between actions, leaps to whatever the agent
+clicks or types into, and teleports between pages and tabs (one per task, in
+the current tab), driven by `browser/spider.ts` (`SpiderBridge`) from `Page`. Full contract, checks and
 open questions: `docs/agent-spider.md`. Never break its invariants: the site's
 DOM is never modified (marks are canvas-only), the host element is never
 touched after creation (`readClickSignature` hashes `outerHTML`), every bridge
 call is capped and swallows its errors, `takeScreenshot` hides it, and
-benchmark runs disable it (`spider-settings.enabled = false`). E2E:
+benchmark runs disable it (`spider-settings.enabled = false`); legs are never
+drawn longer than their bones. E2E:
 `bench/spider/e2e.mjs` (overlay, no model) and `bench/spider/pipeline.mjs`
 (real agent on a scripted localhost model, $0).
 

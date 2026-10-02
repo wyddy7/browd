@@ -338,14 +338,25 @@ try {
     { bridge: linkLine.replace('[Spider] ', ''), pageLogBeforeUnload: firstEvents.map(e => e.op).join(' ') },
   );
 
-  // P3 — after the navigation the hello brought it back without an extra command.
-  const spawn2 = secondEvents.find(e => e.op === 'spawn');
+  // P3 — the navigation is a teleport: the old page reported where the spider was as it unloaded,
+  // and the new page's spider appears at that spot (no second descent on a thread).
+  const unloadLine = swLines.find(l => l.text.includes('[Spider] unload'))?.text ?? '';
+  const unloadAt = /at=(-?\d+),(-?\d+)/.exec(unloadLine);
+  const spawn2 = secondEvents.find(e => e.op === 'spawn' || e.op === 'spawn-teleport');
   const firstAct2 = secondEvents.find(e => e.op === 'approach');
+  const off2 =
+    unloadAt && spawn2 ? Math.hypot(spawn2.body.x - Number(unloadAt[1]), spawn2.body.y - Number(unloadAt[2])) : null;
   checks.record(
     'P3',
-    'second page: hello respawns the spider before the first action there',
-    !!spawn2 && !!firstAct2 && spawn2.t <= firstAct2.t,
-    { spawnBeforeActionMs: spawn2 && firstAct2 ? firstAct2.t - spawn2.t : null },
+    'navigation = teleport: unload reports the spot, the next page spawns there as a teleport before acting, no descent',
+    spawn2?.op === 'spawn-teleport' && off2 !== null && off2 <= 2 && !!firstAct2 && spawn2.t <= firstAct2.t &&
+      !secondEvents.some(e => e.op === 'landed'),
+    {
+      unload: unloadLine.replace('[Spider] ', ''),
+      secondPageSpawn: spawn2 && `${spawn2.op} at ${Math.round(spawn2.body.x)},${Math.round(spawn2.body.y)}`,
+      offsetPx: off2 && Math.round(off2 * 10) / 10,
+      spawnBeforeActionMs: spawn2 && firstAct2 ? firstAct2.t - spawn2.t : null,
+    },
   );
 
   // P4 — typing: tapped the field centre, keys arrived inside typing-on/off.
