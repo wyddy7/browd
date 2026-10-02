@@ -331,7 +331,7 @@ try {
         }),
     );
     if (track.frames.length) fs.writeFileSync(path.join(OUT, 'notice.png'), await panel.screenshot());
-    await panel.locator('[data-testid="notice-primary"]').click().catch(() => {});
+    await panel.locator('[data-testid="notice-close"]').click().catch(() => {});
     await sleep(700);
     const after = await panel.evaluate(async () => ({
       gone: !document.querySelector('[data-testid="notice"]'),
@@ -534,7 +534,7 @@ try {
         last.h <= 70 &&
         maxW > last.w * 1.01 &&
         n.after.gone &&
-        n.after.seen.includes('spider-hello'),
+        n.after.seen.includes('spider-watch'),
       {
         button: n.button && `${Math.round(n.button.w)}×${Math.round(n.button.h)}`,
         firstFrame: first && `${Math.round(first.w)}×${Math.round(first.h)}`,

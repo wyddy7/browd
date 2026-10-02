@@ -6,8 +6,9 @@
  * Adding one: give it a new id (a changed text needs a new id to be shown
  * again), a trigger, an anchor if it is about a control (the bar grows out of
  * that control and folds back into it), and its strings in every locale. It is
- * a low bar over the composer: a title line (with the actions) and one line of
- * text — keep both short enough for a 360 px panel.
+ * a low bar over the composer: a title line and one line of text, a close
+ * button, no other controls (the control it is about is right there) — keep
+ * both lines short enough for a 360 px panel.
  */
 import { t } from '@extension/i18n';
 import { spiderSettingsStore } from '@extension/storage';
@@ -25,26 +26,22 @@ export interface NoticeDef {
   icon?: 'spider';
   title: () => string;
   body: () => string;
-  primary: () => string;
-  secondary?: { label: () => string; run: () => Promise<void> };
+  /** The close button's label (screen readers, tooltip): the only control on a notice. */
+  close: () => string;
   /** Show only while this holds. */
   when?: () => Promise<boolean>;
 }
 
 export const NOTICES: NoticeDef[] = [
   {
-    // Shown the first time the spider comes out with a task.
-    id: 'spider-hello',
+    // Shown when the first task starts, just before the spider comes out (so: an announcement).
+    id: 'spider-watch',
     trigger: 'task-start',
     anchor: 'spider-toggle',
     icon: 'spider',
     title: () => t('notice_spider_title'),
     body: () => t('notice_spider_body'),
-    primary: () => t('notice_ok'),
-    secondary: {
-      label: () => t('notice_spider_hide'),
-      run: () => spiderSettingsStore.updateSettings({ enabled: false }),
-    },
+    close: () => t('notice_ok'),
     when: async () => (await spiderSettingsStore.getSettings()).enabled,
   },
 ];

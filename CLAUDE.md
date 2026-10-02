@@ -323,9 +323,11 @@ in `registry.ts` with a new id (a changed text needs a new id), its strings in
 every locale, and an `anchor` (`data-notice-anchor` on the control) if it is
 about a control — the notice grows out of that control and folds back into it
 (`springBox.ts`, motion-morph springs; `prefers-reduced-motion` = no motion). It is
-a low bar docked over the composer, its full width, two lines: title + actions,
-then one line of text (owner 👤 03.10: «широким и низким, 2 строки … не в углу»).
-First notice: `spider-hello` at the first task with the spider on. Checked by
+a low bar docked over the composer, its full width, no border: a title line with a
+close button (the only control) and one line of text (owner 👤 03.10: «широким и
+низким, 2 строки … не в углу», «нахуя там хоть какая-то кнопка кроме крестика»).
+First notice: `spider-watch` («There's a spider in this extension. / Watch it.» —
+the owner's wording, verbatim) when the first task starts. Checked by
 `bench/spider/pipeline.mjs` P14 (the task is sent through the panel composer, so
 the panel sees the task's events).
 

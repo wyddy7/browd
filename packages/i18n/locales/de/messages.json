@@ -1168,13 +1168,10 @@
     "message": "Spinne anzeigen"
   },
   "notice_spider_title": {
-    "message": "Das ist die Browd-Spinne"
+    "message": "In dieser Erweiterung gibt es eine Spinne."
   },
   "notice_spider_body": {
-    "message": "Sie zeigt, wo der Agent gerade arbeitet."
-  },
-  "notice_spider_hide": {
-    "message": "Ausblenden"
+    "message": "Beobachten Sie sie."
   },
   "notice_ok": {
     "message": "Verstanden"

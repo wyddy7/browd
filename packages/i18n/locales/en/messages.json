@@ -1156,13 +1156,10 @@
     "message": "Show the spider"
   },
   "notice_spider_title": {
-    "message": "This is the Browd spider"
+    "message": "There's a spider in this extension."
   },
   "notice_spider_body": {
-    "message": "It shows where the agent is working."
-  },
-  "notice_spider_hide": {
-    "message": "Hide"
+    "message": "Watch it."
   },
   "notice_ok": {
     "message": "Got it"

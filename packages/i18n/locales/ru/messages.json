@@ -1135,13 +1135,10 @@
     "message": "Показать паука"
   },
   "notice_spider_title": {
-    "message": "Это паук Browd"
+    "message": "В этом расширении есть паук."
   },
   "notice_spider_body": {
-    "message": "Показывает, где сейчас работает агент."
-  },
-  "notice_spider_hide": {
-    "message": "Скрыть"
+    "message": "Следите за ним."
   },
   "notice_ok": {
     "message": "Понятно"

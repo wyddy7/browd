@@ -1168,13 +1168,10 @@
     "message": "显示蜘蛛"
   },
   "notice_spider_title": {
-    "message": "这是 Browd 蜘蛛"
+    "message": "这个扩展里有一只蜘蛛。"
   },
   "notice_spider_body": {
-    "message": "显示代理正在哪里工作。"
-  },
-  "notice_spider_hide": {
-    "message": "隐藏"
+    "message": "看着它。"
   },
   "notice_ok": {
     "message": "知道了"

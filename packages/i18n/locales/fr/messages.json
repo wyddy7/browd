@@ -1168,13 +1168,10 @@
     "message": "Afficher l'araignée"
   },
   "notice_spider_title": {
-    "message": "Voici l'araignée Browd"
+    "message": "Il y a une araignée dans cette extension."
   },
   "notice_spider_body": {
-    "message": "Elle montre où travaille l'agent."
-  },
-  "notice_spider_hide": {
-    "message": "Masquer"
+    "message": "Observez-la."
   },
   "notice_ok": {
     "message": "Compris"

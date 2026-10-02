@@ -11,6 +11,7 @@
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { FaSpider } from 'react-icons/fa';
+import { FiX } from 'react-icons/fi';
 import { noticesStore } from '@extension/storage';
 import { NOTICES, type NoticeDef, type NoticeTrigger } from './registry';
 import { type Box, EXPAND, FOLD, SpringBox } from './springBox';
@@ -131,11 +132,10 @@ function NoticeCard({ notice, onDone }: { notice: NoticeDef; onDone: () => void 
     return () => s.stop();
   }, [notice, dock, width]);
 
-  const answer = async (run?: () => Promise<void>) => {
+  const close = async () => {
     if (leaving.current) return;
     leaving.current = true;
     await noticesStore.markSeen(notice.id).catch(() => {});
-    if (run) await run().catch(() => {});
     const s = spring.current;
     const content = contentRef.current;
     const boxEl = boxRef.current;
@@ -167,12 +167,8 @@ function NoticeCard({ notice, onDone }: { notice: NoticeDef; onDone: () => void 
       role="dialog"
       aria-live="polite"
       aria-label={notice.title()}
-      className="fixed z-50 overflow-hidden border"
-      style={{
-        background: 'hsl(var(--browd-surface-000))',
-        borderColor: 'hsl(var(--browd-border-100) / 0.6)',
-        boxShadow: 'var(--browd-shadow-menu)',
-      }}>
+      className="fixed z-50 overflow-hidden"
+      style={{ background: 'hsl(var(--browd-surface-000))', boxShadow: 'var(--browd-shadow-menu)' }}>
       {notice.icon === 'spider' && (
         <div ref={iconRef} className="absolute text-[var(--browd-accent)]" style={{ width: ICON, height: ICON }}>
           <FaSpider className="size-4" />
@@ -182,33 +178,25 @@ function NoticeCard({ notice, onDone }: { notice: NoticeDef; onDone: () => void 
         ref={contentRef}
         className="absolute left-0 top-0"
         style={{ width, padding: `${PAD_Y}px ${PAD_X}px`, opacity: 0 }}>
-        {/* Line 1: the title, the actions on the right. */}
+        {/* Line 1: the title; the close button on the right is the only control. */}
         <div className="flex items-center gap-1.5" style={{ height: ROW }}>
           {notice.icon && <span className="shrink-0" style={{ width: ICON + 4 }} />}
           <span className="truncate font-medium text-[var(--browd-text)]" style={{ fontSize: 13 }}>
             {notice.title()}
           </span>
           <span className="flex-1" />
-          {notice.secondary && (
-            <button
-              type="button"
-              data-testid="notice-secondary"
-              onClick={() => void answer(notice.secondary?.run)}
-              className="browd-icon-button shrink-0 rounded-[var(--browd-radius-sm)] px-2"
-              style={{ height: ROW, fontSize: 12 }}>
-              {notice.secondary.label()}
-            </button>
-          )}
           <button
             type="button"
-            data-testid="notice-primary"
-            onClick={() => void answer()}
-            className="shrink-0 rounded-[var(--browd-radius-sm)] px-2.5 font-medium text-[var(--browd-text)] transition-colors hover:bg-[var(--browd-control-hover)]"
-            style={{ height: ROW, fontSize: 12, background: 'var(--browd-panel-strong)' }}>
-            {notice.primary()}
+            data-testid="notice-close"
+            onClick={() => void close()}
+            aria-label={notice.close()}
+            title={notice.close()}
+            className="browd-icon-button flex shrink-0 items-center justify-center"
+            style={{ width: ROW, height: ROW }}>
+            <FiX className="size-3.5" />
           </button>
         </div>
-        {/* Line 2: what it is, one line. */}
+        {/* Line 2: one line of text. */}
         <div
           className="truncate text-[var(--browd-muted)]"
           style={{ fontSize: 'var(--browd-text-small)', lineHeight: '17px', paddingLeft: notice.icon ? ICON + 10 : 0 }}>

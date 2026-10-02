@@ -180,9 +180,9 @@ background                                         content script (top frame)
 - Settings `spider-settings` (`packages/storage/lib/settings/spider.ts`): on/off,
   size, pace, marks, colour, tear. Options → General → **Agent spider**; the spider
   button in the chat input toggles it, also mid-task. On by default; the first task
-  with the spider on shows the `spider-hello` notice — a two-line bar over the
-  composer (what it is; «Hide» / «Got it») grown out of that button — see
-  «In-product notices» in `CLAUDE.md`.
+  with the spider on shows the `spider-watch` notice — a two-line bar over the
+  composer («There's a spider in this extension. / Watch it.», a close button)
+  grown out of that button — see «In-product notices» in `CLAUDE.md`.
 
 ### Invariants (keep them when changing anything here)
 

@@ -1168,13 +1168,10 @@
     "message": "Mostrar la araña"
   },
   "notice_spider_title": {
-    "message": "Esta es la araña de Browd"
+    "message": "En esta extensión hay una araña."
   },
   "notice_spider_body": {
-    "message": "Muestra dónde está trabajando el agente."
-  },
-  "notice_spider_hide": {
-    "message": "Ocultar"
+    "message": "Obsérvala."
   },
   "notice_ok": {
     "message": "Entendido"
