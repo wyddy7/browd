@@ -299,18 +299,19 @@ state is not cached. Tab-gone aborts still reject as `TabGoneError`.
 
 ## Agent Spider (content script)
 
-`pages/content/` hosts the agent spider: a line-drawn spider in a closed
-shadow root that reads the page between actions, leaps to whatever the agent
-clicks or types into, and teleports between pages and tabs (one per task, in
-the current tab), driven by `browser/spider.ts` (`SpiderBridge`) from `Page`. Full contract, checks and
-open questions: `docs/agent-spider.md`. Never break its invariants: the site's
-DOM is never modified (marks are canvas-only), the host element is never
-touched after creation (`readClickSignature` hashes `outerHTML`), every bridge
-call is capped and swallows its errors, `takeScreenshot` hides it, and
-benchmark runs disable it (`spider-settings.enabled = false`); legs are never
-drawn longer than their bones. E2E:
-`bench/spider/e2e.mjs` (overlay, no model) and `bench/spider/pipeline.mjs`
-(real agent on a scripted localhost model, $0).
+`pages/content/` hosts the agent spider (`src/spider/`: `engine.ts` commands and
+modes, `rig.ts` body and drawing, `brain.ts` behaviour by the agent's mood,
+`stickers.ts` torn-out words, `reader.ts`, `overlay.ts`). `Page` talks only to the
+`PagePresence` interface (`browser/presence.ts`); `browser/spider.ts`
+(`SpiderBridge`) implements it and reads agent events from the one subscription in
+`background/index.ts` through `browser/agentMood.ts`. Full contract, checks and
+open questions: `docs/agent-spider.md`. Never break its invariants: the site's DOM
+is never modified (torn words, marks and holes are canvas drawing), the host
+element is never touched after creation (`readClickSignature` hashes `outerHTML`),
+every bridge call is capped and swallows its errors, captures never contain it,
+legs are never drawn longer than their bones, benchmark runs disable it
+(`spider-settings.enabled = false`). E2E: `bench/spider/e2e.mjs` (overlay, no
+model) and `bench/spider/pipeline.mjs` (real agent on a scripted localhost model, $0).
 
 ## MV3 Service Worker Gotchas
 

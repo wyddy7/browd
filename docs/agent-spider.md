@@ -1,109 +1,111 @@
 # Agent spider (experimental, branch `exp/spider`)
 
-While the agent works in a tab, a small line-drawn spider lives on top of the
-page and does the agent's actions with its own hands: between actions it reads
-the page block by block, before a click it leaps to the element and taps the
-exact click point, it drums on a field while the agent types, and when the agent
-moves to another page it collapses where it was and reappears at the same spot
-there. You see where the agent is looking and acting without element highlight
-boxes.
+While the agent works in a tab, a long-legged line-drawn spider lives on top of
+the page and shows what the agent is doing. While the model thinks, it reads the
+page the way a spider moves — bursts and freezes, a front leg feeling ahead —
+goes to the words the task is about and tears them out of the page; before a
+click it leaps to the element and taps the exact point; it drums on a field while
+the agent types; it waits while a page loads, turns to the side panel when the
+agent asks you something, and when the agent moves to another page it collapses
+where it was and reappears at the same spot there.
 
 ## What it does
 
-| Agent does | Spider does |
+| Agent | Spider |
 | --- | --- |
 | starts a task in a tab | descends from the top on a thread and lands (first entrance only) |
-| thinks (model call) | reads: walks to a text block, runs its hands along the first lines, looks up, moves to the next block below |
-| `click_element`, `click_at`, `drag_at` | crouches, leaps with legs gathered (≈0.5 s), lands with them spread, winds up and taps the point; a ring marks the contact; then the real click |
+| a model call runs (*thinking*) | reads: walks to a text block that mentions the focus words, steps along the lines in bursts with freezes, goes straight to a focus word and tears it out (a tilted tag pulled by a front leg; a hole left in the line), then the next block |
+| an interaction tool starts (*acting*) | alert; no new tearing |
+| `click_element`, `click_at`, `drag_at` | crouches, leaps with legs gathered (≈0.5 s), lands with them spread, winds up and taps the point; a ring marks the contact; then the real click. Every torn word goes home first |
 | `input_text`, `fill_field_by_label`, `type_at` | goes to the field, taps it, drums with both hands until the keys are in |
+| navigates (link, `go_to_url`) | tucks and collapses into a point with a ring; the next page closes a ring at the same spot, it pops out facing the same way and looks around (*waiting* until the agent moves) |
+| works in another tab | the same teleport, tab to tab — one spider per task (bridge unit-tested; not yet seen end to end, see H4) |
+| asks you (HITL approve / ask) | turns toward the side panel, front legs up, hands waving |
 | scrolls a little (wheel) | feet are planted in the page: they ride with it and step |
-| scrolls far (`scroll_to_bottom`, instant jumps) | a cut: the page carries it a few dozen px, the feet re-grip at once, it springs back to its spot |
-| `screenshot()` and every other capture | disappears for the capture (the model and the Judge never see it), reappears after |
-| navigates (link, `go_to_url`) | tucks and collapses into a point with a ring on the old page; the new page closes a ring at the same spot and it pops out with an overshoot, facing the same way |
-| works in another tab | the same teleport, from the old tab to the new one — one spider per task (bridge unit-tested; not yet seen end to end, see H4) |
-| task ends | climbs out of view on a thread and removes its element |
+| scrolls far (`scroll_to_bottom`) | a cut: the page carries it a few dozen px, the feet re-grip, it springs back |
+| any screenshot | disappears for the capture — spider and torn words; the model and the Judge never see it |
+| task done / failed | a full turn on the spot / a droop, then it climbs away on a thread |
+
+**Focus words** come from the task text and the active subgoal of the plan:
+names and topic words, no verbs, fillers or URLs; capitals-only two-letter words
+(AI) are kept; plurals are trimmed so a prefix match finds both forms. Short words
+match whole («ai» does not catch «aim»); matching is Unicode-aware, so a Russian
+task finds Russian words.
+
+**Torn words are drawn, not moved.** The page's DOM is never touched: the word's
+spot is painted over in the solid colour behind it, and a copy of the word is drawn
+as a sticker — either a filled tag in monospace (the reference look) or the page's
+own font with an outline. At most three at once; skipped over images and
+gradients; every action takes them all back.
 
 ### Motion
 
-- **Anatomy.** Head (cephalothorax) with four eyes, a pedicel and a larger
-  abdomen behind it. The abdomen hangs on its own looser spring: it lags on
-  turns and swings once when the spider stops (follow-through).
-- **Legs.** Four pairs, femur thicker than tibia. Each leg is solved in a
-  vertical plane with the knee always up (pseudo-3D, slight oblique lift), and
-  bowed outward by a fixed rule — front pairs toward the tail, rear pairs toward
-  the head — so a knee can never flip sides. A leg is never drawn longer than its
-  bones; a planted foot that the page carries too far slips along at full reach
-  until it steps. Feet snap to the edges of words and links they land on.
-- **Gait.** Alternating four-leg groups; stride rate rises with speed, groups may
-  overlap at a brisk walk; steps lead the motion by a capped amount.
-- **Darts.** A long approach (>120 px) is a leap: 75 ms crouch and pull back
-  (anticipation), legs gathered under the body in flight, the body slightly
-  larger (coming up), landing with the feet planted around where it will settle
-  and a squash; one overshoot of ~5 px, then rest (spring stiffness 170,
-  damping 20). Short moves are walked.
-- **Hands.** Two pedipalps: wind-up (60 ms), jab to contact (100 ms), recoil;
-  they feel the text while reading and drum while typing.
-- `prefers-reduced-motion`: every move is a jump, no descent, no reading walk.
+- **Anatomy.** Small head with four eyes, pedicel, abdomen on its own looser spring
+  (lags on turns, swings once on stops). Legs about 200 px span at size 1.
+- **Legs.** Four pairs, femur thicker than tibia, the tibia drawn as a slight arc.
+  Each knee bends in the page plane to a fixed side of its hip→foot line — front
+  pairs toward the head, rear pairs toward the tail — so every knee stays in its
+  own leg's sector: no two legs cross and no knee ever flips. A leg is never drawn
+  or simulated longer than its bones; a planted foot the page outruns slips at full
+  reach. Feet snap to the edges of words they land on.
+- **Gait.** Alternating four-leg groups; stride rate rises with speed. Idle moves
+  are stop-and-go: bursts of 50–110 px, freezes of 160–550 ms, a front leg feeling
+  ahead now and then.
+- **Darts.** A long approach is a leap: 75 ms crouch and pull back (anticipation),
+  legs gathered in flight, body slightly larger, landing with feet planted around
+  where it will settle and a squash, one small overshoot.
+- **Colour.** One colour by default (violet); ink, white, cyan, magenta, or the
+  rainbow drift of the reference. The under-stroke flips with the colour's
+  lightness so it reads on dark and light pages.
+- `prefers-reduced-motion`: every move is a jump, no descent, no reading walk, no tearing.
 
 ## How it is wired
 
 ```
-Page (background)                     content script (top frame)
-  clickElementNode ── scrollIntoView
-    └ _spiderStrike(element)
-        boundingBox() ──► spiderBridge.strikeAt ──► { op: 'approach', point, rect, capMs }
-                                         ◄── { arrived }            (leaps there)
-                                     ──► { op: 'strike', point }
-                                         ◄── at the moment of contact
-    └ element.click()
-  navigateTo ──► spiderBridge.depart ──► { op: 'depart' }   (collapse, ~200 ms)
-    └ page.goto
-                                      old page: beforeunload ──► { type: 'browd:spider:pose', place }
-                                      new page: hello ◄── { active, at: place, arrive: 'teleport' }
+background                                         content script (top frame)
+  Page ──► PagePresence (presence.ts)                Spider (engine.ts) — commands, modes, frame loop
+            beforePointer · typing · beforeCapture      Rig (rig.ts)         body, legs, hands, drawing
+            beforeNavigate · attached · detached         Brain (brain.ts)     behaviour by mood
+                 │                                       Stickers (stickers.ts) torn words
+                 ▼                                       reader.ts            blocks, lines, focus words
+           SpiderBridge (spider.ts) ── messages ──►      Overlay (overlay.ts) the one host element + canvas
+                 ▲                                       palette.ts           colours
+  executor events ──► onAgentEvent ── agentMood.ts (mood + focus words, pure)
 ```
 
-- `chrome-extension/src/background/browser/spider.ts` — `SpiderBridge`, the
-  handles `Page` calls: `activate` / `deactivate` (on debugger attach/detach),
-  `strikeAt`, `typing`, `scroll`, `depart`, `hide` / `show`, `helloReply`,
-  `reportPlace`. It keeps one spider per task in the **current** tab and the
-  last place it was seen; moving to another tab departs the old one and spawns a
-  teleport in the new one. Every call is capped (approach 900 ms × pace, strike
-  350 ms, depart 350 ms, hide 300 ms) and swallows its own errors. A tab opened
-  before the extension loaded has no content script: the bridge injects it once
-  and retries. Log lines: `[Spider] strike tab=… at=x,y arrived=true struck=true
-  ms=…`, `[Spider] move tab=a→b arrive=teleport`, `[Spider] unload tab=… at=x,y`.
-- `packages/shared/lib/utils/spider-protocol.ts` — the message types (types
-  only; the content script must stay small).
-- `pages/content/src/spider/engine.ts` — simulation and drawing;
-  `reader.ts` — text blocks and their line boxes; `geometry.ts` — the leg solver
-  and springs. `pages/content/src/index.ts` — top-frame guard, message routing,
-  the hello, the unload report.
-- `packages/storage/lib/settings/spider.ts` — settings (`spider-settings`),
-  read live by the bridge; changes reach a spider already on screen.
-- Options → General → **Agent spider**: on/off, size, pace, marks.
+- **One seam on the page side.** `Page` knows only `PagePresence`
+  (`browser/presence.ts`): `showing`, `attached` / `detached`, `beforePointer`,
+  `typing`, `scrolled`, `beforeNavigate`, `beforeCapture` / `afterCapture`. The
+  background wires the spider in once (`setPagePresence(spiderBridge)`); with
+  nothing wired, every call is a no-op.
+- **One subscription on the agent side.** `subscribeToExecutorEvents` calls
+  `spiderBridge.onAgentEvent(event)`; `agentMood.ts` turns events into a mood
+  (`act.start` → acting, `act.ok/fail` → thinking, HITL → asking, task end → done
+  / failed, and the live `tool_start` / `llm_streaming` stream when it reaches the
+  outer graph) and plan events into focus words. The bridge sends `mood` and
+  `focus` only when they change; a spawn carries the current ones.
+- `SpiderBridge` keeps one spider per task in the current tab and the last place
+  it stood (never from a spider still on its thread or mid-teleport). Every call
+  is capped and swallows its own errors. Log lines: `[Spider] strike … arrived=…
+  ms=…`, `move tab=a→b`, `unload … at=x,y`, `depart …`.
+- Settings `spider-settings` (`packages/storage/lib/settings/spider.ts`): on/off,
+  size, pace, marks, colour, tear. Options → General → **Agent spider**; the spider
+  button in the chat input toggles it, also mid-task.
 
 ### Invariants (keep them when changing anything here)
 
-1. **The site's DOM is never modified.** One host element is appended to
-   `<html>` when the spider spawns and removed when it leaves; nothing else.
-   Marks are drawn on the canvas over the element, never by restyling it —
-   restyling moves layout under the agent's element indexes.
-2. **The host element is never touched after creation.** The agent hashes
-   `document.documentElement.outerHTML` around coordinate clicks
-   (`readClickSignature`); hide/show changes a style inside the shadow root.
-3. **Closed shadow root, `pointer-events: none`.** Page scripts cannot reach
-   it, real clicks and `elementFromPoint` go through it (the DOM builder's
-   top-element check depends on that).
-4. **Nothing on pages the agent is not driving.** No task, no element.
-5. **One spider per task.** Only the current tab answers the hello; any other
-   tab gets `active: false`.
-6. **Decoration never fails or stalls an action.** Caps everywhere; a
-   background tab (no animation frames) resolves at once. Reading samples the
-   layout every few seconds, never per frame.
-7. **Legs never stretch.** Drawn and simulated foot distance ≤ bone length.
-8. **Benchmarks run without it.** `bench/om2w/run.mjs` writes
-   `spider-settings.enabled = false`, otherwise it would be in every
-   trajectory screenshot the WebJudge grades.
+1. **The site's DOM is never modified.** One host element on `<html>` while the
+   spider is shown; torn words, marks and holes are canvas drawing.
+2. **The host element is never touched after creation** (`readClickSignature`
+   hashes `outerHTML`); hide/show changes a style inside the shadow root.
+3. **Closed shadow root, `pointer-events: none`.**
+4. **Nothing on pages the agent is not driving.**
+5. **One spider per task**, in the current tab; other tabs get `active: false`.
+6. **Decoration never fails or stalls an action**; layout reads (blocks, words)
+   happen on the spider's own schedule, never per frame.
+7. **Legs never stretch** past their bones, drawn or simulated.
+8. **Captures never contain it** — spider and torn words.
+9. **Benchmarks run without it** (`bench/om2w/run.mjs` writes `enabled: false`).
 
 ## Checks
 
@@ -113,104 +115,90 @@ All drive the built `dist/` in Playwright's Chromium, headless, $0:
 pnpm build
 cd bench/spider && npm ci
 node e2e.mjs            # tier A: content script + overlay, no model
-node pipeline.mjs       # tier B: the real agent on a scripted localhost model
-node pipeline.mjs --marks feet --size 1.35   # same run, other look; writes agent-feet.mp4
+node pipeline.mjs       # tier B: the real agent on a scripted localhost model (thinks 1.2 s per call)
 node demo.mjs           # choreographed preview video of every move
-node motion.mjs         # frame-by-frame strips: descend, leap, scrolls, read, depart, teleport
-node studio.mjs         # 3× close-up stills for a design check
+node motion.mjs         # frame-by-frame strips: descend, leap, scrolls, read, tear, asking, depart, teleport
+node studio.mjs [size] [colour]   # 3× close-up stills for a design check
 ```
 
-Output lands in `bench-runs/spider-*/<stamp>/` (`report.json`, videos, strips).
-
-Tier A (`e2e.mjs`), last runs 18/18 twice, 1 skipped:
+Tier A (`e2e.mjs`), last run 21/21, 1 skipped:
 
 | | Check | Measured |
 | --- | --- | --- |
 | C1 | no element on a page without a task | none |
-| C2 | first entrance: descends and lands at the requested point | landed after ~620 ms, ≤5 px off |
+| C2 | first entrance: descends and lands | ~630 ms, ≤5 px off |
 | C3 | closed shadow root on `<html>`, no pointer events | yes |
-| C4 | 9 s between actions: reads ≥2 blocks, hands on the text, page DOM unchanged | 3 blocks, hands on text 0.80–0.84 of samples, 0 mutations |
-| C5 | frame budget while reading a 140-reference page | 16.6–16.7 ms per frame, 0 long tasks |
-| C6 | approach to a button ~350 px away | arrived in ~530 ms, hands 2.5 px from the point |
-| C7 | anticipation, leap, overshoot, no jumps | pull back 2.2–2.5 px, legs gathered to ~36 px at peak speed (standing ~61), overshoot ~5.4 px, max 36 px per frame |
-| C8 | strike, then a real click at the point | click reached the button 6–10 ms after the strike |
+| C4 | 9 s of thinking: reads ≥2 blocks in bursts and freezes, DOM unchanged | 2 blocks, still 54–55 % of the time, bursts to 600 px/s, 0 mutations |
+| C4b | focus words get torn out, DOM untouched | first word after ~2.6 s, 0 mutations |
+| C4c | an action sends every torn word home | all `back` at once, gone within 0.9 s |
+| C5 | frame budget while reading and tearing | 16.7 ms per frame, 0 long tasks |
+| C6 | approach to a button ~345 px away | arrived in ~525 ms, hands 2.5 px from the point |
+| C7 | anticipation, leap, overshoot, no jumps | pull back 2.3 px, legs gathered to 43 px at peak speed (standing ~88), overshoot ~7 px, max 31 px per frame |
+| C8 | strike, then a real click at the point | click reached the button ~11 ms after the strike |
 | C9 | typing | text arrived, hands drummed |
-| C10 | `scrollTo(bottom)` (the owner's case) | longest drawn leg 62.5 px of 70, simulated stretch ≤0.91, body on screen, back within 1.7 px |
-| C10b | small wheel scroll | walked, no cut, stretch ≤1 |
-| C11 | background tab resolves at once | **skipped headless** (tabs stay visible); runs with `--headed` |
-| C12 | knees never flip | 0 legs of 8 over ~16 000 samples |
-| C13 | depart, then the next action brings it back | collapsed in ~210 ms, invisible, then arrived |
-| C14 | teleport arrival | exact spot (0 px) and heading, scale 0 → 1.10 → 1, no descent |
-| C15 | hidden spider in a screenshot | 0 px hidden vs ~1800 px visible |
+| C10 | `scrollTo(bottom)` | longest drawn leg 92.7 of 98 px, stretch ≤0.97, back within 1.7 px |
+| C10b | small wheel scroll | walked, no cut, stretch ≤0.99 |
+| C11 | background tab resolves at once | **skipped headless**; runs with `--headed` |
+| C12 | knees never flip | 0 of 8 legs over ~17 000 samples |
+| C13 | depart, then the next action brings it back | ~205 ms, then arrived |
+| C14 | teleport arrival | exact spot and heading, scale 0 → 1.10 → 1, no descent |
+| C15 | captures with the spider and a torn word on screen | 0 px hidden vs ~4400 px visible |
 | C16 | leave removes the element | yes |
 | C17 | after navigation, nothing until told | `not-spawned` |
 | C18 | reduced motion | jump in ≤5 ms, no descent, no reading walk |
+| C19 | moods | waiting: speed 0, a front foot tapping 12 px; asking: heading 0 (toward the panel); done: 6.0 rad turn |
 
-Tier B (`pipeline.mjs`), last run 9/9. The task crosses a navigation, types into
-a field, clicks a button and takes a screenshot; the model is a scripted
-OpenAI-compatible server on localhost (`plan` → `click_element` → `input_text`
-→ `click_element` → `screenshot` → `task_complete`):
+Tier B (`pipeline.mjs`), last run 11/11 — navigation, typing, a click, a screenshot;
+scripted OpenAI-compatible model on localhost that takes 1.2 s per call:
 
 | | Check | Measured |
 | --- | --- | --- |
 | P1 | the real pipeline completes the task | `task.ok`, form submitted |
-| P2 | first page: spawned on attach, read while the model thought, leapt to the link | `spawn landed read approach leap-land arrive`, `arrived=true struck=true` |
-| P3 | the navigation is a teleport | unload reported 383,308; the next page spawned a teleport at 383,308 (0.5 px), 1.2 s before acting, no descent |
+| P2 | first page: spawned, got the focus words and the thinking mood, read, tapped the link | `focus:join,arachnid,society,second,… mood:thinking spawn landed read approach arrive` |
+| P3 | the navigation is a teleport | same spot ±0.5 px, before the first action, no descent |
 | P4 | every keystroke inside the drumming window | 19 of 19 |
-| P5 | strike at the click point before the real click | 19 ms before, 0.9 px apart |
-| P6 | the agent's screenshot has no spider | 0 px; control with the spider drawn at that spot: 2153 px |
-| P7 | shadow root stays closed under the agent's `attachShadow` override | 55 of 55 samples |
-| P8 | task end: leaves and removes itself | yes |
-| P9 | added time per action (bridge-measured) | 509–538 ms, mean 523 ms |
+| P5 | strike at the click point before the real click | ~18 ms before, 0.9 px apart |
+| P6 | the agent's screenshot has no spider | 0 px; control with the spider drawn there: ~2600 px |
+| P7 | shadow root stays closed under the agent's `attachShadow` override | all samples |
+| P8 | task end: done gesture, then it leaves and removes itself | yes |
+| P9 | added time per action | ~405–525 ms, mean ~480 ms |
+| P10 | moods follow the agent | thinking → acting → done; done gesture ≥600 ms before the climb; words torn during the run |
+| P11 | the chat toggle mid-task | gone in ~0.5 s, back in ~10 ms |
 
 Unit tests: `chrome-extension/src/background/browser/__tests__/spiderBridge.test.ts`
-(14: one spider moves between tabs as a teleport, hello only from the current
-tab, place reports, the next task descends again, depart only on the current
-tab, disabled sends nothing, never throws, caps hold, injection once, respawn
-and retry, live settings, pace scales the cap).
+(18: tab teleports, hello only from the current tab, place only from a standing
+spider, focus words from the task and the active subgoal, moods sent once per
+change with the ending mood before the climb, toggle on mid-task, disabled sends
+nothing, never throws, caps, injection, respawn, live settings, pace).
 
 ## Open questions for a manual pass
 
-Each is a hypothesis the automated runs could not settle. «Check» is what to
-do in your own browser with the unpacked `dist/` (disable every other Browd
-copy first).
-
 | # | Hypothesis | Check |
 | --- | --- | --- |
-| H1 | Readable on real sites, dark and light, without hiding what the agent clicks | Task on Hacker News / Wikipedia; watch two clicks |
-| H2 | Reading picks sensible blocks on real layouts (lists, cards, comment threads), not chrome or ads | Watch the spider while the model thinks on HN and on a news site |
-| H3 | The teleport reads as the same spider moving on, also when the next page is slow to load | A task with 3+ navigations; a slow site (the old page keeps painting until the new one commits) |
-| H4 | Tab switches teleport too | Task that opens a link in a new tab and works there |
-| H5 | ≈0.5 s per click/type is an acceptable price | Same task with the spider on and off; pace «Fast» cuts the cap to 0.7× |
-| H6 | Agent tab in the background does not wait for frames | Agent tab focus = background; SW console lines show `reason=hidden` and `ms` near 0 (C11 is headed-only) |
-| H7 | Vision screenshots stay clean on real sites | Vision model; TRACE thumbnails show no spider |
-| H8 | Heavy pages stay smooth while it reads | Long Wikipedia article, a web app with a canvas; DevTools Performance |
-| H9 | React/Next pages that hydrate `<html>` are unaffected | A Next.js site; console clean, spider stays in place |
-| H10 | Anti-bot sites block no more often than before | The Akamai-blocked OM2W pages, spider on vs off |
-| H11 | Which marks default: `target`, `feet` or `off` | Try all three live in Options during one task |
-| H12 | Single-page apps (no unload on route change) keep the spider on screen without a teleport | GitHub or Gmail-like SPA navigation |
+| H1 | The long-legged look and the stop-and-go read as a spider on real sites, dark and light | HN, Wikipedia; watch one minute |
+| H2 | Reading picks sensible blocks on real layouts (lists, cards, comments), not chrome or ads | Watch it while the model thinks on HN and a news site |
+| H3 | The torn words are the ones that matter and don't get in the way | A task with clear topic words; are the torn ones on topic; does anything you want to read stay covered |
+| H4 | Tab switches teleport too | A task that opens a link in a new tab |
+| H5 | The moods match what you see the agent do | Watch thinking / acting / waiting / asking with a real model; `act.*` events drive acting |
+| H6 | ≈0.5 s per click/type is an acceptable price | Spider on vs off (chat button) on the same task |
+| H7 | Vision screenshots stay clean (spider and torn words) | Vision model; TRACE thumbnails |
+| H8 | Heavy pages stay smooth while it reads and tears | Long Wikipedia article; DevTools Performance |
+| H9 | Which colour default: violet, ink, white, cyan, magenta, rainbow | Try in Options during a task |
+| H10 | Pages with gradient or image backgrounds simply skip tearing | A landing page with a hero gradient |
 
 ## If it looks wrong
 
-- **It never walks, only jumps, and does not read:** the OS has Reduce motion on
-  (macOS: Accessibility → Display). That is the reduced-motion path, by design.
-- **Numbered boxes all over the page compete with it:** Options → Display
-  Highlights is on (the default). Turn it off; the spider replaces them.
-- **No spider at all:** Options → Agent spider is off, another Browd copy is
-  enabled (Chrome then refuses the debugger and nothing attaches), or the browser
-  loads the extension from a different folder than the one rebuilt.
+- **It never walks, only jumps:** the OS has Reduce motion on.
+- **Numbered boxes compete with it:** Options → Display Highlights is on; turn it off.
+- **No spider:** the chat spider button is off, Options → Agent spider is off, another
+  Browd copy is enabled, or the browser loads the extension from another folder.
 
 ## Known limits
 
-- `send_keys`, `select_dropdown_option` and `scroll_to_text` have no spider
-  step: Enter presses and dropdown picks happen without a tap.
-- Scrolling inside a scrollable element (not the page) moves content under
-  planted feet without them following; they re-step when stretched.
-- Targets inside cross-origin iframes get their point from the main frame's
-  box model; not covered by the fixtures.
-- `position: fixed` breaks if a site transforms `<html>`; the spider then
-  scrolls with the page.
-- If a navigation commits very fast, the collapse on the old page is cut short;
-  the arrival on the new page still plays in full.
-- The hello is one runtime message per top-frame page load, also when no task
-  runs (the background answers `active: false`).
+- `send_keys`, `select_dropdown_option` and `scroll_to_text` have no spider step.
+- The live `tool_start` stream of a subgoal's inner agent does not always reach the
+  outer graph; the acting mood comes from `act.start`.
+- Scrolling inside a scrollable element does not move the planted feet with it.
+- Targets in cross-origin iframes get their point from the main frame's box model.
+- If a navigation commits very fast, the collapse on the old page is cut short.
+- The hello is one runtime message per top-frame page load, also with no task.
