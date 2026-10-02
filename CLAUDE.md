@@ -297,6 +297,19 @@ state message renders as `<page-state-warning>`. Empty elements on purpose:
 a stale selector map would send clicks to the wrong element. The degraded
 state is not cached. Tab-gone aborts still reject as `TabGoneError`.
 
+## Agent Spider (content script)
+
+`pages/content/` hosts the agent spider: a line-drawn spider in a closed
+shadow root that walks to whatever the agent clicks or types into, driven by
+`browser/spider.ts` (`SpiderBridge`) from `Page`. Full contract, checks and
+open questions: `docs/agent-spider.md`. Never break its invariants: the site's
+DOM is never modified (marks are canvas-only), the host element is never
+touched after creation (`readClickSignature` hashes `outerHTML`), every bridge
+call is capped and swallows its errors, `takeScreenshot` hides it, and
+benchmark runs disable it (`spider-settings.enabled = false`). E2E:
+`bench/spider/e2e.mjs` (overlay, no model) and `bench/spider/pipeline.mjs`
+(real agent on a scripted localhost model, $0).
+
 ## MV3 Service Worker Gotchas
 
 These fail at runtime even when build passes. happy-dom in tests
@@ -326,7 +339,7 @@ provides them; the actual SW does not.
 - `chrome-extension/` — manifest, background service worker, agent runtime, browser automation.
 - `pages/side-panel/` — main chat UI.
 - `pages/options/` — settings UI.
-- `pages/content/` — content script.
+- `pages/content/` — content script (top frame only; hosts the agent spider).
 - `packages/storage/` — Chrome storage abstractions and settings models.
 - `packages/i18n/` — source locales and generated i18n helpers.
 - `packages/ui/` — shared UI primitives.
