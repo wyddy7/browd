@@ -51,6 +51,28 @@ async function sample(send, work, ms = 0) {
   return { out, result };
 }
 const legLengths = pose => pose.hips.map((h, i) => dist(h, pose.feet[i]));
+/**
+ * One sample per drawn frame (the poll runs far faster than frames), timed by
+ * the page's frame clock; velocity and acceleration only across directly
+ * consecutive frames, so a frame the poll skipped is never read as a jolt.
+ */
+function kinematics(out) {
+  const fr = out.filter((o, i) => i === 0 || o.frame.n !== out[i - 1].frame.n);
+  const v = [];
+  for (let i = 1; i < fr.length; i++) {
+    const dt = (fr[i].frame.t - fr[i - 1].frame.t) / 1000;
+    if (fr[i].frame.n - fr[i - 1].frame.n !== 1 || dt <= 0) continue;
+    v.push({ n: fr[i].frame.n, t: fr[i].t, x: (fr[i].pose.body.x - fr[i - 1].pose.body.x) / dt, y: (fr[i].pose.body.y - fr[i - 1].pose.body.y) / dt, dt });
+  }
+  const a = [];
+  for (let i = 1; i < v.length; i++) {
+    if (v[i].n - v[i - 1].n !== 1) continue;
+    a.push({ t: v[i].t, x: (v[i].x - v[i - 1].x) / v[i].dt, y: (v[i].y - v[i - 1].y) / v[i].dt, dv: Math.hypot(v[i].x - v[i - 1].x, v[i].y - v[i - 1].y) });
+  }
+  const speed = v.map(q => Math.hypot(q.x, q.y));
+  return { frames: fr, v, a, speed, accel: a.map(q => Math.hypot(q.x, q.y)) };
+}
+const p95 = arr => [...arr].sort((x, y) => x - y)[Math.floor(arr.length * 0.95)] ?? 0;
 
 try {
   const ext = await extensionPage(ctx, extId);
@@ -140,18 +162,45 @@ try {
   }));
   const readEvents = st.events.filter(e => e.op === 'read');
   const readPoints = new Set(readEvents.map(e => `${Math.round(e.point.x / 20)}:${Math.round(e.point.y / 20)}`));
-  // Stop-and-go, the way a spider moves: frozen part of the time, short fast bursts in between.
-  const idleSamples = reading.out.filter(o => o.pose.mode.startsWith('idle'));
-  const stillShare = idleSamples.filter(o => o.pose.speed < 10).length / Math.max(1, idleSamples.length);
-  const burstPeak = Math.max(0, ...idleSamples.map(o => o.pose.speed));
+  // Gliding, not stop-and-go (owner 02.10: «НЕ рывками а максимально плавно»): moving most of
+  // the time, a full stop only where it means something (a focus word, the end of what it read).
+  const rk = kinematics(reading.out);
+  let stops = 0;
+  let still = 0;
+  for (const sp of rk.speed) {
+    still = sp < 8 ? still + 1 : 0;
+    if (still === 7) stops++;
+  }
+  // A pulse: the speed falls under 30 % of its last peak and rises again — the signature of bursts.
+  let pulses = 0;
+  let top = 0;
+  let dipped = false;
+  for (const sp of rk.speed) {
+    top = Math.max(top, sp);
+    if (top > 80 && sp < top * 0.3) dipped = true;
+    if (dipped && sp > 80) {
+      pulses++;
+      dipped = false;
+      top = sp;
+    }
+  }
+  const secs = rk.v.reduce((sum, q) => sum + q.dt, 0);
+  const movingShare = rk.speed.filter(sp => sp >= 8).length / Math.max(1, rk.speed.length);
   checks.record(
     'C4',
-    '12 s between actions: reads ≥2 blocks in bursts and freezes; page DOM unchanged',
-    readPoints.size >= 2 && stillShare >= 0.3 && stillShare <= 0.9 && burstPeak > 150 && quiet.mutations === 0 && quiet.outerHTMLUnchanged,
+    '12 s between actions: reads ≥2 blocks gliding — moving most of the time, few stops, no bursts; page DOM unchanged',
+    readPoints.size >= 2 &&
+      movingShare >= 0.6 &&
+      (stops / secs) * 10 <= 4 &&
+      (pulses / secs) * 10 <= 6 &&
+      quiet.mutations === 0 &&
+      quiet.outerHTMLUnchanged,
     {
       blocksRead: readPoints.size,
-      stillShare: Math.round(stillShare * 100) / 100,
-      burstPeakPxS: Math.round(burstPeak),
+      movingShare: Math.round(movingShare * 100) / 100,
+      stopsPer10s: Math.round((stops / secs) * 100) / 10,
+      pulsesPer10s: Math.round((pulses / secs) * 100) / 10,
+      peakPxS: Math.round(Math.max(0, ...rk.speed)),
       mutations: quiet.mutations,
       outerHTMLUnchanged: quiet.outerHTMLUnchanged,
     },
@@ -223,13 +272,13 @@ try {
       .filter(({ v, prev }) => v.gap === 1 && prev.gap === 1)
       .map(({ v, prev }) => Math.hypot(v.x - prev.x, v.y - prev.y));
     const sorted = [...dv].sort((a, b) => a - b);
-    const p95 = sorted[Math.floor(sorted.length * 0.95)] ?? 0;
+    const p95dv = sorted[Math.floor(sorted.length * 0.95)] ?? 0;
     const peak = Math.max(0, ...vel.filter(v => v.gap === 1).map(v => Math.hypot(v.x, v.y)));
     checks.record(
       'C20',
-      'smooth reading: velocity changes ≤ 160 px/s per frame (p95), peak speed under 500 px/s',
-      dv.length > 50 && p95 <= 160 && peak < 500,
-      { frames: dv.length, p95DeltaV: Math.round(p95), peakSpeed: Math.round(peak) },
+      'smooth reading: velocity changes ≤ 40 px/s per frame (p95; bursts gave 44–50, before them 144), peak speed under 500 px/s',
+      dv.length > 50 && p95dv <= 40 && peak < 500,
+      { frames: dv.length, p95DeltaV: Math.round(p95dv), peakSpeed: Math.round(peak) },
     );
   }
 
@@ -255,7 +304,7 @@ try {
     );
   }
 
-  // C6/C7 — a long approach: crouch and pull back, leap with legs gathered, land with one small overshoot.
+  // C6/C7 — a long approach: one glide — crouch, leap with legs gathered at speed, settle without a bounce.
   await send({ op: 'approach', point: { x: 1050, y: 560 }, capMs: 900 });
   await sleep(900);
   const btn = await rectOf(page, '#subscribe');
@@ -286,13 +335,26 @@ try {
   const midSpread = peak.pose.speed > 600 ? Math.max(...peak.pose.feet.map(f => dist(f, peak.pose.body))) : null;
   const frames = flight.out.filter((o, i) => i === 0 || dist(o.pose.body, flight.out[i - 1].pose.body) > 0);
   const maxStep = Math.max(0, ...frames.slice(1).map((o, i) => dist(o.pose.body, frames[i].pose.body)));
+  const fk = kinematics(flight.out);
+  const peakAccel = Math.max(0, ...fk.accel);
+  // No kick: the acceleration changes by at most ~5000 px/s² from one frame to the next (a minimum-jerk
+  // start is ~2000–2500 for this move; the old spring went from 0 to ~58 000 in one frame).
+  const kick = Math.max(0, ...fk.a.slice(1).map((q, i) => Math.hypot(q.x - fk.a[i].x, q.y - fk.a[i].y)));
   checks.record(
     'C7',
-    'motion: anticipation (pull back), leap with gathered legs, one small overshoot, no jumps',
-    pullBack >= 2 && pullBack <= 10 && overshoot >= 1 && overshoot <= 14 && midSpread !== null && midSpread < 62 && maxStep <= 80,
+    'motion: one glide — no backing up, acceleration builds up gradually and stays in budget, legs gathered at speed, no bounce, no jumps',
+    pullBack <= 1 &&
+      overshoot <= 6 &&
+      peakAccel <= 15000 &&
+      kick <= 5000 &&
+      midSpread !== null &&
+      midSpread < 62 &&
+      maxStep <= 40,
     {
       pullBackPx: r1(pullBack),
       overshootPx: r1(overshoot),
+      peakAccelPxS2: Math.round(peakAccel),
+      maxAccelStepPxS2: Math.round(kick),
       legSpreadAtPeakSpeedPx: midSpread && r1(midSpread),
       peakSpeed: peak.pose.speed,
       maxFrameStepPx: r1(maxStep),

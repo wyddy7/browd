@@ -76,9 +76,20 @@ export function nearestOnRectEdge(p: V, r: { x: number; y: number; width: number
 }
 
 /** Damped spring step (semi-implicit Euler) for a 2D point, with a speed cap. */
-export function springStep(pos: V, vel: V, target: V, k: number, c: number, dt: number, vmax: number): void {
-  const ax = k * (target.x - pos.x) - c * vel.x;
-  const ay = k * (target.y - pos.y) - c * vel.y;
+/** `tvel`, `tacc`: the target's own velocity and acceleration, fed forward so a moving target is tracked without lag. */
+export function springStep(
+  pos: V,
+  vel: V,
+  target: V,
+  k: number,
+  c: number,
+  dt: number,
+  vmax: number,
+  tvel: V = { x: 0, y: 0 },
+  tacc: V = { x: 0, y: 0 },
+): void {
+  const ax = k * (target.x - pos.x) + c * (tvel.x - vel.x) + tacc.x;
+  const ay = k * (target.y - pos.y) + c * (tvel.y - vel.y) + tacc.y;
   vel.x += ax * dt;
   vel.y += ay * dt;
   const s = Math.hypot(vel.x, vel.y);

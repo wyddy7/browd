@@ -37,6 +37,9 @@ import type { Palette } from './palette';
 /** How the body should move this frame. */
 export interface Control {
   target: V;
+  /** The target's velocity (px/s) and acceleration (px/s²) when it moves along a glide. */
+  tvel?: V;
+  tacc?: V;
   k: number;
   c: number;
   vmax: number;
@@ -221,19 +224,34 @@ export class Rig {
     return legs;
   }
 
-  /** Plant every foot around `at` (where the body will settle). */
-  land(at: V = this.body): void {
+  /**
+   * Plant every foot around `at` (where the body will settle). `unfold`: the
+   * legs reach their spots in one quick step from wherever they are (after a
+   * leap, a thread, a page jump) instead of appearing there.
+   */
+  land(at: V = this.body, unfold = false): void {
     this.airborne = false;
     this.dashing = false;
     const around = this.toDoc(at);
     const here = this.toDoc(this.body);
     for (const leg of this.legs) {
       const g = this.grip(this.idealFoot(leg, around));
-      leg.foot = clampLen(this.hip(leg, here), g.p, this.reach(leg) * 0.99);
+      const spot = clampLen(this.hip(leg, here), g.p, this.reach(leg) * 0.99);
+      leg.rel = null;
+      leg.feel = null;
+      if (unfold) {
+        leg.from = clampLen(this.hip(leg, here), leg.foot, this.reach(leg) * 0.98);
+        leg.foot = { ...leg.from };
+        leg.to = spot;
+        leg.t = 0;
+        leg.dur = 0.14;
+        leg.grip = null;
+        continue;
+      }
+      leg.foot = spot;
       leg.grip = g.rect;
       leg.t = -1;
       leg.lift = 0;
-      leg.rel = null;
     }
   }
 
@@ -328,6 +346,8 @@ export class Rig {
       this.abdomen = add(this.abdomen, mul(carry, 1.25));
       this.vel = add(this.vel, mul(carry, 3));
       for (const leg of this.legs) leg.feel = null;
+      // A cut: the page jumped under the feet; they re-grip at once (an unfold
+      // from wherever the page left them would sweep every leg the same way).
       this.land();
       this.squashAt = now;
       return 'cut';
@@ -356,7 +376,7 @@ export class Rig {
       this.vel = mul(this.vel, Math.max(0, 1 - dt * 18));
       this.body = add(this.body, mul(this.vel, dt));
     } else {
-      springStep(this.body, this.vel, ctl.target, ctl.k, ctl.c, dt, ctl.vmax);
+      springStep(this.body, this.vel, ctl.target, ctl.k, ctl.c, dt, ctl.vmax, ctl.tvel, ctl.tacc);
     }
     const speed = Math.hypot(this.vel.x, this.vel.y);
     const want = ctl.face ?? (speed > 30 ? Math.atan2(this.vel.y, this.vel.x) : this.heading);
@@ -430,7 +450,7 @@ export class Rig {
         }
       } else if (this.dashing && !leap && bodySpeed < 380 * s) {
         this.dashing = false;
-        this.land();
+        this.land(this.body, true);
         this.squashAt = now;
       }
     }
@@ -815,7 +835,8 @@ export class Rig {
     const round = (x: number) => Math.round(x * 10) / 10;
     const roundV = (p: V) => ({ x: round(p.x), y: round(p.y) });
     return {
-      body: roundV(this.body),
+      // Two decimals for the body: checks differentiate it twice (acceleration per frame).
+      body: { x: Math.round(this.body.x * 100) / 100, y: Math.round(this.body.y * 100) / 100 },
       heading: round(this.heading),
       mode: mode + (this.dashing ? ':leap' : ''),
       scale: round(this.scale),

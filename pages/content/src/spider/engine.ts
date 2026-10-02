@@ -21,6 +21,7 @@ import type {
 } from '@extension/shared';
 import { Brain } from './brain';
 import { clamp, dist, easeIn, easeOutBack, fromAngle, mul, sub, unit, vec } from './geometry';
+import { type Glide, glide, glideAt, moveTime } from './motion';
 import { Box, Overlay } from './overlay';
 import { palette } from './palette';
 import { type Control, HAND_TIP, Rig } from './rig';
@@ -53,8 +54,9 @@ export class Spider {
 
   private target = vec(0, 0);
   private faceTo: V | null = null;
-  private dartFrom = vec(0, 0);
-  private dartAnticipate = false;
+  /** The commanded move in progress (descend, approach, leave), document space. */
+  private flight: Glide | null = null;
+  private anticipate = false;
   private busyUntil = 0;
   private leavePending = false;
   private departTimer = 0;
@@ -115,6 +117,8 @@ export class Spider {
       this.setMode('descend');
       this.rig.airborne = true;
       this.rig.thread = { anchor: vec(x, -20), alpha: 1 };
+      const now = performance.now();
+      this.flight = glide(this.rig.toDoc(start), vec(0, 0), this.rig.toDoc(this.target), now, 750);
     }
     this.log({ op: teleport ? 'spawn-teleport' : 'spawn', body: { x, y } });
     this.start();
@@ -158,9 +162,10 @@ export class Spider {
     const goal = sub(point, mul(dir, HAND_TIP * s));
     this.target = vec(clamp(goal.x, 16, innerWidth - 16), clamp(goal.y, 16, innerHeight - 16));
     this.faceTo = { ...point };
-    if (this.mode !== 'arrive') this.setMode('approach');
-    this.dartFrom = { ...body };
-    this.dartAnticipate = far > 120 * s && !this.rig.airborne;
+    if (this.mode !== 'arrive') {
+      this.setMode('approach');
+      this.startFlight(now, far > 120 * s && !this.rig.airborne);
+    }
     this.rig.handMode = { kind: 'rest' };
     if (this.rig.thread) this.rig.thread.alpha = Math.min(this.rig.thread.alpha, 0.6);
     if (rect && this.look.marks === 'target') this.targetMark = { rect: this.docRect(rect), born: Infinity };
@@ -172,7 +177,7 @@ export class Spider {
       const reason = this.reducedMotion ? 'reduced-motion' : 'hidden';
       return Promise.resolve(this.ack({ ok: true, arrived: false, reason }));
     }
-    if (this.mode === 'approach' && this.arrived()) {
+    if (this.mode === 'approach' && this.arrived(now)) {
       this.setMode('busy');
       this.busyUntil = now + 1500;
       this.log({ op: 'arrive', arrived: true, body: { ...this.rig.body } });
@@ -362,6 +367,8 @@ export class Spider {
     this.rig.airborne = true;
     this.rig.thread = { anchor: vec(this.rig.body.x, -20), alpha: 1 };
     this.target = vec(this.rig.body.x, -160 * this.look.size);
+    const now = performance.now();
+    this.flight = glide(this.rig.toDoc(this.rig.body), this.rig.vel, this.rig.toDoc(this.target), now, 650);
   }
 
   private setMode(mode: Mode): void {
@@ -377,8 +384,32 @@ export class Spider {
     if (!this.brain.tear) this.stickers.returnAll(performance.now());
   }
 
-  private arrived(): boolean {
-    return dist(this.rig.body, this.target) < 3.5 * this.look.size && Math.hypot(this.rig.vel.x, this.rig.vel.y) < 50;
+  private arrived(now: number): boolean {
+    const done = !this.flight || glideAt(this.flight, now).done;
+    return (
+      done && dist(this.rig.body, this.target) < 3.5 * this.look.size && Math.hypot(this.rig.vel.x, this.rig.vel.y) < 60
+    );
+  }
+
+  /**
+   * One glide to the target from where the body is, with the velocity it has:
+   * about half a second, so the eye can follow it (owner's motion rule), a
+   * slight arc that leans the way the head points, no overshoot — the abdomen
+   * supplies the follow-through.
+   */
+  private startFlight(now: number, anticipate: boolean): void {
+    const s = this.look.size;
+    const m = PACE[this.look.pace] ?? 1;
+    const from = this.rig.toDoc(this.rig.body);
+    const to = this.rig.toDoc(this.target);
+    const len = dist(from, to);
+    const T = moveTime(len, 320, 1600 * s, 380, 720) / m;
+    const dir = unit(sub(to, from));
+    const head = fromAngle(this.rig.heading);
+    const lean = dir.x * head.y - dir.y * head.x;
+    const bow = len > 120 * s ? (lean >= 0 ? 1 : -1) * 0.04 : 0;
+    this.flight = glide(from, this.rig.vel, to, now, T, bow);
+    this.anticipate = anticipate;
   }
 
   /** Straight to the target, no flight (reduced motion, throttled tab). */
@@ -426,26 +457,47 @@ export class Spider {
       case 'descend':
       case 'leave': {
         const face = this.mode === 'descend' ? Math.PI / 2 : -Math.PI / 2;
-        return { target: this.target, k: 55 * m * m, c: 13 * m, vmax: 1400 * m, face, leap: false, hold: false };
+        if (!this.flight) return { target: this.target, k: 300, c: 34, vmax: 1400, face, leap: false, hold: false };
+        const at = glideAt(this.flight, now);
+        return {
+          target: this.rig.toView(at.p),
+          tvel: at.v,
+          tacc: at.a,
+          k: 900,
+          c: 60,
+          vmax: 4000,
+          face,
+          leap: false,
+          hold: false,
+        };
       }
       case 'approach': {
-        if (this.dartAnticipate && since < 75) {
-          // Anticipation: crouch and pull back a little before the leap.
-          this.rig.crouch = Math.min(1, this.rig.crouch + 0.14);
-          const back = sub(this.dartFrom, mul(unit(sub(this.target, this.dartFrom)), 6 * s));
-          return { target: back, k: 320, c: 32, vmax: 2400, face: faceTarget, leap: false, hold: false };
-        }
+        // Anticipation: a crouch while the glide is still slow — no backing up.
+        if (this.anticipate && since < 110) this.rig.crouch = Math.min(0.8, this.rig.crouch + 0.08);
         const left = dist(body, this.target);
-        const leap = this.dartAnticipate && left > 20 * s;
         const face = left < 60 * s ? faceTarget : null;
-        return { target: this.target, k: 170 * m * m, c: 20 * m, vmax: 2400 * m, face, leap, hold: false };
+        if (!this.flight) return { target: this.target, k: 300, c: 34, vmax: 1400, face, leap: false, hold: false };
+        const at = glideAt(this.flight, now);
+        // A fast stretch is a leap: legs gathered while the speed is up.
+        const leap = this.anticipate && !at.done && Math.hypot(at.v.x, at.v.y) > 700 * s;
+        return {
+          target: this.rig.toView(at.p),
+          tvel: at.v,
+          tacc: at.a,
+          k: 900,
+          c: 60,
+          vmax: 4000,
+          face,
+          leap,
+          hold: false,
+        };
       }
       case 'busy':
         return {
           target: this.target,
-          k: 170 * m * m,
-          c: 20 * m,
-          vmax: 2400 * m,
+          k: 300 * m * m,
+          c: 34 * m,
+          vmax: 1400,
           face: faceTarget,
           leap: false,
           hold: false,
@@ -494,7 +546,7 @@ export class Spider {
     const speed = Math.hypot(this.rig.vel.x, this.rig.vel.y);
     if (this.mode === 'descend' && dist(this.rig.body, this.target) < 5 * s && speed < 80) {
       this.setMode('free');
-      this.rig.land();
+      this.rig.land(this.rig.body, true);
       this.rig.squashAt = now;
       if (this.rig.thread) this.rig.thread.alpha = 0.99;
       this.log({ op: 'landed', body: { ...this.rig.body } });
@@ -511,7 +563,7 @@ export class Spider {
         this.log({ op: 'arrived-teleport', body: { ...this.rig.body } });
         if (this.faceTo) {
           this.setMode('approach');
-          this.dartAnticipate = false;
+          this.startFlight(now, false);
         } else {
           // Just arrived: look around a moment before reading on.
           this.setMode('free');
@@ -536,10 +588,11 @@ export class Spider {
     } else if (this.mode === 'leave' && this.rig.body.y < -110 * s) {
       this.unmount();
       return;
-    } else if (this.mode === 'approach' && since > 75 && this.arrived()) {
+    } else if (this.mode === 'approach' && this.arrived(now)) {
       this.setMode('busy');
       this.busyUntil = now + 1500;
       this.rig.squashAt = now;
+      if (this.rig.airborne) this.rig.land(this.rig.body, true);
       this.rig.handMode = this.faceTo ? { kind: 'reach', p: { ...this.faceTo } } : { kind: 'rest' };
       this.log({ op: 'arrive', arrived: true, body: { ...this.rig.body } });
       this.settleWaiter(this.approachWaiter, { ok: true, arrived: true });

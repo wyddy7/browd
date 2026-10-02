@@ -2,18 +2,23 @@
  * What the spider does when no command drives it: behaviour by the agent's
  * mood. The rig only moves; this decides where to and how.
  *
- * - thinking (a model call runs): reads the page the way a spider moves —
- *   short bursts and freezes, a front leg feeling ahead — preferring blocks
- *   that mention the focus words (the task and the current subgoal), and
- *   tears those words out of the page as it goes;
+ * Every move is a glide (`motion.ts`): it starts with the velocity the body
+ * already has and ends at rest, with no jolt at either end. Stops happen only
+ * where they mean something — on a focus word, at the end of what it read.
+ *
+ * - thinking (a model call runs): reads the page — glides to a block (in a
+ *   slight arc), runs its hands along a line like a finger, preferring blocks
+ *   that mention the focus words (the task and the current subgoal), stops on
+ *   those words and tears them out;
  * - acting: the same reading, no tearing (an approach is about to come);
  * - waiting (a page loads): still, a front leg tapping;
  * - asking (the agent waits for the user): turned to the side panel, front
  *   legs up, hands waving;
- * - done: a quick turn on the spot; failed: a droop. Then it can leave.
+ * - done: a quick turn on tiptoe; failed: a droop. Then it can leave.
  */
 import type { SpiderMood, SpiderPoint as V } from '@extension/shared';
-import { add, clamp, clampLen, dist, easeInOut, fromAngle, lerp, minJerk, sub, unit, vec } from './geometry';
+import { add, clamp, dist, easeInOut, fromAngle, lerp, sub, unit, vec } from './geometry';
+import { type Glide, brake, glide, glideAt, moveTime } from './motion';
 import type { Palette } from './palette';
 import { type Block, type Line, type WordHit, findBlocks, findWords, focusMatcher, pickNext } from './reader';
 import { type Control, HAND_TIP, type Rig } from './rig';
@@ -34,24 +39,35 @@ type Plan =
       block?: Block;
       lines?: Line[];
       words?: Word[];
-      /** One heading for the whole walk, set when it starts: no turning on every burst. */
+      /** The walk lands on a focus word (and stops there) rather than at the start of a line. */
+      onWord?: boolean;
+      /** One heading for the whole walk, set when it starts: no turning mid-way. */
       face?: number;
     }
-  | { kind: 'read'; block: Block; lines: Line[]; line: number; x: number; words: Word[] }
+  | {
+      kind: 'read';
+      block: Block;
+      line: Line;
+      /** Document x of the reading point (the hands). */
+      x: number;
+      /** Where the current stroke along the line ends, and whether that is a focus word. */
+      to: number;
+      atWord: boolean;
+      words: Word[];
+      /** A stop on a focus word lasts until then. */
+      restUntil: number;
+    }
   | { kind: 'look'; until: number; base: number };
-
-interface Stop {
-  until: number;
-  feelSide: 1 | -1 | 0;
-  /** This freeze is at the goal (not a pause on the way): the plan moves on after it. */
-  atGoal: boolean;
-}
 
 export interface BrainLog {
   (e: { op: string; point?: V; body?: V }): void;
 }
 
 const PACE = { calm: 0.72, normal: 1, fast: 1.4 } as const;
+/** Reading speed along a line, px/s at size 1 — about a finger following text. */
+const READ_SPEED = 100;
+/** How far along a line it reads before moving on. */
+const READ_SPAN = 300;
 
 export class Brain {
   mood: SpiderMood | null = null;
@@ -60,27 +76,25 @@ export class Brain {
   private words: string[] = [];
   private plan: Plan = { kind: 'pause', until: 0 };
   private visited = new WeakSet<Element>();
-  /** Stop-and-go: the current burst along a minimum-jerk path (document space), or a freeze. */
-  private burst: { from: V; to: V; t0: number; T: number } | null = null;
-  /** Where the body rests during a freeze or a mood pose (document space). */
+  /** The move in progress (document space) and what it is for. */
+  private move: Glide | null = null;
+  private moveFor: 'travel' | 'read' | 'brake' = 'brake';
+  /** Where the body rests between moves (document space). */
   private anchor: V | null = null;
-  private stop: Stop | null = null;
   private pull: { side: 1 | -1; at: number; from: V; to: V } | null = null;
   private turnFrom = 0;
+  /** Where the tapping front foot stands (view space) while waiting. */
+  private tapBase: V | null = null;
   pace: keyof typeof PACE = 'normal';
   private scanningOn = false;
 
-  /** The agent is reading the DOM: ease out of the current burst, start no new one. */
+  /** The agent is reading the DOM: ease out of the current move, start no new one. */
   get scanning(): boolean {
     return this.scanningOn;
   }
 
   set scanning(on: boolean) {
-    if (on && !this.scanningOn && this.burst) {
-      // Come to rest a little ahead, on the soft spring — no brake.
-      this.burst = null;
-      this.anchor = this.rig.toDoc(add(this.rig.body, { x: this.rig.vel.x * 0.06, y: this.rig.vel.y * 0.06 }));
-    }
+    if (on && !this.scanningOn) this.easeOut(performance.now(), 280);
     this.scanningOn = on;
   }
   tear = true;
@@ -96,16 +110,16 @@ export class Brain {
     if (mood === this.mood) return;
     this.mood = mood;
     this.moodAt = now;
-    this.stop = null;
-    this.burst = null;
-    this.anchor = null;
+    this.tapBase = null;
+    this.easeOut(now);
     this.endPull();
     this.rig.feel(1, null);
     this.rig.feel(-1, null);
     if (mood !== 'thinking' && mood !== 'acting') this.stickers.returnAll(now);
     if (mood === 'done') this.turnFrom = this.rig.heading;
     if (mood === 'asking') this.rig.handMode = { kind: 'wave' };
-    else if (this.rig.handMode.kind === 'wave') this.rig.handMode = { kind: 'rest' };
+    else if (this.rig.handMode.kind === 'wave' || this.rig.handMode.kind === 'read')
+      this.rig.handMode = { kind: 'rest' };
     this.log({ op: `mood:${mood}`, body: { ...this.rig.body } });
   }
 
@@ -113,29 +127,31 @@ export class Brain {
     this.words = words.slice(0, 12);
     this.matcher = focusMatcher(this.words);
     // The cached words of the current block are for the old focus: pick afresh.
-    if (this.plan.kind === 'read' || this.plan.kind === 'travel') this.plan = { kind: 'pause', until: 0 };
+    if (this.plan.kind === 'read' || this.plan.kind === 'travel') {
+      this.plan = { kind: 'pause', until: 0 };
+      this.easeOut(performance.now());
+    }
     this.log({ op: `focus:${this.words.join(',')}` });
   }
 
   /** A command took over (approach, depart…): drop the plan and the pulls; look around for `pauseMs` after. */
   interrupt(now: number, pauseMs = 450): void {
     this.plan = { kind: 'pause', until: now + pauseMs };
-    this.burst = null;
+    this.move = null;
     this.anchor = null;
-    this.stop = null;
     this.rig.gripRects = [];
     this.endPull();
     this.rig.feel(1, null);
     this.rig.feel(-1, null);
     this.stickers.returnAll(now);
+    if (this.rig.handMode.kind === 'read') this.rig.handMode = { kind: 'rest' };
   }
 
   onScroll(kind: 'cut' | 'walk', now: number): void {
     if (this.plan.kind === 'read' || this.plan.kind === 'travel') {
       this.plan = { kind: 'pause', until: now + (kind === 'cut' ? 500 : 300) };
-      this.burst = null;
-      this.anchor = null;
-      this.stop = null;
+      this.easeOut(now, 250);
+      if (this.rig.handMode.kind === 'read') this.rig.handMode = { kind: 'rest' };
     }
   }
 
@@ -148,7 +164,6 @@ export class Brain {
     const m = PACE[this.pace] ?? 1;
     const s = this.rig.size;
     const here = this.rig.body;
-    const hold = this.settle(m, null);
     const since = now - this.moodAt;
 
     if (this.reducedMotion) return { target: here, k: 0, c: 0, vmax: 0, face: null, leap: false, hold: true };
@@ -156,98 +171,66 @@ export class Brain {
     if (this.mood === 'done') {
       // A quick full turn on tiptoe (the feet turn with it), then still.
       const t = clamp(since / 650, 0, 1);
-      return { ...hold, face: this.turnFrom + Math.PI * 2 * easeInOut(t), spin: since < 1000 };
+      return { ...this.rest(now, m, this.turnFrom + Math.PI * 2 * easeInOut(t)), spin: since < 1000 };
     }
     if (this.mood === 'failed') {
       this.rig.crouch = Math.min(1, this.rig.crouch + 0.05);
-      return hold;
+      return this.rest(now, m, null);
     }
     if (this.mood === 'waiting') {
-      // Still, a front leg tapping every half second.
+      // Still, a front leg tapping every half second: up and forward from where
+      // the foot stands, and down on the same spot.
       const phase = (since % 520) / 520;
       const side: 1 | -1 = Math.floor(since / 1040) % 2 ? 1 : -1;
-      if (phase < 0.3) this.rig.feel(side, add(this.rig.frontFoot(side), fromAngle(this.rig.heading, 6 * s)));
-      else this.rig.feel(side, null);
-      return hold;
+      if (phase < 0.35) {
+        this.tapBase ??= this.rig.frontFoot(side);
+        const up = Math.sin((Math.PI * phase) / 0.35);
+        this.rig.feel(side, add(this.tapBase, fromAngle(this.rig.heading, 10 * s * up)));
+      } else {
+        this.rig.feel(side, null);
+        this.tapBase = null;
+      }
+      return this.rest(now, m, null);
     }
     if (this.mood === 'asking') {
       // Turned toward the side panel at the right edge, front legs raised.
       const up = (side: 1 | -1) => add(here, fromAngle(-0.5 + side * 0.45, 70 * s));
       this.rig.feel(1, up(1));
       this.rig.feel(-1, up(-1));
-      return { ...hold, face: 0 };
+      return this.rest(now, m, 0);
     }
     return this.read(now, m, s, pal);
   }
 
-  // ---------- reading ----------
+  // ---------- moving ----------
 
-  private read(now: number, m: number, s: number, pal: Palette): Control {
-    const rig = this.rig;
-    const here = rig.body;
-    this.updatePull(now);
-
-    // Freeze between bursts: a soft spring to where it stopped, no brake.
-    if (this.stop) {
-      if (now < this.stop.until) return this.settle(m, this.faceForPlan(now));
-      if (this.stop.feelSide) rig.feel(this.stop.feelSide, null);
-      const atGoal = this.stop.atGoal;
-      this.stop = null;
-      if (atGoal) this.advance(now, s, pal);
-    }
-
-    const plan = this.plan;
-    if (plan.kind === 'pause' || plan.kind === 'look') {
-      if (now < plan.until) return this.settle(m, this.faceForPlan(now));
-      this.pickBlock(now, s);
-    }
-
-    const goal = this.goal();
-    if (!goal) return this.settle(m, null);
-    const goalView = rig.toView(goal);
-    // While the agent reads the DOM the page may freeze for a moment: stand still then,
-    // so a stall looks like a pause, not like a hitch in the middle of a move.
-    if (!this.burst && this.scanning) return this.settle(m, this.faceForPlan(now));
-    if (!this.burst) {
-      // Next burst: 50–110 px toward the goal, on a minimum-jerk path — it
-      // starts and stops with zero acceleration, so nothing jolts.
-      const step = clampLen(vec(0, 0), sub(goalView, here), (60 + Math.random() * 70) * s);
-      const length = Math.hypot(step.x, step.y);
-      const T = (clamp(length / (240 * s), 0.26, 0.6) * 1000) / m;
-      this.burst = { from: rig.toDoc(here), to: rig.toDoc(add(here, step)), t0: now, T };
+  /** Ease out of the current motion (no brake): a short glide to rest along the way it was going. */
+  private easeOut(now: number, T = 320): void {
+    const v = this.rig.vel;
+    if (Math.hypot(v.x, v.y) < 15) {
+      this.move = null;
       this.anchor = null;
+      return;
     }
-    const b = this.burst;
-    const tau = (now - b.t0) / b.T;
-    const toView = rig.toView(b.to);
-    if (tau >= 1 && dist(here, toView) < 3 * s) {
-      this.burst = null;
-      this.anchor = b.to;
-      const atGoal = dist(here, goalView) < 6 * s;
-      const reading = this.plan.kind === 'read';
-      // Now and then a front leg feels ahead during the freeze.
-      const feelSide: 1 | -1 | 0 = !atGoal && Math.random() < 0.2 ? (Math.random() < 0.5 ? 1 : -1) : 0;
-      if (feelSide) rig.feel(feelSide, add(here, mul2(unit(sub(goalView, here)), 55 * s)));
-      const freeze = reading ? 160 + Math.random() * 200 : 200 + Math.random() * 260;
-      this.stop = { until: now + freeze / m, feelSide, atGoal };
-      if (atGoal) this.arrive(now, s, pal);
-      return this.settle(m, this.faceForPlan(now));
-    }
-    const along = rig.toView(lerp(b.from, b.to, minJerk(tau)));
-    // A stiff spring tracks the smooth path.
-    return {
-      target: along,
-      k: 600 * m * m,
-      c: 46 * m,
-      vmax: 1200 * m,
-      face: this.faceForPlan(now),
-      leap: false,
-      hold: false,
-    };
+    this.move = brake(this.rig.toDoc(this.rig.body), v, now, T);
+    this.moveFor = 'brake';
+    this.anchor = null;
   }
 
-  /** Rest at the anchor (taken where the body is when first asked) on a soft spring. */
-  private settle(m: number, face: number | null): Control {
+  /** Follow a glide: a stiff spring with the glide's velocity fed forward. */
+  private track(at: { p: V; v: V; a: V }, face: number | null): Control {
+    const { p, v, a } = at;
+    return { target: this.rig.toView(p), tvel: v, tacc: a, k: 700, c: 55, vmax: 3000, face, leap: false, hold: false };
+  }
+
+  /** At rest: finish an easing-out glide if one runs, then hold the anchor on a soft spring. */
+  private rest(now: number, m: number, face: number | null): Control {
+    if (this.move && this.moveFor === 'brake') {
+      const at = glideAt(this.move, now);
+      if (!at.done) return this.track(at, face);
+      this.anchor = this.move.p1;
+      this.move = null;
+    }
     this.anchor ??= this.rig.toDoc(this.rig.body);
     return {
       target: this.rig.toView(this.anchor),
@@ -260,14 +243,85 @@ export class Brain {
     };
   }
 
-  private goal(): V | null {
-    const p = this.plan;
-    if (p.kind === 'travel') return p.goal;
-    if (p.kind === 'read') {
-      const line = p.lines[p.line];
-      return { x: p.x - HAND_TIP * this.rig.size, y: line.y };
+  // ---------- reading ----------
+
+  private read(now: number, m: number, s: number, pal: Palette): Control {
+    const rig = this.rig;
+    this.updatePull(now);
+
+    // A move in progress: follow it; when it ends, the plan takes its next step.
+    if (this.move && this.moveFor !== 'brake') {
+      const at = glideAt(this.move, now);
+      if (this.moveFor === 'read') rig.handMode = { kind: 'read', p: rig.headTip() };
+      if (!at.done) return this.track(at, this.faceForPlan(now));
+      this.anchor = this.move.p1;
+      this.move = null;
+      this.arrive(now, s, pal);
     }
-    return null;
+
+    const plan = this.plan;
+    if (plan.kind === 'pause' || plan.kind === 'look') {
+      if (now < plan.until) return this.rest(now, m, this.faceForPlan(now));
+      this.pickBlock(now, s);
+    }
+    const p = this.plan;
+    if (p.kind === 'read' && now < p.restUntil) return this.rest(now, m, this.faceForPlan(now));
+    // While the agent reads the DOM the page may freeze for a moment: start no
+    // move then, so a stall looks like a pause, not like a hitch mid-move.
+    if (this.scanning || (this.move && this.moveFor === 'brake')) return this.rest(now, m, this.faceForPlan(now));
+
+    if (p.kind === 'travel') this.startTravel(now, m, s);
+    else if (p.kind === 'read') this.startStroke(now, m, s);
+    if (!this.move) return this.rest(now, m, this.faceForPlan(now));
+    return this.track(glideAt(this.move, now), this.faceForPlan(now));
+  }
+
+  /** One glide to the block, bowed a little (an arc reads as alive, a ruler line does not). */
+  private startTravel(now: number, m: number, s: number): void {
+    const p = this.plan;
+    if (p.kind !== 'travel') return;
+    const from = this.rig.toDoc(this.rig.body);
+    const len = dist(from, p.goal);
+    if (len < 4 * s) {
+      this.arrive(now, s, null);
+      return;
+    }
+    // A quintic peaks at ~1.875× its mean speed: long walks take longer instead of rushing (peak ≈ 380 px/s).
+    const T = Math.max(moveTime(len, 600, 260 * s, 800, 4200), (1.875 * len * 1000) / (380 * s)) / m;
+    const bow = (Math.random() < 0.5 ? -1 : 1) * (0.05 + Math.random() * 0.04);
+    // Arriving at the start of a line it keeps going: the walk flows into reading.
+    const flowsOn = p.then === 'read' && !p.onWord;
+    const v1 = flowsOn ? vec(READ_SPEED * s * m, 0) : vec(0, 0);
+    this.move = glide(from, this.rig.vel, p.goal, now, T, bow, v1);
+    this.moveFor = 'travel';
+    this.anchor = null;
+  }
+
+  /** One stroke along the line: to the next focus word (a stop) or to where it stops reading. */
+  private startStroke(now: number, m: number, s: number): void {
+    const p = this.plan;
+    if (p.kind !== 'read') return;
+    const to = this.nextFocusOnLine(p);
+    const end = Math.min(p.line.x1 - 4, p.line.x0 + READ_SPAN);
+    p.atWord = to !== null;
+    p.to = to ?? end;
+    const from = this.rig.toDoc(this.rig.body);
+    const goal = { x: p.to - HAND_TIP * s, y: p.line.y };
+    const len = dist(from, goal);
+    if (p.to <= p.x + 2 || len < 3 * s) {
+      this.finishReading(now);
+      return;
+    }
+    const T = moveTime(len, 300, READ_SPEED * s * m, 500, 4500);
+    this.move = glide(from, this.rig.vel, goal, now, T);
+    this.moveFor = 'read';
+    this.anchor = null;
+  }
+
+  private finishReading(now: number): void {
+    this.rig.handMode = { kind: 'rest' };
+    this.plan = { kind: 'look', until: now + 600 + Math.random() * 400, base: this.rig.heading };
+    this.log({ op: 'look', body: { ...this.rig.body } });
   }
 
   /**
@@ -324,83 +378,70 @@ export class Brain {
     const goal = first
       ? { x: first.doc.x - 6 - HAND_TIP * s, y: first.doc.y + first.doc.height / 2 }
       : { x: lines[0].x0 + 4 - HAND_TIP * s, y: lines[0].y };
-    this.plan = { kind: 'travel', goal, then: 'read', block: next, lines, words };
+    this.plan = { kind: 'travel', goal, then: 'read', block: next, lines, words, onWord: !!first };
     this.log({ op: 'read', point: this.rig.toView({ x: lines[0].x0, y: lines[0].y }), body: { ...this.rig.body } });
     void now;
   }
 
-  /** The current goal was reached. */
-  private arrive(now: number, s: number, pal: Palette): void {
+  /** The current move ended at its goal. */
+  private arrive(now: number, s: number, pal: Palette | null): void {
     const p = this.plan;
     if (p.kind === 'travel') {
       if (p.then === 'read' && p.block && p.lines) {
-        // Start reading where it arrived: on the focus word's line, or at the top.
-        const at = p.goal.x + HAND_TIP * s;
+        // Read one line: the focus word's line (starting on the word), or the first.
         const lines = p.lines;
         const nearest = lines.reduce(
           (best, l, i) => (Math.abs(l.y - p.goal.y) < Math.abs(lines[best].y - p.goal.y) ? i : best),
           0,
         );
-        const onWord = (p.words ?? []).length > 0;
+        const line = p.onWord ? lines[nearest] : lines[0];
+        const x = p.goal.x + HAND_TIP * s;
         this.plan = {
           kind: 'read',
           block: p.block,
-          lines: p.lines,
-          line: onWord ? nearest : 0,
-          x: onWord ? at : p.lines[0].x0 + 4,
+          line,
+          x,
+          to: x,
+          atWord: !!p.onWord,
           words: p.words ?? [],
+          restUntil: 0,
         };
-        // Arrived on the word itself: the hands are on it now.
-        const cursor = this.rig.toView({ x: this.plan.x, y: p.goal.y });
-        this.rig.handMode = { kind: 'read', p: cursor };
-        if (onWord && this.tear && this.mood !== 'acting') this.maybeTear(now, cursor, s, pal);
+        this.rig.handMode = { kind: 'read', p: this.rig.toView({ x, y: line.y }) };
+        if (p.onWord) this.stopOnWord(now, s, pal);
       } else {
         this.plan = { kind: 'look', until: now + 600, base: this.rig.heading };
       }
       return;
     }
     if (p.kind === 'read') {
-      const cursor = this.rig.toView({ x: p.x, y: p.lines[p.line].y });
-      this.rig.handMode = { kind: 'read', p: cursor };
-      if (this.tear && this.mood !== 'acting') this.maybeTear(now, cursor, s, pal);
+      p.x = p.to;
+      if (p.atWord) this.stopOnWord(now, s, pal);
+      else this.finishReading(now);
     }
   }
 
-  /** After a freeze while reading: move the cursor on, or to the next line, or finish. */
-  private advance(now: number, s: number, pal: Palette): void {
+  /** On a focus word: a real stop — hands on it, tear it out, then read on past it. */
+  private stopOnWord(now: number, s: number, pal: Palette | null): void {
     const p = this.plan;
-    void pal;
     if (p.kind !== 'read') return;
-    const line = p.lines[p.line];
-    // A focus word further along this line: go straight to it.
-    const ahead = this.nextFocusOnLine(p, line);
-    if (ahead !== null) {
-      p.x = ahead;
-      return;
-    }
-    // Otherwise skim the start of the line, a few steps along it.
-    const end = Math.min(line.x1 - 4, line.x0 + 300);
-    if (p.x < end) {
-      p.x = Math.min(end, p.x + (60 + Math.random() * 50) * s);
-      return;
-    }
-    if (p.line + 1 < p.lines.length) {
-      p.line++;
-      p.x = p.lines[p.line].x0 + 4;
-      return;
-    }
-    this.rig.handMode = { kind: 'rest' };
-    this.plan = { kind: 'look', until: now + 500 + Math.random() * 400, base: this.rig.heading };
-    this.log({ op: 'look', body: { ...this.rig.body } });
+    const m = PACE[this.pace] ?? 1;
+    p.restUntil = now + (500 + Math.random() * 300) / m;
+    const cursor = this.rig.toView({ x: p.x, y: p.line.y });
+    this.rig.handMode = { kind: 'read', p: cursor };
+    if (pal && this.tear && this.mood !== 'acting') this.maybeTear(now, cursor, s, pal);
+    // Read on from the end of this word.
+    const word = p.words.find(w => Math.abs(w.doc.x - 6 - p.x) < 4);
+    if (word) p.x = word.doc.x + word.doc.width + 2;
   }
 
-  /** Document x just before the next focus word on this line, if there is one ahead of the cursor. */
-  private nextFocusOnLine(p: Extract<Plan, { kind: 'read' }>, line: Line): number | null {
+  /** Document x just before the next focus word on this line, if there is one ahead of the hands. */
+  private nextFocusOnLine(p: Extract<Plan, { kind: 'read' }>): number | null {
     if (!this.matcher || !this.tear || this.mood === 'acting') return null;
+    const end = Math.min(p.line.x1 - 4, p.line.x0 + READ_SPAN);
     const x = p.words
-      .filter(w => Math.abs(w.doc.y + w.doc.height / 2 - line.y) < w.doc.height * 0.6)
+      .filter(w => Math.abs(w.doc.y + w.doc.height / 2 - p.line.y) < w.doc.height * 0.6)
       .map(w => w.doc.x)
-      .filter(wx => wx > p.x + 20)
+      .filter(wx => wx - 6 > p.x + 4 && wx <= end)
       .sort((a, b) => a - b)[0];
     return x === undefined ? null : x - 6;
   }

@@ -301,7 +301,7 @@ state is not cached. Tab-gone aborts still reject as `TabGoneError`.
 
 `pages/content/` hosts the agent spider (`src/spider/`: `engine.ts` commands and
 modes, `rig.ts` body and drawing, `brain.ts` behaviour by the agent's mood,
-`stickers.ts` torn-out words, `reader.ts`, `overlay.ts`). `Page` talks only to the
+`stickers.ts` torn-out words, `motion.ts` glides — every move starts and stops without a kick, `reader.ts`, `overlay.ts`). `Page` talks only to the
 `PagePresence` interface (`browser/presence.ts`); `browser/spider.ts`
 (`SpiderBridge`) implements it and reads agent events from the one subscription in
 `background/index.ts` through `browser/agentMood.ts`. Full contract, checks and
