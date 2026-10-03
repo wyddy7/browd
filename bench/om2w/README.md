@@ -32,6 +32,11 @@ read 214 screenshots instead of 356. Each screenshot is one judge call, so it is
 usage. It is a change to the protocol — report such numbers as «WebJudge, duplicate screenshots
 removed».
 
+Local model: `--llm-url http://127.0.0.1:PORT/v1 [--llm-model name]` points the extension at any
+OpenAI-compatible endpoint instead of OpenRouter (no key, no spend). `node selftest-hitl.mjs` uses it: a
+scripted model asks to take over a user tab and the runner must reject that approval at once — approvals
+arrive on the side-panel port, and a missed one waits for the 5-minute HITL timeout (#12).
+
 Ad-hoc: `node run.mjs --task "<any task>" --url <start page>` — one task, no judge; read
 `result.json` (answer, tools, `premature_stop_suspect`) and the screenshots.
 

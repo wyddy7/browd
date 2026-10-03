@@ -79,8 +79,12 @@ benchmark (see Commands). How it works, and the traps already paid for:
   `side-panel/index.html` URL: open it as a tab, wrap `chrome.runtime.connect` via
   `addInitScript` to tap the React app's own port, and post `new_task` with an explicit
   `tabId` (the side panel's "active tab" would be itself).
-- HITL requests arrive as runtime messages `browd:hitl:request`; answer with
-  `{type:'hitl_decision', id, decision}` on the port. Automated runs always reject.
+- HITL requests (approvals, questions) arrive **on the side-panel port** as
+  `{type: 'browd:hitl:request', payload}` — not as runtime messages; answer with
+  `{type:'hitl_decision', id, decision}` on the same port. Automated runs always reject
+  action approvals. A missed one waits for the controller's 5-minute timeout (#12);
+  `node bench/om2w/selftest-hitl.mjs` checks the runner end to end on a scripted local
+  model (`run.mjs --llm-url …`, $0).
 - Service-worker console: `--sw-log` adds `--remote-debugging-port` and reads
   `Runtime.consoleAPICalled` over the worker's CDP WebSocket — that is how the
   `_updateState` hang was pinned.

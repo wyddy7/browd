@@ -8,6 +8,8 @@
 //        node run.mjs --cases <file.json> [--host-rules "MAP *.test 127.0.0.1:8765"] [--before-each <url>]
 //          # own task list (same fields as subset30.json); host rules go to Chromium verbatim;
 //          # --before-each is fetched before every task (e.g. a fixture server's state reset)
+//        node run.mjs ... --llm-url http://127.0.0.1:PORT/v1 [--llm-model name]
+//          # any OpenAI-compatible endpoint instead of OpenRouter (a scripted local model: selftest-hitl.mjs), $0
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -38,11 +40,14 @@ const MODE = arg('mode', 'as-shipped');
 const SW_LOG = Boolean(arg('sw-log', false)); // capture the extension service-worker console via CDP (debug runs)
 const HOST_RULES = arg('host-rules', null);
 const BEFORE_EACH = arg('before-each', null);
+// A local OpenAI-compatible endpoint instead of OpenRouter: no key, no spend.
+const LLM_URL = arg('llm-url', null);
 let swPort = 9333;
 const taskText = t =>
   MODE === 'site' ? `${t.confirmed_task}\n\nStart at ${t.website} (already open in your tab) and complete the task on that website.` : t.confirmed_task;
 
 function loadEnv() {
+  if (LLM_URL) return { key: 'local', model: arg('llm-model', 'scripted') };
   const f = path.join(ROOT, '.env.bench.local');
   const env = {};
   for (const line of fs.readFileSync(f, 'utf8').split('\n')) {
@@ -54,6 +59,7 @@ function loadEnv() {
 }
 
 async function keyUsage(key) {
+  if (LLM_URL) return 0;
   const r = await fetch('https://openrouter.ai/api/v1/key', { headers: { Authorization: `Bearer ${key}` } });
   const d = (await r.json()).data;
   return d.usage;
@@ -65,9 +71,9 @@ function storageConfig(key, model) {
       providers: {
         openrouter: {
           apiKey: key,
-          name: 'OpenRouter',
-          type: 'openrouter',
-          baseUrl: 'https://openrouter.ai/api/v1',
+          name: LLM_URL ? 'Local' : 'OpenRouter',
+          type: LLM_URL ? 'custom_openai' : 'openrouter',
+          baseUrl: LLM_URL || 'https://openrouter.ai/api/v1',
           modelNames: [model],
           createdAt: Date.now(),
         },
@@ -175,7 +181,11 @@ async function runTask(task, env) {
         const p = orig(...a);
         if (a[0] && a[0].name === 'side-panel-connection') {
           window.__port = p;
-          p.onMessage.addListener(m => window.__ev.push(m));
+          // Approval requests (HITL) come over this port, like every other agent message: answer them,
+          // or the task waits for the controller's 5-minute timeout (#12).
+          p.onMessage.addListener(m =>
+            m && m.type === 'browd:hitl:request' ? window.__hitl.push(m.payload) : window.__ev.push(m),
+          );
         }
         return p;
       };
