@@ -12,7 +12,10 @@ import { AIMessage, HumanMessage, SystemMessage, type BaseMessage, type ToolMess
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type { RunnableConfig } from '@langchain/core/runnables';
 import type { StructuredToolInterface } from '@langchain/core/tools';
+import { createLogger } from '@src/background/log';
 import { readTaskCompletion, TaskToolNode, type TaskOutcome } from '../taskOutcome';
+
+const logger = createLogger('finalTurn');
 
 export const FINAL_TURN_INSTRUCTION =
   'You have used every step allowed for this subgoal. No tool other than task_complete is available now: call it. ' +
@@ -52,9 +55,12 @@ export async function runFinalTurn(args: {
   let reply: AIMessage;
   try {
     reply = await llm.bindTools([taskComplete], { tool_choice: taskComplete.name }).invoke(input, config);
-  } catch {
+  } catch (err) {
     // Some providers reject a forced tool choice (Claude on Bedrock, Qwen — 2026-10-02); OpenRouter wraps the
     // reason in a generic «Provider returned error». With task_complete as the only tool, «auto» still ends in it.
+    logger.warning(
+      `final turn: forced tool choice rejected, retrying with tool_choice auto: ${JSON.stringify((err as { error?: unknown })?.error ?? String(err)).slice(0, 300)}`,
+    );
     reply = await llm.bindTools([taskComplete], { tool_choice: 'auto' }).invoke(input, config);
   }
   const call = reply.tool_calls?.find(c => c.name === taskComplete.name);

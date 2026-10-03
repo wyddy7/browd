@@ -8,6 +8,8 @@
 //        node run.mjs --cases <file.json> [--host-rules "MAP *.test 127.0.0.1:8765"] [--before-each <url>]
 //          # own task list (same fields as subset30.json); host rules go to Chromium verbatim;
 //          # --before-each is fetched before every task (e.g. a fixture server's state reset)
+//        node run.mjs ... --llm-model <openrouter id>   # one run on another model (overrides BENCH_MODEL)
+//        node run.mjs ... --sw-log   # worker console + every model call (tool_choice, status) → sw-console.log
 //        node run.mjs ... --llm-url http://127.0.0.1:PORT/v1 [--llm-model name]
 //          # any OpenAI-compatible endpoint instead of OpenRouter (a scripted local model: selftest-hitl.mjs), $0
 import { chromium } from 'playwright';
@@ -55,7 +57,7 @@ function loadEnv() {
     if (m) env[m[1]] = m[2].trim();
   }
   if (!env.OPENROUTER_API_KEY) throw new Error('OPENROUTER_API_KEY missing in .env.bench.local');
-  return { key: env.OPENROUTER_API_KEY, model: env.BENCH_MODEL || 'openai/gpt-6-luna' };
+  return { key: env.OPENROUTER_API_KEY, model: arg('llm-model', null) || env.BENCH_MODEL || 'openai/gpt-6-luna' };
 }
 
 async function keyUsage(key) {
@@ -148,10 +150,48 @@ async function runTask(task, env) {
       const target = list.find(x => x.type === 'service_worker' && x.url.includes(extId));
       const swLog = fs.createWriteStream(path.join(dir, 'sw-console.log'));
       const ws = new WebSocket(target.webSocketDebuggerUrl);
-      ws.onopen = () => ws.send(JSON.stringify({ id: 1, method: 'Runtime.enable' }));
+      // Model calls too: which tool_choice each one asked for and what the provider answered (a silent
+      // fallback, like the final turn's forced → auto retry, shows up only here).
+      const calls = new Map();
+      const replies = new Map(); // CDP command id → what to do with its result
+      let cdpId = 10;
+      const cdp = (method, params, then) => {
+        replies.set(++cdpId, then);
+        ws.send(JSON.stringify({ id: cdpId, method, params }));
+      };
+      const log = (kind, text) => swLog.write(`${Date.now() - t0}\t${kind}\t${text}\n`);
+      ws.onopen = () => {
+        ws.send(JSON.stringify({ id: 1, method: 'Runtime.enable' }));
+        ws.send(JSON.stringify({ id: 2, method: 'Network.enable' }));
+      };
       ws.onmessage = m => {
         const msg = JSON.parse(m.data);
-        if (msg.method === 'Runtime.consoleAPICalled') {
+        if (msg.id && replies.has(msg.id)) {
+          replies.get(msg.id)(msg.result ?? {});
+          replies.delete(msg.id);
+          return;
+        }
+        const requestId = msg.params?.requestId;
+        const call = requestId && calls.get(requestId);
+        if (msg.method === 'Network.requestWillBeSent' && /\/chat\/completions/.test(msg.params.request.url)) {
+          const c = { n: calls.size + 1 };
+          calls.set(requestId, c);
+          cdp('Network.getRequestPostData', { requestId }, r => {
+            let body = {};
+            try {
+              body = JSON.parse(r.postData);
+            } catch {}
+            const tools = (body.tools || []).map(t => t.function?.name);
+            log('model-call', `#${c.n} tool_choice=${JSON.stringify(body.tool_choice ?? null)} tools=[${tools.length > 4 ? `${tools.length} tools` : tools}]`);
+          });
+        } else if (msg.method === 'Network.responseReceived' && call) {
+          call.status = msg.params.response.status;
+          log('model-reply', `#${call.n} status=${call.status}`);
+        } else if (msg.method === 'Network.loadingFinished' && call && call.status >= 400) {
+          cdp('Network.getResponseBody', { requestId }, r => log('model-error', `#${call.n} ${String(r.body ?? '').slice(0, 400)}`));
+        } else if (msg.method === 'Network.loadingFailed' && call) {
+          log('model-reply', `#${call.n} failed=${msg.params.errorText}`);
+        } else if (msg.method === 'Runtime.consoleAPICalled') {
           const text = msg.params.args.map(a => a.value ?? a.description ?? '').join(' ');
           swLog.write(`${Date.now() - t0}\t${msg.params.type}\t${String(text).slice(0, 600)}\n`);
         } else if (msg.method === 'Runtime.exceptionThrown') {

@@ -87,7 +87,10 @@ benchmark (see Commands). How it works, and the traps already paid for:
   model (`run.mjs --llm-url …`, $0).
 - Service-worker console: `--sw-log` adds `--remote-debugging-port` and reads
   `Runtime.consoleAPICalled` over the worker's CDP WebSocket — that is how the
-  `_updateState` hang was pinned.
+  `_updateState` hang was pinned. The same file (`sw-console.log`) lists every
+  model call (`model-call` with its `tool_choice` and tools, `model-reply` with
+  the HTTP status, `model-error` with the provider's error body): why a call was
+  retried shows up there.
 - Deny `google.com` in the firewall for automated runs: repeated agent searches from one
   IP hit Google's captcha wall within minutes.
 - Result fields worth grepping: `terminal_state`, `premature_stop_suspect` (answer text

@@ -32,6 +32,8 @@ read 214 screenshots instead of 356. Each screenshot is one judge call, so it is
 usage. It is a change to the protocol — report such numbers as «WebJudge, duplicate screenshots
 removed».
 
+Another OpenRouter model for one run: `--llm-model <id>` (overrides `BENCH_MODEL`).
+
 Local model: `--llm-url http://127.0.0.1:PORT/v1 [--llm-model name]` points the extension at any
 OpenAI-compatible endpoint instead of OpenRouter (no key, no spend). `node selftest-hitl.mjs` uses it: a
 scripted model asks to take over a user tab and the runner must reject that approval at once — approvals
