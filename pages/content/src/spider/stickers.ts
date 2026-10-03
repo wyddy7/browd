@@ -156,7 +156,9 @@ export class Stickers {
       ctx.scale(k, k);
       ctx.drawImage(st.art, -st.artW / 2, -st.artH / 2, st.artW, st.artH);
       ctx.restore();
-      const r = (Math.max(st.artW, st.artH) * k) / 2 + 6;
+      // A turned word reaches as far as its corners: half the diagonal, not half the long side
+      // (a heading-sized word left a corner on the page after it went back).
+      const r = (Math.hypot(st.artW, st.artH) * k) / 2 + 3;
       box.add(c, r);
     }
   }
