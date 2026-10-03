@@ -463,6 +463,18 @@
   "options_models_providers_models_instructions": {
     "message": "Введите и нажмите Enter или Space, чтобы добавить."
   },
+  "options_models_providers_models_defaultsOutdated": {
+    "message": "Вышли новые рекомендуемые модели."
+  },
+  "options_models_providers_models_defaultsUse": {
+    "message": "Взять актуальный список"
+  },
+  "options_models_providers_models_defaultsApplied": {
+    "message": "Обновлено — нажмите «Сохранить». Ваши модели и модель агентов на месте."
+  },
+  "options_models_providers_models_defaultsUndo": {
+    "message": "Отменить"
+  },
   "options_models_providers_models_openrouter_empty": {
     "message": "Модели не выбраны. При необходимости добавьте имена моделей вручную."
   },

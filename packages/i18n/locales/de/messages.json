@@ -451,6 +451,18 @@
   "options_models_providers_models_instructions": {
     "message": "Eingeben und Enter oder Leertaste drücken, um hinzuzufügen."
   },
+  "options_models_providers_models_defaultsOutdated": {
+    "message": "Neuere empfohlene Modelle sind verfügbar."
+  },
+  "options_models_providers_models_defaultsUse": {
+    "message": "Aktuelle Standards übernehmen"
+  },
+  "options_models_providers_models_defaultsApplied": {
+    "message": "Aktualisiert — zum Behalten „Speichern“ drücken. Eigene Modelle und das Modell der Agenten bleiben."
+  },
+  "options_models_providers_models_defaultsUndo": {
+    "message": "Rückgängig"
+  },
   "options_models_providers_models_openrouter_empty": {
     "message": "Keine Modelle ausgewählt. Füge bei Bedarf Modellnamen manuell hinzu."
   },

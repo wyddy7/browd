@@ -451,6 +451,18 @@
   "options_models_providers_models_instructions": {
     "message": "Escribe y pulsa Enter o Espacio para añadir."
   },
+  "options_models_providers_models_defaultsOutdated": {
+    "message": "Hay modelos recomendados más nuevos."
+  },
+  "options_models_providers_models_defaultsUse": {
+    "message": "Usar los predeterminados actuales"
+  },
+  "options_models_providers_models_defaultsApplied": {
+    "message": "Actualizado: pulsa Guardar para conservarlo. Tus modelos y el modelo de los agentes se mantienen."
+  },
+  "options_models_providers_models_defaultsUndo": {
+    "message": "Deshacer"
+  },
   "options_models_providers_models_openrouter_empty": {
     "message": "No hay modelos seleccionados. Añade los nombres de los modelos manualmente si es necesario."
   },

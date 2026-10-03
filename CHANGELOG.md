@@ -26,6 +26,10 @@ unchanged.
 - `bench/spider/`: end-to-end checks of the spider (28 checks, also across seven
   screen sizes and zooms) and of the real agent on a scripted local model
   (14 checks). Development tools, not part of the extension.
+- **Use current defaults** under an OpenRouter model list saved with older
+  default models (Options → Models). It puts in the current defaults and keeps
+  the models you added and any model your agents are set to; Undo brings the old
+  list back until you save.
 
 ### Changed
 
@@ -34,6 +38,10 @@ unchanged.
 - **DOM highlights are off by default** for new installs: the numbered boxes
   drawn over the page while the agent reads it. Settings that were saved before
   keep their value; Options → General turns them back on.
+- `qwen/qwen3.8-flash` is no longer an OpenRouter default: a single upstream
+  provider serves it, and its requests were rate-limited for minutes at a time.
+- When a provider refuses the forced tool choice of the final turn at the step
+  limit, the retry with `tool_choice: auto` is logged with the provider's reason.
 
 ## [0.1.17] — 2026-10-02
 
