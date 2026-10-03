@@ -42,6 +42,10 @@ unchanged.
   provider serves it, and its requests were rate-limited for minutes at a time.
 - When a provider refuses the forced tool choice of the final turn at the step
   limit, the retry with `tool_choice: auto` is logged with the provider's reason.
+- **Claude models on OpenRouter use the prompt cache.** OpenRouter caches Claude
+  only when the request asks for it; Browd did not, so every step of a task paid
+  full price for the whole prompt. A part of the prompt read back from the cache
+  costs a tenth.
 
 ## [0.1.17] — 2026-10-02
 

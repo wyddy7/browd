@@ -134,6 +134,8 @@ function createOpenAIChatModel(
   modelConfig: ModelConfig,
   // Add optional extra fetch options for headers etc.
   extraFetchOptions: { headers?: Record<string, string> } | undefined,
+  // Extra top-level request fields (e.g. OpenRouter's cache_control for Claude).
+  extraBody?: Record<string, unknown>,
 ): BaseChatModel {
   assertHeaderSafeValue('API key', providerConfig.apiKey);
   const args: {
@@ -142,8 +144,9 @@ function createOpenAIChatModel(
     // Configuration should align with ClientOptions from @langchain/openai
     configuration?: Record<string, unknown>;
     modelKwargs?: {
-      max_completion_tokens: number;
+      max_completion_tokens?: number;
       reasoning_effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high';
+      [field: string]: unknown;
     };
     topP?: number;
     temperature?: number;
@@ -198,7 +201,20 @@ function createOpenAIChatModel(
     args.temperature = (modelConfig.parameters?.temperature ?? 0.1) as number;
     args.maxTokens = maxTokens;
   }
+  if (extraBody) {
+    args.modelKwargs = { ...args.modelKwargs, ...extraBody };
+  }
   return new ChatOpenAI(args);
+}
+
+/**
+ * OpenRouter caches Claude only when asked: one top-level `cache_control` turns on automatic
+ * caching and keeps the requests on the provider that holds the cache. Without it every call of
+ * an agent loop pays full input price (2026-10-03: a Sonnet 5.5 run, 316k input tokens, no cache
+ * read). OpenAI, Gemini, DeepSeek and others cache on their own.
+ */
+export function openRouterExtraBody(modelName: string): Record<string, unknown> | undefined {
+  return modelName.startsWith('anthropic/') ? { cache_control: { type: 'ephemeral' } } : undefined;
 }
 
 // Function to extract instance name from Azure endpoint URL
@@ -411,12 +427,17 @@ export function createChatModel(providerConfig: ProviderConfig, modelConfig: Mod
     case ProviderTypeEnum.OpenRouter: {
       // Call the helper function, passing OpenRouter headers via the third argument
       console.log('[createChatModel] Calling createOpenAIChatModel for OpenRouter');
-      return createOpenAIChatModel(providerConfig, modelConfig, {
-        headers: {
-          'HTTP-Referer': 'https://github.com/wyddy7/browd',
-          'X-Title': 'Browd',
+      return createOpenAIChatModel(
+        providerConfig,
+        modelConfig,
+        {
+          headers: {
+            'HTTP-Referer': 'https://github.com/wyddy7/browd',
+            'X-Title': 'Browd',
+          },
         },
-      });
+        openRouterExtraBody(modelConfig.modelName),
+      );
     }
     case ProviderTypeEnum.Llama: {
       // Llama API has a different response format, use custom ChatLlama class
