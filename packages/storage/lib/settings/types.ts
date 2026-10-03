@@ -111,7 +111,6 @@ export const llmProviderModelNames = {
     'anthropic/claude-sonnet-5.5',
     'google/gemini-3.8-flash',
     'deepseek/deepseek-v4.1-flash',
-    'qwen/qwen3.8-flash',
   ],
   [ProviderTypeEnum.Groq]: ['llama-3.3-70b-versatile'],
   [ProviderTypeEnum.Cerebras]: ['llama-3.3-70b'],
@@ -123,6 +122,41 @@ export const llmProviderModelNames = {
   ],
   // Custom OpenAI providers don't have predefined models as they are user-defined
 };
+
+/**
+ * OpenRouter models Browd shipped as defaults before the current list. A provider saved
+ * earlier keeps its own list, so these tell the old defaults apart from models the user added.
+ * When the defaults change, move the dropped ids here.
+ */
+export const previousOpenRouterDefaults = [
+  'google/gemini-2.5-pro',
+  'google/gemini-2.5-flash',
+  'openai/gpt-4o-2024-11-20',
+  // Dropped 2026-10-03: one upstream provider, rate-limited (429) for minutes at a time.
+  'qwen/qwen3.8-flash',
+];
+
+/**
+ * A saved OpenRouter list holds old defaults, and the update would change it: an old default no agent
+ * uses would go, or a current default would come in. A list without old defaults is the user's own.
+ */
+export function hasOutdatedOpenRouterDefaults(list: string[], inUse: string[]): boolean {
+  const current = llmProviderModelNames[ProviderTypeEnum.OpenRouter];
+  const old = list.filter(m => previousOpenRouterDefaults.includes(m));
+  return old.length > 0 && (old.some(m => !inUse.includes(m)) || current.some(m => !list.includes(m)));
+}
+
+/**
+ * The current defaults, then every model the user added, then any old default an agent
+ * still uses (so no agent loses its model). Old defaults nobody uses are dropped.
+ */
+export function withCurrentOpenRouterDefaults(list: string[], inUse: string[]): string[] {
+  const current = llmProviderModelNames[ProviderTypeEnum.OpenRouter];
+  const rest = list.filter(m => !current.includes(m));
+  const added = rest.filter(m => !previousOpenRouterDefaults.includes(m));
+  const stillUsed = rest.filter(m => previousOpenRouterDefaults.includes(m) && inUse.includes(m));
+  return [...new Set([...current, ...added, ...stillUsed])];
+}
 
 // Default parameters for each agent per provider, for providers not specified, use OpenAI parameters
 export const llmProviderParameters = {

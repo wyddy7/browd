@@ -21,6 +21,8 @@ import {
   type RuntimeJudgeMode,
   AgentNameEnum,
   llmProviderModelNames,
+  hasOutdatedOpenRouterDefaults,
+  withCurrentOpenRouterDefaults,
   ProviderTypeEnum,
   getDefaultDisplayNameFromProviderId,
   getDefaultProviderConfig,
@@ -125,6 +127,8 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
     [AgentNameEnum.Planner]: undefined,
   });
   const [newModelInputs, setNewModelInputs] = useState<Record<string, string>>({});
+  // A provider's model list before «Use current defaults», kept for Undo until the page closes.
+  const [listBeforeDefaults, setListBeforeDefaults] = useState<Record<string, string[]>>({});
   const [isProviderSelectorOpen, setIsProviderSelectorOpen] = useState(false);
   const newlyAddedProviderRef = useRef<string | null>(null);
   const [nameErrors, setNameErrors] = useState<Record<string, string>>({});
@@ -540,6 +544,39 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
     });
   };
 
+  /** Swap the provider's old default models for the current ones; added models and any model in use stay. */
+  /** Models of this provider the agents and the judge are set to (`provider>model` values). */
+  const modelsInUse = (provider: string) =>
+    [...Object.values(selectedModels), selectedJudgeModel]
+      .filter(v => v.startsWith(`${provider}>`))
+      .map(v => v.slice(provider.length + 1));
+
+  const applyCurrentDefaults = (provider: string) => {
+    const before = providers[provider]?.modelNames ?? [];
+    const inUse = modelsInUse(provider);
+    setListBeforeDefaults(prev => ({ ...prev, [provider]: before }));
+    setModifiedProviders(prev => new Set(prev).add(provider));
+    setProviders(prev => ({
+      ...prev,
+      [provider]: { ...prev[provider], modelNames: withCurrentOpenRouterDefaults(before, inUse) },
+    }));
+  };
+
+  const forgetListBeforeDefaults = (provider: string) =>
+    setListBeforeDefaults(prev => {
+      const next = { ...prev };
+      delete next[provider];
+      return next;
+    });
+
+  const undoCurrentDefaults = (provider: string) => {
+    const before = listBeforeDefaults[provider];
+    if (!before) return;
+    setModifiedProviders(prev => new Set(prev).add(provider));
+    setProviders(prev => ({ ...prev, [provider]: { ...prev[provider], modelNames: before } }));
+    forgetListBeforeDefaults(provider);
+  };
+
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>, provider: string) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
@@ -665,6 +702,7 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
       // Add to providersFromStorage since it's now saved
       setProvidersFromStorage(prev => new Set(prev).add(provider));
 
+      forgetListBeforeDefaults(provider);
       setModifiedProviders(prev => {
         const next = new Set(prev);
         next.delete(provider);
@@ -1858,6 +1896,37 @@ export const ModelSettings = ({ isDarkMode = false }: ModelSettingsProps) => {
                                 />
                               </div>
                               <p className={helpTextClass}>{t('options_models_providers_models_instructions')}</p>
+                              {listBeforeDefaults[providerId] ? (
+                                <div className="flex flex-wrap items-center gap-3 text-xs">
+                                  <span className="text-[var(--browd-muted)]">
+                                    {t('options_models_providers_models_defaultsApplied')}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => undoCurrentDefaults(providerId)}
+                                    className="font-medium text-[var(--browd-accent)] hover:underline">
+                                    {t('options_models_providers_models_defaultsUndo')}
+                                  </button>
+                                </div>
+                              ) : (
+                                hasOutdatedOpenRouterDefaults(
+                                  providerConfig.modelNames ?? [],
+                                  modelsInUse(providerId),
+                                ) && (
+                                  <div className="flex flex-wrap items-center gap-3 text-xs">
+                                    <span className="text-[var(--browd-muted)]">
+                                      {t('options_models_providers_models_defaultsOutdated')}
+                                    </span>
+                                    <Button
+                                      variant="secondary"
+                                      theme={isDarkMode ? 'dark' : 'light'}
+                                      className="text-xs"
+                                      onClick={() => applyCurrentDefaults(providerId)}>
+                                      {t('options_models_providers_models_defaultsUse')}
+                                    </Button>
+                                  </div>
+                                )
+                              )}
                             </>
                           ) : (
                             /* Default Tag Input for other providers */

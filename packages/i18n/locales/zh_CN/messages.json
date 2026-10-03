@@ -451,6 +451,18 @@
   "options_models_providers_models_instructions": {
     "message": "输入后按下 Enter 或空格键以添加。"
   },
+  "options_models_providers_models_defaultsOutdated": {
+    "message": "有更新的推荐模型。"
+  },
+  "options_models_providers_models_defaultsUse": {
+    "message": "使用当前默认模型"
+  },
+  "options_models_providers_models_defaultsApplied": {
+    "message": "已更新——点击“保存”以保留。你添加的模型和智能体正在使用的模型都会保留。"
+  },
+  "options_models_providers_models_defaultsUndo": {
+    "message": "撤销"
+  },
   "options_models_providers_models_openrouter_empty": {
     "message": "未选择任何模型。如有需要，请手动添加模型名称。"
   },

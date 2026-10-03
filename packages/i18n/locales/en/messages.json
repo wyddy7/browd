@@ -484,6 +484,18 @@
   "options_models_providers_models_instructions": {
     "message": "Type and Press Enter or Space to add."
   },
+  "options_models_providers_models_defaultsOutdated": {
+    "message": "Newer recommended models are available."
+  },
+  "options_models_providers_models_defaultsUse": {
+    "message": "Use current defaults"
+  },
+  "options_models_providers_models_defaultsApplied": {
+    "message": "Updated — press Save to keep it. Your own models and your agents' model stay."
+  },
+  "options_models_providers_models_defaultsUndo": {
+    "message": "Undo"
+  },
   "options_models_providers_models_openrouter_empty": {
     "message": "No models selected. Add model names manually if needed."
   },
