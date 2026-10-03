@@ -91,7 +91,7 @@ function storageConfig(key, model) {
       useVision: false,
       useVisionForPlanner: false,
       planningInterval: 3,
-      displayHighlights: true,
+      displayHighlights: false,
       minWaitPageLoad: 250,
       replayHistoricalTasks: false,
       launchShortcut: 'Ctrl+E',

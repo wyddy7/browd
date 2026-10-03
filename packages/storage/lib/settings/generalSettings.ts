@@ -88,7 +88,9 @@ export const DEFAULT_GENERAL_SETTINGS: GeneralSettingsConfig = {
   useVision: false,
   useVisionForPlanner: false,
   planningInterval: 3,
-  displayHighlights: true,
+  // Numbered boxes over the page during DOM reads: off by default (the agent spider shows where it works).
+  // With them on, the agent's screenshots also carry the boxes (they stay on the page after a DOM read).
+  displayHighlights: false,
   minWaitPageLoad: 250,
   replayHistoricalTasks: false,
   launchShortcut: 'Ctrl+E',
