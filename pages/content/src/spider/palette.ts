@@ -20,6 +20,15 @@ const MONO: Record<Exclude<SpiderColor, 'rainbow'>, { h: number; s: number; l: n
   magenta: { h: 318, s: 100, l: 66 },
 };
 
+/** Sticker colour per spider colour: a hue far from the spider's, light enough for dark text. */
+const STICKER: Record<Exclude<SpiderColor, 'rainbow'>, { h: number; s: number; l: number }> = {
+  violet: { h: 46, s: 100, l: 60 }, // amber, a highlighter
+  ink: { h: 46, s: 100, l: 60 },
+  white: { h: 258, s: 100, l: 76 },
+  cyan: { h: 318, s: 100, l: 74 },
+  magenta: { h: 188, s: 100, l: 60 },
+};
+
 export function palette(color: SpiderColor, now: number): Palette {
   if (color === 'rainbow') {
     const h = (190 + now / 90) % 360;
@@ -39,9 +48,11 @@ export function palette(color: SpiderColor, now: number): Palette {
     joint: `hsl(${c.h}, ${c.s}%, ${dark ? c.l + 26 : Math.min(96, c.l + 14)}%)`,
     shade: dark ? 'rgba(255, 255, 255, 0.6)' : 'rgba(8, 10, 20, 0.45)',
     fill: dark ? 'rgba(20, 20, 26, 0.6)' : 'rgba(8, 10, 20, 0.42)',
-    stickers: [0, 10, -10, 18].map(
-      dl => `hsl(${c.h}, ${c.s}%, ${Math.max(20, Math.min(90, (dark ? 40 : c.l) + dl))}%)`,
-    ),
-    stickerText: dark || c.l < 70 ? '#ffffff' : '#0b0b12',
+    // Torn words in a contrasting colour: in the spider's own hue they merged with the spider holding them.
+    stickers: [0, 8, -6, 4].map(dl => {
+      const k = STICKER[color as keyof typeof STICKER];
+      return `hsl(${k.h}, ${k.s}%, ${k.l + dl}%)`;
+    }),
+    stickerText: '#0b0b12',
   };
 }
