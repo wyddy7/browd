@@ -6,15 +6,19 @@ All notable changes to Browd are documented here. The format is based on
 
 ## [Unreleased]
 
-A spider now shows where the agent is working. Browser permissions are
-unchanged.
+## [0.1.18] — 2026-10-04
+
+A spider now shows where the agent is working, and Claude models on
+OpenRouter cost less per task through the prompt cache. Browser permissions
+are unchanged; saved settings keep their values.
 
 ### Added
 
 - **Agent spider.** A line-drawn spider walks on the page the agent works in.
   While the model thinks it reads along and tears out the words the task is
-  about (drawn over the page; the page itself is never changed). Before each
-  click or keystroke it glides to the element, then taps it. It stays on screen
+  about, each in a colour that stands out against the spider (drawn over the
+  page; the page itself is never changed). Before each click or keystroke it
+  glides to the element, then taps it. It stays on screen
   across page loads, and a long burst of navigations sends it into the chat
   panel and back, one leap drawn across the seam between the two. It is hidden
   for every screenshot the agent takes. On by default: the spider button in the
