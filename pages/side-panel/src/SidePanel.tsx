@@ -1709,7 +1709,7 @@ const SidePanel = () => {
   return (
     <div data-browd-theme={appearanceTheme} data-browd-mode={isDarkMode ? 'dark' : 'light'}>
       <NoticeHost fire={noticeFire} />
-      <div className="browd-shell flex h-screen flex-col overflow-hidden rounded-[var(--browd-radius-md)] border border-[var(--browd-border)] text-[var(--browd-text)]">
+      <div className="browd-shell flex h-screen flex-col overflow-hidden text-[var(--browd-text)]">
         <header className="header relative">
           <div className="header-logo">
             {showHistory ? (
