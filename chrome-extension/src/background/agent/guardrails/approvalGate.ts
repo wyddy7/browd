@@ -69,8 +69,35 @@ export function createApprovalGate(context: AgentContext): ApprovalGate | undefi
     }
   };
 
+  /**
+   * Index-based field actions (`input_text`) carry no label: the model sends
+   * only the element index. Without this lookup the credential rule never saw
+   * a password field typed by index — the live self-test (selftest-gate.mjs,
+   * 2026-11-24) typed "hunter2" into `type=password`. The label is built from
+   * the element's own attributes, which the page cannot reword per call.
+   */
+  const INDEXED_FIELD_ACTIONS = new Set(['input_text', 'select_dropdown_option']);
+  const FIELD_ATTRS = ['type', 'name', 'id', 'aria-label', 'placeholder', 'autocomplete'];
+  const fieldLabelByIndex = async (index: unknown): Promise<string> => {
+    if (typeof index !== 'number') return '';
+    try {
+      const st = await context.browserContext.getState(false);
+      const node = st.selectorMap?.get(index);
+      const attrs = node?.attributes ?? {};
+      return FIELD_ATTRS.map(a => attrs[a])
+        .filter(Boolean)
+        .join(' ');
+    } catch {
+      return '';
+    }
+  };
+
   return async (actionName, input) => {
-    const args = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
+    let args = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
+    if (INDEXED_FIELD_ACTIONS.has(actionName) && args.label == null) {
+      const label = await fieldLabelByIndex(args.index);
+      if (label) args = { ...args, label };
+    }
 
     // Layers that need no page state run first — keeps read-only tools free of
     // an expensive state capture.

@@ -168,6 +168,28 @@ describe('createApprovalGate — safety invariants', () => {
     expect('message' in out && out.message).toMatch(/Do not retry this field/i);
   });
 
+  it('input_text by INDEX into type=password is refused (label read from the element)', async () => {
+    const { context, requestDecision } = makeContext([]);
+    const pw = { tagName: 'input', attributes: { type: 'password', 'aria-label': 'Password' }, highlightIndex: 3 };
+    const email = { tagName: 'input', attributes: { type: 'email', name: 'email' }, highlightIndex: 1 };
+    (context.browserContext as unknown as { getState: unknown }).getState = async () => ({
+      url: 'https://example.com/signup',
+      title: 'Sign up',
+      selectorMap: new Map<number, unknown>([
+        [1, email],
+        [3, pw],
+      ]),
+    });
+    const gate = createApprovalGate(context as never)!;
+
+    const refused = await gate('input_text', { index: 3, text: 'hunter2', intent: 'enter the password' });
+    expect(refused.proceed).toBe(false);
+    expect(requestDecision).not.toHaveBeenCalled();
+
+    const allowed = await gate('input_text', { index: 1, text: 'sam@example.com', intent: 'enter the email' });
+    expect(allowed.proceed).toBe(true);
+  });
+
   it.each([
     ['fill_field_by_label', 'Password'],
     ['input_text', 'CVV'],
