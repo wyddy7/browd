@@ -84,7 +84,10 @@ benchmark (see Commands). How it works, and the traps already paid for:
   `{type:'hitl_decision', id, decision}` on the same port. Automated runs always reject
   action approvals. A missed one waits for the controller's 5-minute timeout (#12);
   `node bench/om2w/selftest-hitl.mjs` checks the runner end to end on a scripted local
-  model (`run.mjs --llm-url …`, $0).
+  model (`run.mjs --llm-url …`, $0). `node bench/om2w/selftest-gate.mjs` checks the
+  unified-mode approval gate the same way: a password typed by element index is refused
+  without a prompt, a form submit asks and is rejected, and the form never reaches the
+  local server (on 0.1.18 all three failed: the server received `password=hunter2`).
 - Service-worker console: `--sw-log` adds `--remote-debugging-port` and reads
   `Runtime.consoleAPICalled` over the worker's CDP WebSocket — that is how the
   `_updateState` hang was pinned. The same file (`sw-console.log`) lists every
