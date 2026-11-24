@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import * as actionSchemas from '../../actions/schemas';
-import { checkApproval, INTERACTION_ACTIONS, SELF_GATED_ACTIONS, mayNeedPageState } from '../approvalPolicy';
+import {
+  checkApproval,
+  INTERACTION_ACTIONS,
+  SELF_GATED_ACTIONS,
+  mayNeedPageState,
+  isSensitiveField,
+} from '../approvalPolicy';
 
 /** Every action name the real registry exposes. */
 const REAL_ACTION_NAMES = new Set(
@@ -123,5 +129,23 @@ describe('ApprovalPolicy', () => {
       expect(mayNeedPageState('web_search')).toBe(false);
       expect(mayNeedPageState('scroll_to_top')).toBe(false);
     });
+  });
+});
+
+describe('isSensitiveField — words, not substrings', () => {
+  it.each([
+    ['shipping-address', false],
+    ['businessName', false],
+    ['spinner', false],
+    ['email', false],
+    ['cc-number', true],
+    ['cc-csc', true],
+    ['one-time-code', true],
+    ['current-password', true],
+    ['Card number', true],
+    ['Пароль', true],
+    ['Номер карты', true],
+  ])('%s → %s', (label, expected) => {
+    expect(isSensitiveField(label)).toBe(expected);
   });
 });

@@ -12,6 +12,12 @@ vi.mock('@src/background/log', () => ({
   createLogger: () => ({ warning: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() }),
 }));
 vi.mock('webextension-polyfill', () => ({ default: {} }));
+const finder = vi.hoisted(() => ({ result: null as unknown }));
+vi.mock('@src/background/browser/dom/fieldFinder', () => ({ findFieldByLabel: () => finder.result }));
+const settings = vi.hoisted(() => ({ permissionMode: 'default' as 'default' | 'full' }));
+vi.mock('@extension/storage', () => ({
+  generalSettingsStore: { getSettings: async () => ({ permissionMode: settings.permissionMode }) },
+}));
 
 import { createApprovalGate } from '../approvalGate';
 
@@ -32,6 +38,8 @@ function makeContext(decisions: Decision[]) {
 }
 
 beforeEach(() => {
+  settings.permissionMode = 'default';
+  finder.result = null;
   (globalThis as unknown as { chrome: unknown }).chrome = {
     tabs: { get: vi.fn().mockResolvedValue({ id: 11, url: 'https://example.com/apply' }) },
   };
@@ -74,7 +82,7 @@ describe('createApprovalGate — approval memory', () => {
     const gate = createApprovalGate(context as never)!;
 
     await gate('click_element', SENSITIVE);
-    await gate('click_element', { ...SENSITIVE, index: 2 });
+    await gate('click_element', { ...SENSITIVE, keys: 'other' });
 
     expect(requestDecision).toHaveBeenCalledTimes(2);
   });
@@ -220,6 +228,140 @@ describe('createApprovalGate — safety invariants', () => {
     const gate = createApprovalGate(context as never)!;
     const out = await gate('web_search', { query: 'weather', intent: 'look it up' });
     expect(out).toEqual({ proceed: true });
+    expect(requestDecision).not.toHaveBeenCalled();
+  });
+});
+
+// --- Hardening after the independent review of PR #32 (2026-11-24) ---
+
+type Node = {
+  tagName: string;
+  attributes: Record<string, string>;
+  xpath: string;
+  getAllTextTillNextClickableElement?: () => string;
+};
+const node = (tagName: string, attributes: Record<string, string>, xpath: string, text = ''): Node => ({
+  tagName,
+  attributes,
+  xpath,
+  getAllTextTillNextClickableElement: () => text,
+});
+
+function withPage(ctx: ReturnType<typeof makeContext>['context'], map: Map<number, Node>, underPoint: unknown = null) {
+  (ctx.browserContext as unknown as Record<string, unknown>).getState = async () => ({
+    url: 'https://shop.example/checkout',
+    title: 'Checkout',
+    selectorMap: map,
+    elementTree: { children: [], attributes: {}, tagName: 'body' },
+  });
+  (ctx.browserContext as unknown as Record<string, unknown>).getCurrentPage = async () => ({
+    describeElementAtImageCoord: async () => underPoint,
+  });
+}
+
+describe('approval gate — targets are read from the page', () => {
+  it('type_at over a password input is refused (real schema: x, y, text — no label)', async () => {
+    const { context, requestDecision } = makeContext([]);
+    withPage(context, new Map(), {
+      tag: 'input',
+      attributes: { type: 'password' },
+      text: '',
+      path: 'form[0]/input[1]',
+    });
+    const gate = createApprovalGate(context as never)!;
+    const out = await gate('type_at', { intent: 'type it', x: 100, y: 200, text: 'hunter2' });
+    expect(out.proceed).toBe(false);
+    expect(requestDecision).not.toHaveBeenCalled();
+  });
+
+  it('fill_field_by_label with a harmless model label is refused when the field it finds is a password', async () => {
+    const { context, requestDecision } = makeContext([]);
+    withPage(context, new Map());
+    finder.result = node('input', { type: 'password', name: 'pw' }, 'form/input[2]');
+    const gate = createApprovalGate(context as never)!;
+    const out = await gate('fill_field_by_label', { label: 'field 2', value: 'hunter2', intent: 'fill' });
+    expect(out.proceed).toBe(false);
+    expect(requestDecision).not.toHaveBeenCalled();
+  });
+
+  it('type_at over a search box runs without a prompt', async () => {
+    const { context, requestDecision } = makeContext([]);
+    withPage(context, new Map(), {
+      tag: 'input',
+      attributes: { type: 'search', name: 'q' },
+      text: '',
+      path: 'form[0]/input[0]',
+    });
+    const gate = createApprovalGate(context as never)!;
+    const out = await gate('type_at', { intent: 'search', x: 10, y: 20, text: 'shoes' });
+    expect(out.proceed).toBe(true);
+    expect(requestDecision).not.toHaveBeenCalled();
+  });
+
+  it('a field-writing action whose target cannot be read asks instead of passing', async () => {
+    const { context, requestDecision } = makeContext([{ type: 'reject', message: 'no' }]);
+    withPage(context, new Map(), null);
+    const gate = createApprovalGate(context as never)!;
+    const out = await gate('type_at', { intent: 'type', x: 1, y: 1, text: 'x' });
+    expect(requestDecision).toHaveBeenCalledTimes(1);
+    expect(out.proceed).toBe(false);
+  });
+
+  it('an approval of "Continue" does not carry over to "Place order" that got the same index', async () => {
+    const { context, requestDecision } = makeContext([{ type: 'approve' }, { type: 'approve' }]);
+    const gate = createApprovalGate(context as never)!;
+    withPage(context, new Map([[12, node('button', { type: 'submit' }, 'form/button[1]', 'Continue')]]));
+    await gate('click_element', { index: 12, intent: 'submit the application' });
+    withPage(context, new Map([[12, node('button', { type: 'submit' }, 'form/button[2]', 'Place order')]]));
+    await gate('click_element', { index: 12, intent: 'submit the application' });
+    expect(requestDecision).toHaveBeenCalledTimes(2);
+  });
+
+  it('the same element under a new index is still remembered', async () => {
+    const { context, requestDecision } = makeContext([{ type: 'approve' }]);
+    const gate = createApprovalGate(context as never)!;
+    const btn = node('button', { type: 'submit' }, 'form/button[1]', 'Continue');
+    withPage(context, new Map([[12, btn]]));
+    await gate('click_element', { index: 12, intent: 'submit the application' });
+    withPage(context, new Map([[7, btn]]));
+    const out = await gate('click_element', { index: 7, intent: 'submit the application' });
+    expect(out.proceed).toBe(true);
+    expect(requestDecision).toHaveBeenCalledTimes(1);
+  });
+
+  it('permissionMode=full skips the prompt but never the credential refusal', async () => {
+    settings.permissionMode = 'full';
+    const { context, requestDecision } = makeContext([]);
+    withPage(context, new Map([[3, node('input', { type: 'password' }, 'form/input[1]')]]));
+    const gate = createApprovalGate(context as never)!;
+    const submit = await gate('click_element', { index: 9, intent: 'submit the application' });
+    const pw = await gate('input_text', { index: 3, text: 'hunter2', intent: 'enter it' });
+    expect(submit.proceed).toBe(true);
+    expect(pw.proceed).toBe(false);
+    expect(requestDecision).not.toHaveBeenCalled();
+  });
+
+  it('a neutral click on a form submit button asks (the element decides, not the intent)', async () => {
+    const { context, requestDecision } = makeContext([{ type: 'reject', message: 'no' }]);
+    withPage(context, new Map([[4, node('button', { type: 'submit' }, 'html/body/form/button', 'Create account')]]));
+    const gate = createApprovalGate(context as never)!;
+    const out = await gate('click_element', { index: 4, intent: 'click Create account' });
+    expect(requestDecision).toHaveBeenCalledTimes(1);
+    expect(out.proceed).toBe(false);
+  });
+
+  it('a search button and a plain link do not ask', async () => {
+    const { context, requestDecision } = makeContext([]);
+    withPage(
+      context,
+      new Map([
+        [1, node('button', { type: 'submit' }, 'html/body/form/button', 'Search')],
+        [2, node('a', {}, 'html/body/nav/a', 'Pricing')],
+      ]),
+    );
+    const gate = createApprovalGate(context as never)!;
+    expect((await gate('click_element', { index: 1, intent: 'look it up' })).proceed).toBe(true);
+    expect((await gate('click_element', { index: 2, intent: 'open pricing' })).proceed).toBe(true);
     expect(requestDecision).not.toHaveBeenCalled();
   });
 });

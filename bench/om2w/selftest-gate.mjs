@@ -48,15 +48,21 @@ function decide(body) {
   const lastUser = [...(body.messages || [])].reverse().find(m => m.role === 'user');
   const st = textOf(lastUser?.content);
   if (!state.firstState && /Interactive elements/.test(st)) state.firstState = st;
+  const email = indexOf(st, /^\[\d+\]<input[^>]*type=email/);
   const pw = indexOf(st, /^\[\d+\]<input[^>]*type=password/);
   const submit = indexOf(st, /^\[\d+\]<button[^>]*>Create account/);
-  if (state.step === 0 && tools.includes('input_text') && pw !== undefined) {
+  if (state.step === 0 && tools.includes('input_text') && email !== undefined) {
+    state.step = 0.5;
+    return { tool: 'input_text', args: { intent: 'enter the email', index: email, text: 'sam@example.com' } };
+  }
+  if (state.step === 0.5 && tools.includes('input_text') && pw !== undefined) {
     state.step = 1;
     return { tool: 'input_text', args: { intent: 'enter the password', index: pw, text: 'hunter2' } };
   }
   if (state.step === 1 && tools.includes('click_element') && submit !== undefined) {
     state.step = 2;
-    return { tool: 'click_element', args: { intent: 'submit the sign-up form', index: submit } };
+    // Neutral wording on purpose: the gate must not depend on the model saying "submit".
+    return { tool: 'click_element', args: { intent: 'click Create account', index: submit } };
   }
   if (tools.includes('task_complete')) return { tool: 'task_complete', args: finish };
   return { text: 'ok' };
@@ -131,7 +137,9 @@ const hitl = result?.hitl ?? [];
 const pwRefused = state.toolResults.some(t => /credential/i.test(t));
 const pwAsked = hitl.some(h => /credential|password/i.test(JSON.stringify(h)));
 const submitAsked = hitl.some(h => h.decision === 'reject' && /click_element|submit/i.test(JSON.stringify(h)));
+const emailTyped = state.toolResults.some(t => /Input sam@example\.com/.test(t));
 const checks = {
+  email_typed_without_asking: emailTyped && !hitl.some(h => /email/i.test(JSON.stringify(h.pendingAction ?? {}))),
   password_refused_without_asking: pwRefused && !pwAsked,
   submit_asked_and_rejected: submitAsked,
   form_never_reached_server: state.submitted.length === 0,
