@@ -17,6 +17,7 @@ import { actionsToTools, DEFAULT_TOOL_BUDGETS } from '../tools/langGraphAdapter'
 import { reactSystemPromptTemplate } from '../prompts/react';
 import { buildReactVisionPrompt } from '../prompts/reactVision';
 import { extractForms, formatFormsForPrompt } from '@src/background/browser/dom/forms';
+import { createApprovalGate } from '../guardrails/approvalGate';
 import { wrapUntrustedContent } from '../messages/utils';
 import { Actors, ExecutionState } from '../event/types';
 import { createLogger } from '@src/background/log';
@@ -300,7 +301,12 @@ export async function runReactAgent(input: RunReactAgentInput): Promise<RunReact
     if (n === 'done') return false;
     return true;
   });
-  const tools = actionsToTools(filteredActions, { counters, limits: DEFAULT_TOOL_BUDGETS }, dupGuard);
+  // Sensitive actions (form submit, credential fields) go through HITL in
+  // unified mode too. Policy, approval memory and decision handling live in
+  // guardrails/approvalGate.ts; here it is one wiring line.
+  const approvalGate = createApprovalGate(context);
+
+  const tools = actionsToTools(filteredActions, { counters, limits: DEFAULT_TOOL_BUDGETS }, dupGuard, approvalGate);
   const baseSystemPrompt = visionMode === 'off' ? reactSystemPromptTemplate : buildReactVisionPrompt();
 
   const { usageCallback, emitUsage } = createUsageTracker(context, input.contextWindow);
