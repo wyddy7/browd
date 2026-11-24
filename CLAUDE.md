@@ -233,6 +233,18 @@ separate `visionMode` toggle:
   the user IS the only solution (no automation can bypass). Add new
   HITL gates by checking `(await generalSettingsStore.getSettings()).permissionMode`
   at decision time, mirroring the take-over handler.
+- **Approval gate in unified mode** (`guardrails/approvalGate.ts`, wired once in
+  `langGraphAdapter`, after the budget and duplicate guards). It reads the action's
+  target from the page, never from model text: by element index, by the field
+  `fill_field_by_label` will fill, or by the element under a `type_at` / `click_at`
+  point (`Page.describeElementAtImageCoord`). Typing into a credential / payment /
+  identity field (`isSensitiveField`, words and `autocomplete` tokens) is refused
+  without a prompt in every posture. A click on a button that submits a form asks,
+  whatever the intent says (search buttons excepted). A field write whose target
+  cannot be read asks instead of passing. Approvals are remembered for the task by
+  element signature (xpath + attributes + text), never by index. `permissionMode:
+  'full'` skips the prompts, not the credential refusal. Live check:
+  `bench/om2w/selftest-gate.mjs`.
 - **All third-party text sources MUST go through
   `wrapUntrustedContent`** before reaching the LLM:
   `Interactive elements`, `pageText`, `web_fetch_markdown`,

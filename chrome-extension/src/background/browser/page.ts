@@ -668,6 +668,50 @@ export default class Page {
     return { cssX: m.cssX, cssY: m.cssY, vw: m.vw, vh: m.vh };
   }
 
+  /**
+   * What sits under an image-pixel coordinate, read before a coordinate action
+   * runs. The approval gate uses it to see that `type_at` is aimed at a
+   * password field — the coordinate tools carry no label of their own. Reads
+   * only; never focuses, clicks or scrolls. Null when nothing is there.
+   */
+  async describeElementAtImageCoord(
+    x: number,
+    y: number,
+  ): Promise<{ tag: string; attributes: Record<string, string>; text: string; path: string } | null> {
+    if (!this._puppeteerPage) throw new Error('Puppeteer page is not connected');
+    const m = await this._coordToCss(x, y);
+    return this._puppeteerPage.evaluate(
+      (cx: number, cy: number) => {
+        let el = document.elementFromPoint(cx, cy) as Element | null;
+        // A label or wrapper around the input is what the pointer often hits.
+        if (el && el.tagName === 'LABEL') {
+          const forId = el.getAttribute('for');
+          el = (forId && document.getElementById(forId)) || el.querySelector('input,textarea,select') || el;
+        }
+        if (!el) return null;
+        const attributes: Record<string, string> = {};
+        for (const a of ['type', 'name', 'id', 'aria-label', 'placeholder', 'autocomplete']) {
+          const v = el.getAttribute(a);
+          if (v) attributes[a] = v;
+        }
+        const path: string[] = [];
+        for (let n: Element | null = el; n && n !== document.documentElement; n = n.parentElement) {
+          const parent: Element | null = n.parentElement;
+          const idx = parent ? Array.prototype.indexOf.call(parent.children, n) : 0;
+          path.unshift(`${n.tagName.toLowerCase()}[${idx}]`);
+        }
+        return {
+          tag: el.tagName.toLowerCase(),
+          attributes,
+          text: (el.textContent || '').trim().slice(0, 80),
+          path: path.join('/'),
+        };
+      },
+      m.cssX,
+      m.cssY,
+    );
+  }
+
   async scrollAtImageCoord(
     x: number,
     y: number,

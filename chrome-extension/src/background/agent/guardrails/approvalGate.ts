@@ -4,6 +4,8 @@ import type { HITLRequest } from '../hitl/types';
 import { checkApproval, mayNeedPageState } from './approvalPolicy';
 import { classifyState } from '../state/classifier';
 import { extractForms } from '@src/background/browser/dom/forms';
+import { findFieldByLabel } from '@src/background/browser/dom/fieldFinder';
+import { generalSettingsStore } from '@extension/storage';
 import { Actors, ExecutionState } from '../event/types';
 import { createLogger } from '@src/background/log';
 
@@ -40,21 +42,6 @@ export function createApprovalGate(context: AgentContext): ApprovalGate | undefi
    */
   const approvalMemory = new Set<string>();
 
-  /**
-   * Key for the memory. Deliberately EXCLUDES `intent`, which the model writes
-   * itself — caching on model-authored text would let a reworded new action
-   * inherit an older approval. Action name + host + the remaining arguments is
-   * what actually identifies "this same thing again".
-   */
-  const stableArgs = (args: Record<string, unknown>): string => {
-    const { intent: _intent, ...rest } = args;
-    return JSON.stringify(
-      Object.keys(rest)
-        .sort()
-        .map(k => [k, rest[k]]),
-    );
-  };
-
   const currentHost = async (): Promise<string> => {
     try {
       const tabId = context.browserContext.agentTabId();
@@ -70,33 +57,114 @@ export function createApprovalGate(context: AgentContext): ApprovalGate | undefi
   };
 
   /**
-   * Index-based field actions (`input_text`) carry no label: the model sends
-   * only the element index. Without this lookup the credential rule never saw
-   * a password field typed by index — the live self-test (selftest-gate.mjs,
-   * 2026-11-24) typed "hunter2" into `type=password`. The label is built from
-   * the element's own attributes, which the page cannot reword per call.
+   * The element an action is aimed at, read from the PAGE, never from text the
+   * model wrote. Three ways in, one per tool family:
+   *  - by index (`input_text`, `select_dropdown_option`, `click_element`): the
+   *    model sends only an index; the live self-test (selftest-gate.mjs,
+   *    2026-11-24) typed "hunter2" into `type=password` because of that;
+   *  - by label (`fill_field_by_label`): the label is the model's, so the field
+   *    the action will actually fill is looked up the same way the action does;
+   *  - by coordinate (`type_at`, `click_at`, `drag_at`): the element under the
+   *    point.
+   * `signature` identifies the element for approval memory: indices are
+   * rebuilt on every state read, so an index-keyed memory could auto-approve a
+   * different button that took the same number.
    */
-  const INDEXED_FIELD_ACTIONS = new Set(['input_text', 'select_dropdown_option']);
+  type Target = { label: string; signature: string; submits: boolean; name: string };
   const FIELD_ATTRS = ['type', 'name', 'id', 'aria-label', 'placeholder', 'autocomplete'];
-  const fieldLabelByIndex = async (index: unknown): Promise<string> => {
-    if (typeof index !== 'number') return '';
+  const INDEX_ACTIONS = new Set(['input_text', 'select_dropdown_option', 'click_element']);
+  const COORD_ACTIONS = new Set(['type_at', 'click_at', 'drag_at']);
+  /** Actions that put text into a field: if their target cannot be read, ask instead of guessing. */
+  const FIELD_WRITE_ACTIONS = new Set(['input_text', 'type_at', 'fill_field_by_label', 'select_dropdown_option']);
+
+  /**
+   * Does clicking this element submit a form? Read from the element, not from
+   * the model's intent: the live self-test showed a neutral "click Create
+   * account" passing every layer and the form reaching the server. A search
+   * box's button is the one exemption, or every search would need approval.
+   */
+  const SEARCH_RE = /\b(search|find|go|filter|поиск|найти|искать)\b/i;
+  const submitsForm = (tag: string, attrs: Record<string, string>, path: string, text: string): boolean => {
+    const t = tag.toLowerCase();
+    const type = (attrs.type ?? '').toLowerCase();
+    const inForm = /(^|\/)form\b/i.test(path);
+    const isSubmit = ((t === 'button' || t === 'input') && type === 'submit') || (t === 'button' && !type && inForm);
+    if (!isSubmit) return false;
+    const words = [text, attrs['aria-label'], attrs.name, attrs.id, attrs.value].filter(Boolean).join(' ');
+    return !SEARCH_RE.test(words);
+  };
+
+  const fromAttrs = (tag: string, attrs: Record<string, string>, path: string, text: string): Target => ({
+    label: FIELD_ATTRS.map(a => attrs[a])
+      .filter(Boolean)
+      .join(' '),
+    signature: [tag, path, ...FIELD_ATTRS.map(a => attrs[a] ?? ''), text.slice(0, 60)].join('|'),
+    submits: submitsForm(tag, attrs, path, text),
+    name: (text || attrs['aria-label'] || attrs.value || tag).slice(0, 60),
+  });
+
+  /** undefined = the action has no element target; null = it has one but it could not be read. */
+  const resolveTarget = async (
+    actionName: string,
+    args: Record<string, unknown>,
+  ): Promise<Target | null | undefined> => {
+    const byIndex = INDEX_ACTIONS.has(actionName);
+    const byLabel = actionName === 'fill_field_by_label';
+    const byCoord = COORD_ACTIONS.has(actionName);
+    if (!byIndex && !byLabel && !byCoord) return undefined;
     try {
+      if (byCoord) {
+        const x = Number(args.x ?? args.from_x);
+        const y = Number(args.y ?? args.from_y);
+        if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+        const page = await context.browserContext.getCurrentPage();
+        const el = await page.describeElementAtImageCoord(x, y);
+        return el ? fromAttrs(el.tag, el.attributes, el.path, el.text) : null;
+      }
       const st = await context.browserContext.getState(false);
-      const node = st.selectorMap?.get(index);
-      const attrs = node?.attributes ?? {};
-      return FIELD_ATTRS.map(a => attrs[a])
-        .filter(Boolean)
-        .join(' ');
+      const node = byIndex
+        ? typeof args.index === 'number'
+          ? st.selectorMap?.get(args.index)
+          : undefined
+        : findFieldByLabel(st, String(args.label ?? ''), Number(args.nth ?? 1));
+      if (!node) return null;
+      const text = actionName === 'click_element' ? (node.getAllTextTillNextClickableElement?.(2) ?? '') : '';
+      return fromAttrs(node.tagName ?? '', node.attributes ?? {}, node.xpath ?? '', text);
     } catch {
-      return '';
+      return null;
     }
   };
 
+  /** Arguments that are positions, not meaning: replaced by the element signature in the memory key. */
+  const POSITIONAL = new Set([
+    'intent',
+    'index',
+    'x',
+    'y',
+    'from_x',
+    'from_y',
+    'to_x',
+    'to_y',
+    'label',
+    'nth',
+    'xpath',
+  ]);
+  const meaningArgs = (args: Record<string, unknown>): string =>
+    JSON.stringify(
+      Object.keys(args)
+        .filter(k => !POSITIONAL.has(k))
+        .sort()
+        .map(k => [k, args[k]]),
+    );
+
   return async (actionName, input) => {
     let args = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
-    if (INDEXED_FIELD_ACTIONS.has(actionName) && args.label == null) {
-      const label = await fieldLabelByIndex(args.index);
-      if (label) args = { ...args, label };
+    const target = await resolveTarget(actionName, args);
+    if (target) {
+      // The model's own label (fill_field_by_label) is kept next to the
+      // element's attributes, so either one can trip the credential rule.
+      const modelLabel = typeof args.label === 'string' ? args.label : '';
+      args = { ...args, label: [modelLabel, target.label].filter(Boolean).join(' ') };
     }
 
     // Layers that need no page state run first — keeps read-only tools free of
@@ -112,6 +180,27 @@ export function createApprovalGate(context: AgentContext): ApprovalGate | undefi
         // on the state-free verdict rather than blocking the run — layers 1
         // and 3 already ran.
       }
+    }
+    if (
+      !decision.requiresApproval &&
+      target?.submits &&
+      (actionName === 'click_element' || actionName === 'click_at')
+    ) {
+      decision = {
+        requiresApproval: true,
+        reason: 'sensitive_action',
+        risk: 'high',
+        summary: `Clicking "${target.name}" submits a form.`,
+      };
+    }
+    if (!decision.requiresApproval && target === null && FIELD_WRITE_ACTIONS.has(actionName)) {
+      // Could not see which field this types into: ask, never assume it is harmless.
+      decision = {
+        requiresApproval: true,
+        reason: 'sensitive_action',
+        risk: 'medium',
+        summary: `Could not identify the field "${actionName}" would type into. Approve only if it is not a password, card or ID field.`,
+      };
     }
     if (!decision.requiresApproval) return { proceed: true };
 
@@ -130,7 +219,16 @@ export function createApprovalGate(context: AgentContext): ApprovalGate | undefi
     const hitl = context.hitlController;
     if (!hitl) return { proceed: true };
 
-    const memoryKey = `${actionName}|${await currentHost()}|${stableArgs(args)}`;
+    // Permission posture (CLAUDE.md § Permission posture): «Full access» skips
+    // approval prompts. It never lifts the credential refusal above — that is
+    // a hand-off, not a question.
+    const permissionMode = (await generalSettingsStore.getSettings()).permissionMode;
+    if (permissionMode === 'full') {
+      logger.info(`approval skipped (permissionMode=full): ${actionName}`);
+      return { proceed: true };
+    }
+
+    const memoryKey = `${actionName}|${await currentHost()}|${target ? target.signature : ''}|${meaningArgs(args)}`;
     if (approvalMemory.has(memoryKey)) {
       // Visible, never silent: an auto-approval the user cannot see would be a
       // worse failure than asking twice.

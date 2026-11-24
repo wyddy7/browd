@@ -52,7 +52,26 @@ export const SELF_GATED_ACTIONS = new Set(['ask_user', 'hitl_click_at', 'take_ov
 const HIGH_RISK_STATES: Set<TaskState> = new Set(['ready_to_submit', 'apply_modal']);
 
 /** Field labels whose content must never be typed without the user seeing it. */
-const SENSITIVE_FIELD_RE = /password|пароль|card.*number|номер.*карт|cvv|cvc|pin|passport|паспорт|ssn/i;
+/**
+ * Credential / payment / identity fields, matched on WORDS of the field's own
+ * attributes (type, name, id, aria-label, placeholder, autocomplete). A plain
+ * substring test refused `shipping-address` ("pin"), `businessName` ("ssn")
+ * and `spinner`, while it let `cc-number` and `one-time-code` through. The
+ * label is split on camelCase, `-`, `_` and `.` first, so `cc-csc` → "cc csc".
+ * `autocomplete` tokens are the HTML spec names for these fields.
+ */
+const SENSITIVE_WORDS_RE =
+  /\b(password|passwd|pwd|passcode|pin|cvv|cvc|csc|ssn|passport|otp|one time code|current password|new password|cc number|cc csc|cc exp|card number|card no|security code)\b/i;
+// JS `\b` is ASCII-only, so Cyrillic words get their own test.
+const SENSITIVE_RU_RE = /пароль|паспорт|номер\s*карт|cvv|код\s*безопасности/i;
+
+export function isSensitiveField(label: string): boolean {
+  const words = label
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[-_.:/]+/g, ' ')
+    .toLowerCase();
+  return SENSITIVE_WORDS_RE.test(words) || SENSITIVE_RU_RE.test(words);
+}
 
 /** Keys that submit a form on their own, regardless of what the intent says. */
 const SUBMITTING_KEYS_RE = /\b(enter|return|numpadenter)\b/i;
@@ -125,7 +144,7 @@ export function checkApproval(
   // Typing into a credential / payment / identity field.
   if (actionName === 'fill_field_by_label' || actionName === 'input_text' || actionName === 'type_at') {
     const label = labelOf(actionArgs);
-    if (SENSITIVE_FIELD_RE.test(label)) {
+    if (isSensitiveField(label)) {
       return {
         requiresApproval: true,
         handOff: true,
